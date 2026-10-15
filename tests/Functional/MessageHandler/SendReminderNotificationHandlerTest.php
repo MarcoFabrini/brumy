@@ -118,7 +118,7 @@ final class SendReminderNotificationHandlerTest extends KernelTestCase
 
         ($this->handler)(new SendReminderNotificationMessage((int) $reminder->getId()));
 
-        // Filtra solo le mail generate dal nostro handler (subject "AutoCron — Scadenza: ...").
+        // Filtra solo le mail generate dal nostro handler (subject "Brumy — Scadenza: ...").
         // Necessario perché Symfony profiler collector può accumulare messaggi inter-test
         // se non resettato; restringere via subject + recipients noti rende l'assertion
         // robusta indipendentemente dall'isolamento del collector.
@@ -506,13 +506,13 @@ final class SendReminderNotificationHandlerTest extends KernelTestCase
     }
 
     /**
-     * Filtra mail generate dal nostro handler via subject prefix "AutoCron — Scadenza: <description>".
+     * Filtra mail generate dal nostro handler via subject prefix "Brumy — Scadenza: <description>".
      *
      * @return list<Email>
      */
     private function filterHandlerEmails(string $reminderDescription): array
     {
-        $expectedSubject = 'AutoCron — Scadenza: '.$reminderDescription;
+        $expectedSubject = 'Brumy — Scadenza: '.$reminderDescription;
         $filtered = [];
         foreach (static::getMailerMessages() as $msg) {
             if ($msg instanceof Email && $msg->getSubject() === $expectedSubject) {

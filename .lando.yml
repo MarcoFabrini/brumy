@@ -1,10 +1,10 @@
-name: autocron
+name: brumy
 
 proxy:
   appserver:
-    - autocron.lndo.site
+    - brumy.lndo.site
   mailpit:
-    - mail.autocron.lndo.site
+    - mail.brumy.lndo.site
 
 services:
   appserver:
@@ -20,12 +20,12 @@ services:
         APP_ENV: dev
         APP_DEBUG: "1"
         APP_SECRET: dev_secret_change_me
-        DATABASE_URL: "mysql://autocron:autocron@database:3306/autocron?serverVersion=mariadb-11.4.0&charset=utf8mb4"
+        DATABASE_URL: "mysql://brumy:brumy@database:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4"
         JWT_SECRET_KEY: "%kernel.project_dir%/config/jwt/private.pem"
         JWT_PUBLIC_KEY: "%kernel.project_dir%/config/jwt/public.pem"
         JWT_PASSPHRASE: dev_jwt_passphrase
         MAILER_DSN: "smtp://mailpit:1025"
-        FRONTEND_URL: "https://autocron.lndo.site"
+        FRONTEND_URL: "https://brumy.lndo.site"
         CORS_ALLOW_ORIGIN: '^https?://(localhost|127\.0\.0\.1|.*\.lndo\.site)(:[0-9]+)?$'
         TRUSTED_PROXIES: "REMOTE_ADDR"
     build:
@@ -35,11 +35,11 @@ services:
     type: mariadb:11.4
     portforward: 3306
     creds:
-      user: autocron
-      password: autocron
-      database: autocron
+      user: brumy
+      password: brumy
+      database: brumy
     build_as_root:
-      - mysql -uroot -e "GRANT ALL PRIVILEGES ON \`autocron%\`.* TO 'autocron'@'%'; FLUSH PRIVILEGES;"
+      - mysql -uroot -e "GRANT ALL PRIVILEGES ON \`brumy%\`.* TO 'brumy'@'%'; FLUSH PRIVILEGES;"
 
   mailpit:
     type: mailpit

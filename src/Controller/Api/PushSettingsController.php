@@ -182,7 +182,7 @@ final class PushSettingsController extends AbstractController
         }
 
         $payload = new PushPayload(
-            title: 'AutoCron',
+            title: 'Brumy',
             body: 'Notifica di prova: le notifiche push funzionano.',
             url: '/settings',
         );

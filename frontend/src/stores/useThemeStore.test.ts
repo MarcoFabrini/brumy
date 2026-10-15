@@ -69,13 +69,13 @@ describe('useThemeStore (persistenza)', () => {
 
     store.getState().setTheme('dark');
 
-    const saved = JSON.parse(memory.get('autocron-theme') ?? 'null') as { state: { theme: string } } | null;
+    const saved = JSON.parse(memory.get('brumy-theme') ?? 'null') as { state: { theme: string } } | null;
     expect(saved?.state.theme).toBe('dark');
   });
 
   it('ripristina la preferenza salvata al caricamento', async () => {
     const store = await freshStore();
-    memory.set('autocron-theme', JSON.stringify({ state: { theme: 'light' }, version: 0 }));
+    memory.set('brumy-theme', JSON.stringify({ state: { theme: 'light' }, version: 0 }));
 
     await store.persist.rehydrate();
 

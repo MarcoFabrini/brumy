@@ -7,7 +7,7 @@ import './i18n';
 import './schemas/errorMap';
 import { router } from './router';
 import { Toaster } from '@/components/ui';
-import { AuthGate, UpdatePrompt, ViewportDebug } from '@/components/layout';
+import { AuthGate, UpdatePrompt } from '@/components/layout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { clearQueryCacheOnSessionChange } from '@/lib/sessionCache';
 import { shouldRetryQuery } from '@/lib/queryRetry';
@@ -43,7 +43,6 @@ createRoot(document.getElementById('root')!).render(
         </AuthGate>
         <Toaster />
         <UpdatePrompt />
-        <ViewportDebug />
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,

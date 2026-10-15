@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
-// AutoCron — mobile-first PWA
+// Brumy — mobile-first PWA
 export default defineConfig({
   plugins: [
     react(),
@@ -20,8 +20,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
       manifest: {
-        name: 'AutoCron — Gestione veicoli',
-        short_name: 'AutoCron',
+        name: 'Brumy — Gestione veicoli',
+        short_name: 'Brumy',
         description: 'Manutenzioni, rifornimenti, spese e scadenze per i tuoi veicoli',
         theme_color: '#0f172a',          // slate-900
         background_color: '#0f172a',

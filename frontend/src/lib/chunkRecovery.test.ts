@@ -7,7 +7,7 @@ import {
 } from './chunkRecovery';
 import { mockLocationReload } from '@/test/mockReload';
 
-const KEY = 'autocron:chunk-reload-at';
+const KEY = 'brumy:chunk-reload-at';
 
 describe('reloadOnceForChunkError', () => {
   beforeEach(() => {

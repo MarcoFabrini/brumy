@@ -14,7 +14,7 @@ node_modules/
 *.log
 .DS_Store
 .lando-data/
-autocron/
+brumy/
 tests/
 scripts/
 .github/

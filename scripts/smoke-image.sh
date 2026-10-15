@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test dell'immagine Docker di produzione (target `prod` di docker/app/Dockerfile).
 #
-#   scripts/smoke-image.sh <immagine>        es. scripts/smoke-image.sh autocron-smoke:local
+#   scripts/smoke-image.sh <immagine>        es. scripts/smoke-image.sh brumy-smoke:local
 #
 # Perché esiste: la CI costruiva e pubblicava l'immagine senza mai avviarla, quindi un'estensione PHP
 # mancante, un entrypoint rotto, un Caddyfile sbagliato, le chiavi JWT che non si generano, le migrazioni
@@ -42,10 +42,10 @@ READY_TIMEOUT="${SMOKE_TIMEOUT:-180}"
 random_hex() { od -An -N"${1:-16}" -tx1 /dev/urandom | tr -d ' \n'; }
 
 SUFFIX="$$-$(random_hex 3)"
-NET="autocron-smoke-net-$SUFFIX"
-DB="autocron-smoke-db-$SUFFIX"
-APP="autocron-smoke-app-$SUFFIX"
-APP_DOC="autocron-smoke-doc-$SUFFIX"   # seconda istanza, con la documentazione API accesa (fase 7)
+NET="brumy-smoke-net-$SUFFIX"
+DB="brumy-smoke-db-$SUFFIX"
+APP="brumy-smoke-app-$SUFFIX"
+APP_DOC="brumy-smoke-doc-$SUFFIX"   # seconda istanza, con la documentazione API accesa (fase 7)
 DB_PASSWORD="$(random_hex 16)"
 APP_SECRET_VALUE="$(random_hex 32)"
 JWT_PASSPHRASE_VALUE="$(random_hex 32)"
@@ -204,10 +204,10 @@ if [ "$healthcheck" = "null" ]; then ko "l'immagine dichiara un HEALTHCHECK"; el
 
 section "Avvio (rete $NET)"
 
-docker network create --label autocron-smoke=1 "$NET" >/dev/null
-docker run -d --name "$DB" --network "$NET" --label autocron-smoke=1 \
+docker network create --label brumy-smoke=1 "$NET" >/dev/null
+docker run -d --name "$DB" --network "$NET" --label brumy-smoke=1 \
     --tmpfs /var/lib/mysql \
-    -e MARIADB_ROOT_PASSWORD="$DB_PASSWORD" -e MARIADB_DATABASE=autocron \
+    -e MARIADB_ROOT_PASSWORD="$DB_PASSWORD" -e MARIADB_DATABASE=brumy \
     "$MARIADB_IMAGE" --innodb-flush-log-at-trx-commit=0 --skip-innodb-doublewrite >/dev/null
 
 waited=0
@@ -223,13 +223,13 @@ ok "MariaDB pronto"
 
 # Stesse variabili obbligatorie di compose.yml (APP_ENV, AUTO_MIGRATE, DOMAIN, APP_SECRET, JWT_PASSPHRASE,
 # DATABASE_URL). FRONTEND_URL/DEFAULT_URI/CORS_ALLOW_ORIGIN li ricava l'entrypoint da DOMAIN.
-docker run -d --name "$APP" --network "$NET" --label autocron-smoke=1 \
+docker run -d --name "$APP" --network "$NET" --label brumy-smoke=1 \
     -e APP_ENV=prod \
     -e AUTO_MIGRATE=true \
-    -e DOMAIN=autocron.smoke.test \
+    -e DOMAIN=brumy.smoke.test \
     -e APP_SECRET="$APP_SECRET_VALUE" \
     -e JWT_PASSPHRASE="$JWT_PASSPHRASE_VALUE" \
-    -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/autocron?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
+    -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
     "$IMAGE" >/dev/null
 
 if wait_ready; then
@@ -354,7 +354,7 @@ assert_contains "401 in formato Problem Details" "$RESP_BODY" '"status":401'
 fetch http://127.0.0.1/api/auth/registration
 assert_contains "dopo il primo utente la registrazione si chiude" "$RESP_BODY" '"open":false'
 
-sql() { docker exec -e MYSQL_PWD="$DB_PASSWORD" "$DB" mariadb -uroot -N -B autocron -e "$1"; }
+sql() { docker exec -e MYSQL_PWD="$DB_PASSWORD" "$DB" mariadb -uroot -N -B brumy -e "$1"; }
 tables="$(sql 'SHOW TABLES' || true)"
 for table in users organizations organization_members vehicles reminders messenger_messages doctrine_migration_versions; do
     assert_contains "tabella $table creata dalle migrazioni" "$tables" "$table"
@@ -410,14 +410,14 @@ fi
 section "Documentazione API accesa (API_DOC_ENABLED=true)"
 
 # Stesso DB e stessa rete: le migrazioni sono già applicate e le chiavi JWT sono di questo container.
-docker run -d --name "$APP_DOC" --network "$NET" --label autocron-smoke=1 \
+docker run -d --name "$APP_DOC" --network "$NET" --label brumy-smoke=1 \
     -e APP_ENV=prod \
     -e AUTO_MIGRATE=true \
     -e API_DOC_ENABLED=true \
-    -e DOMAIN=autocron.smoke.test \
+    -e DOMAIN=brumy.smoke.test \
     -e APP_SECRET="$APP_SECRET_VALUE" \
     -e JWT_PASSPHRASE="$JWT_PASSPHRASE_VALUE" \
-    -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/autocron?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
+    -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
     "$IMAGE" >/dev/null
 
 if wait_ready "$APP_DOC"; then

@@ -144,7 +144,7 @@ abstract class ApiTestCase extends WebTestCase
      */
     protected function makeUploadedFile(string $name, string $bytes, string $mime): UploadedFile
     {
-        $tmpPath = tempnam(sys_get_temp_dir(), 'autocron_test_');
+        $tmpPath = tempnam(sys_get_temp_dir(), 'brumy_test_');
         if ($tmpPath === false) {
             throw new \RuntimeException('Cannot create tempfile');
         }

@@ -6,7 +6,7 @@
  * reload sarebbe un ciclo, e si lascia l'errore all'ErrorBoundary.
  */
 
-const STORAGE_KEY = 'autocron:chunk-reload-at';
+const STORAGE_KEY = 'brumy:chunk-reload-at';
 
 /** Entro questo tempo da un reload "di recupero" non se ne fa un altro (copre anche un flag rimasto sporco). */
 const RELOAD_WINDOW_MS = 60_000;

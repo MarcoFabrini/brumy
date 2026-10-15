@@ -1,4 +1,4 @@
-# AutoCron
+# Brumy
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
@@ -14,8 +14,8 @@ Self-hosted vehicle management (PWA): maintenance, fuel logs, expenses, reminder
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/dashboard-light.png" alt="AutoCron dashboard in the light theme: totals, upcoming reminders and monthly charts"><br><sub>Dashboard, light theme</sub></td>
-    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="AutoCron dashboard in the dark theme"><br><sub>Dashboard, dark theme</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Brumy dashboard in the light theme: totals, upcoming reminders and monthly charts"><br><sub>Dashboard, light theme</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Brumy dashboard in the dark theme"><br><sub>Dashboard, dark theme</sub></td>
   </tr>
   <tr>
     <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Vehicle detail page with spending, category, distance and consumption charts"><br><sub>Vehicle detail with its charts</sub></td>
@@ -28,7 +28,7 @@ Self-hosted vehicle management (PWA): maintenance, fuel logs, expenses, reminder
 
 <table>
   <tr>
-    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="AutoCron dashboard on a phone"><br><sub>Mobile dashboard</sub></td>
+    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Brumy dashboard on a phone"><br><sub>Mobile dashboard</sub></td>
     <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Vehicle charts on a phone"><br><sub>Mobile vehicle charts</sub></td>
     <td width="33%"><img src="screenshots/mobile-reminders.png" alt="Reminder list on a phone"><br><sub>Mobile reminders</sub></td>
   </tr>
@@ -41,8 +41,8 @@ _Sample data for a fictional user._
 **Requirements:** Docker + Docker Compose.
 
 ```bash
-curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/compose.yml
-curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/.env
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/.env
 ```
 
 Open `.env`, set `DOMAIN` and generate the 3 secrets (DB password, `APP_SECRET`, `JWT_PASSPHRASE`):
@@ -80,10 +80,10 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: "proxy"
-      traefik.http.routers.autocron.rule: "Host(`${DOMAIN}`)"
-      traefik.http.routers.autocron.entrypoints: "https"
-      traefik.http.routers.autocron.tls.certresolver: "letsencrypt"
-      traefik.http.services.autocron.loadbalancer.server.port: "80"
+      traefik.http.routers.brumy.rule: "Host(`${DOMAIN}`)"
+      traefik.http.routers.brumy.entrypoints: "https"
+      traefik.http.routers.brumy.tls.certresolver: "letsencrypt"
+      traefik.http.services.brumy.loadbalancer.server.port: "80"
 
 networks:
   proxy:
@@ -99,11 +99,15 @@ docker compose exec -u www-data api php bin/console app:backup:create   # backup
 docker compose pull && docker compose up -d
 ```
 
-DB migrations run automatically on startup, so an update can change the schema: take a backup first. To stay on a known version set `AUTOCRON_TAG` in `.env` to a release without the `v` (e.g. `0.1.2`, or `0.1` for its latest patch) instead of the default `latest`, which follows the newest release.
+DB migrations run automatically on startup, so an update can change the schema: take a backup first. To stay on a known version set `BRUMY_TAG` in `.env` to a release without the `v` (e.g. `0.1.2`, or `0.1` for its latest patch) instead of the default `latest`, which follows the newest release.
+
+#### Moving an install created under a different name
+
+If your data folder, database name or `.env` variable prefix come from an older name of the project, `scripts/migrate-instance.sh <old-name>` moves everything to the current names without losing data: it exports the database, moves `./<old-name>/` to `./brumy/`, rewrites the `.env` (a copy stays in `.env.pre-rename`), imports the data into the new database and keeps the old database folder in `./brumy/db.pre-rename`. Run `docker compose down` with the old `compose.yml` first, replace it with the new one, run the script in the same folder, then `docker compose pull && docker compose up -d`.
 
 ### Backup
 
-Data (DB, attachments, JWT keys) lives in `./autocron/`, but **don't copy `./autocron/db` while the stack is running**: a live copy of a database directory can be inconsistent. A nightly job writes a DB dump (`db-<date>.sql.gz`) and an uploads archive (`uploads-<date>.tar.gz`) to `./autocron/backups` (readable only by the app user): copy those, plus your `.env`, to another machine. The backups contain the database and the attachments only, **not the JWT keys** (see Restore). To copy the whole folder, stop the stack first (`docker compose down`).
+Data (DB, attachments, JWT keys) lives in `./brumy/`, but **don't copy `./brumy/db` while the stack is running**: a live copy of a database directory can be inconsistent. A nightly job writes a DB dump (`db-<date>.sql.gz`) and an uploads archive (`uploads-<date>.tar.gz`) to `./brumy/backups` (readable only by the app user): copy those, plus your `.env`, to another machine. The backups contain the database and the attachments only, **not the JWT keys** (see Restore). To copy the whole folder, stop the stack first (`docker compose down`).
 
 To take a backup by hand, run it as the app user (`-u www-data`), otherwise the files end up owned by root:
 
@@ -113,9 +117,9 @@ docker compose exec -u www-data api php bin/console app:backup:create
 
 ### Restore
 
-You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `uploads-<date>.tar.gz`) from `./autocron/backups`, and the **same `.env`** as the instance that produced them. Keep the same `APP_SECRET`: the Web Push (VAPID) private key is stored encrypted with a key derived from it, so with a different `APP_SECRET` the push settings can no longer be decrypted.
+You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `uploads-<date>.tar.gz`) from `./brumy/backups`, and the **same `.env`** as the instance that produced them. Keep the same `APP_SECRET`: the Web Push (VAPID) private key is stored encrypted with a key derived from it, so with a different `APP_SECRET` the push settings can no longer be decrypted.
 
-1. Put `compose.yml`, `.env` and the backup files in `./autocron/backups/` on the target machine. On an existing install stop the app, leaving the database up; on a new machine just start the database:
+1. Put `compose.yml`, `.env` and the backup files in `./brumy/backups/` on the target machine. On an existing install stop the app, leaving the database up; on a new machine just start the database:
 
    ```bash
    docker compose stop api messenger        # existing install
@@ -125,10 +129,10 @@ You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `upl
 2. Restore the database (the dump replaces the tables it contains):
 
    ```bash
-   gunzip -c ./autocron/backups/db-<date>.sql.gz | docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
+   gunzip -c ./brumy/backups/db-<date>.sql.gz | docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
    ```
 
-3. Restore the attachments into `./autocron/uploads` and give them to the app user (`www-data`, uid 82 in the image). Done inside a throwaway container, it needs neither `sudo` nor knowing the uid:
+3. Restore the attachments into `./brumy/uploads` and give them to the app user (`www-data`, uid 82 in the image). Done inside a throwaway container, it needs neither `sudo` nor knowing the uid:
 
    ```bash
    docker compose run --rm --no-deps --entrypoint sh api -c \
@@ -141,7 +145,7 @@ You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `upl
    docker compose up -d
    ```
 
-The JWT keys are **not** in the backups: if `./autocron/jwt` is empty the app generates a new pair at startup, which signs out every user (they just log in again). Migrations run on startup, so restoring a dump from an older version and then pulling a newer image works.
+The JWT keys are **not** in the backups: if `./brumy/jwt` is empty the app generates a new pair at startup, which signs out every user (they just log in again). Migrations run on startup, so restoring a dump from an older version and then pulling a newer image works.
 
 ### Settings worth knowing
 
@@ -171,8 +175,8 @@ Gestione veicoli self-hosted (PWA): manutenzioni, rifornimenti, spese, scadenze 
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Dashboard di AutoCron nel tema chiaro: totali, prossime scadenze e grafici mensili"><br><sub>Dashboard, tema chiaro</sub></td>
-    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Dashboard di AutoCron nel tema scuro"><br><sub>Dashboard, tema scuro</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Dashboard di Brumy nel tema chiaro: totali, prossime scadenze e grafici mensili"><br><sub>Dashboard, tema chiaro</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Dashboard di Brumy nel tema scuro"><br><sub>Dashboard, tema scuro</sub></td>
   </tr>
   <tr>
     <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Pagina di dettaglio veicolo con i grafici di spesa, categorie, distanza e consumi"><br><sub>Dettaglio veicolo con i suoi grafici</sub></td>
@@ -185,7 +189,7 @@ Gestione veicoli self-hosted (PWA): manutenzioni, rifornimenti, spese, scadenze 
 
 <table>
   <tr>
-    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Dashboard di AutoCron su smartphone"><br><sub>Dashboard su smartphone</sub></td>
+    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Dashboard di Brumy su smartphone"><br><sub>Dashboard su smartphone</sub></td>
     <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Grafici del veicolo su smartphone"><br><sub>Grafici del veicolo su smartphone</sub></td>
     <td width="33%"><img src="screenshots/mobile-reminders.png" alt="Elenco dei promemoria su smartphone"><br><sub>Promemoria su smartphone</sub></td>
   </tr>
@@ -198,8 +202,8 @@ _Dati di esempio di un utente fittizio. Le schermate mostrano l'interfaccia in i
 **Requisiti:** Docker + Docker Compose.
 
 ```bash
-curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/compose.yml
-curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/.env
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/.env
 ```
 
 Apri `.env`, imposta `DOMAIN` e genera i 3 secret (password DB, `APP_SECRET`, `JWT_PASSPHRASE`):
@@ -237,10 +241,10 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: "proxy"
-      traefik.http.routers.autocron.rule: "Host(`${DOMAIN}`)"
-      traefik.http.routers.autocron.entrypoints: "https"
-      traefik.http.routers.autocron.tls.certresolver: "letsencrypt"
-      traefik.http.services.autocron.loadbalancer.server.port: "80"
+      traefik.http.routers.brumy.rule: "Host(`${DOMAIN}`)"
+      traefik.http.routers.brumy.entrypoints: "https"
+      traefik.http.routers.brumy.tls.certresolver: "letsencrypt"
+      traefik.http.services.brumy.loadbalancer.server.port: "80"
 
 networks:
   proxy:
@@ -256,11 +260,15 @@ docker compose exec -u www-data api php bin/console app:backup:create   # prima 
 docker compose pull && docker compose up -d
 ```
 
-Le migrazioni DB girano da sole all'avvio, quindi un aggiornamento può cambiare lo schema: fai prima un backup. Per restare su una versione precisa imposta `AUTOCRON_TAG` in `.env` a una release senza la `v` (es. `0.1.2`, oppure `0.1` per la sua ultima patch) invece del default `latest`, che segue l'ultima release.
+Le migrazioni DB girano da sole all'avvio, quindi un aggiornamento può cambiare lo schema: fai prima un backup. Per restare su una versione precisa imposta `BRUMY_TAG` in `.env` a una release senza la `v` (es. `0.1.2`, oppure `0.1` per la sua ultima patch) invece del default `latest`, che segue l'ultima release.
+
+#### Spostare un'installazione creata con un altro nome
+
+Se la cartella dei dati, il nome del database o il prefisso delle variabili del `.env` vengono da un nome precedente del progetto, `scripts/migrate-instance.sh <vecchio-nome>` porta tutto ai nomi attuali senza perdere dati: esporta il database, sposta `./<vecchio-nome>/` in `./brumy/`, riscrive il `.env` (una copia resta in `.env.pre-rename`), importa i dati nel database nuovo e tiene la vecchia cartella del database in `./brumy/db.pre-rename`. Prima fai `docker compose down` con il vecchio `compose.yml`, poi sostituiscilo con quello nuovo, lancia lo script nella stessa cartella e infine `docker compose pull && docker compose up -d`.
 
 ### Backup
 
-I dati (DB, allegati, chiavi JWT) sono in `./autocron/`, ma **non copiare `./autocron/db` a stack acceso**: la copia a caldo di una cartella di database può essere incoerente. Un job notturno scrive un dump del DB (`db-<data>.sql.gz`) e un archivio degli upload (`uploads-<data>.tar.gz`) in `./autocron/backups` (leggibile solo dall'utente dell'app): copia quelli, più il tuo `.env`, su un'altra macchina. I backup contengono solo database e allegati, **non le chiavi JWT** (vedi Ripristino). Per copiare l'intera cartella ferma prima lo stack (`docker compose down`).
+I dati (DB, allegati, chiavi JWT) sono in `./brumy/`, ma **non copiare `./brumy/db` a stack acceso**: la copia a caldo di una cartella di database può essere incoerente. Un job notturno scrive un dump del DB (`db-<data>.sql.gz`) e un archivio degli upload (`uploads-<data>.tar.gz`) in `./brumy/backups` (leggibile solo dall'utente dell'app): copia quelli, più il tuo `.env`, su un'altra macchina. I backup contengono solo database e allegati, **non le chiavi JWT** (vedi Ripristino). Per copiare l'intera cartella ferma prima lo stack (`docker compose down`).
 
 Per fare un backup a mano eseguilo come utente dell'app (`-u www-data`), altrimenti i file risultano di proprietà di root:
 
@@ -270,9 +278,9 @@ docker compose exec -u www-data api php bin/console app:backup:create
 
 ### Ripristino
 
-Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.tar.gz`) di `./autocron/backups` e lo **stesso `.env`** dell'istanza che li ha prodotti. Mantieni lo stesso `APP_SECRET`: la chiave privata VAPID del Web Push è salvata cifrata con una chiave derivata da quello, quindi con un `APP_SECRET` diverso le impostazioni push non sono più decifrabili.
+Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.tar.gz`) di `./brumy/backups` e lo **stesso `.env`** dell'istanza che li ha prodotti. Mantieni lo stesso `APP_SECRET`: la chiave privata VAPID del Web Push è salvata cifrata con una chiave derivata da quello, quindi con un `APP_SECRET` diverso le impostazioni push non sono più decifrabili.
 
-1. Metti `compose.yml`, `.env` e i file di backup in `./autocron/backups/` sulla macchina di destinazione. Su un'installazione esistente ferma l'app lasciando acceso il database; su una macchina nuova avvia solo il database:
+1. Metti `compose.yml`, `.env` e i file di backup in `./brumy/backups/` sulla macchina di destinazione. Su un'installazione esistente ferma l'app lasciando acceso il database; su una macchina nuova avvia solo il database:
 
    ```bash
    docker compose stop api messenger        # installazione esistente
@@ -282,10 +290,10 @@ Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.t
 2. Ripristina il database (il dump sostituisce le tabelle che contiene):
 
    ```bash
-   gunzip -c ./autocron/backups/db-<data>.sql.gz | docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
+   gunzip -c ./brumy/backups/db-<data>.sql.gz | docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
    ```
 
-3. Ripristina gli allegati in `./autocron/uploads` assegnandoli all'utente dell'app (`www-data`, uid 82 nell'immagine). In un container usa-e-getta non servono né `sudo` né l'uid:
+3. Ripristina gli allegati in `./brumy/uploads` assegnandoli all'utente dell'app (`www-data`, uid 82 nell'immagine). In un container usa-e-getta non servono né `sudo` né l'uid:
 
    ```bash
    docker compose run --rm --no-deps --entrypoint sh api -c \
@@ -298,7 +306,7 @@ Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.t
    docker compose up -d
    ```
 
-Le chiavi JWT **non** sono nei backup: se `./autocron/jwt` è vuota l'app ne genera una nuova coppia all'avvio e tutti gli utenti vengono disconnessi (basta rifare il login). Le migrazioni girano all'avvio, quindi si può ripristinare un dump di una versione precedente e poi scaricare un'immagine più recente.
+Le chiavi JWT **non** sono nei backup: se `./brumy/jwt` è vuota l'app ne genera una nuova coppia all'avvio e tutti gli utenti vengono disconnessi (basta rifare il login). Le migrazioni girano all'avvio, quindi si può ripristinare un dump di una versione precedente e poi scaricare un'immagine più recente.
 
 ### Impostazioni da conoscere
 

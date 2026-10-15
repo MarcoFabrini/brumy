@@ -50,7 +50,7 @@ self.addEventListener('push', (event) => {
   const data = readPushData(event);
 
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'AutoCron', {
+    self.registration.showNotification(data.title ?? 'Brumy', {
       body: data.body ?? '',
       icon: data.icon ?? '/icons/icon-192.png',
       badge: '/icons/icon-192.png',

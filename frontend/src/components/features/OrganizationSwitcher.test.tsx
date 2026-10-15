@@ -78,7 +78,7 @@ describe('OrganizationSwitcher', () => {
     setSession([]);
     renderSwitcher();
 
-    expect(screen.getByText('AutoCron')).toBeInTheDocument();
+    expect(screen.getByText('Brumy')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

@@ -1,9 +1,9 @@
 nelmio_api_doc:
     documentation:
         info:
-            title: AutoCron API
+            title: Brumy API
             description: |
-                REST JSON API for AutoCron vehicle fleet management.
+                REST JSON API for Brumy vehicle fleet management.
                 Auth: JWT dual-channel (HttpOnly cookie web / Bearer mobile via `X-Client-Type` header).
                 Multi-tenant: every business resource scoped to active `organization_id` claim.
             version: 1.0.0

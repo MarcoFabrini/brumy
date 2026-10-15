@@ -1,7 +1,7 @@
-# AutoCron — deploy with prebuilt images.
+# Brumy — deploy with prebuilt images.
 #
-#   curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/compose.yml
-#   curl -O https://raw.githubusercontent.com/MarcoFabrini/auto-cron/main/.env
+#   curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
+#   curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/.env
 #   # fill in .env (DOMAIN and passwords, instructions inside)
 #   docker compose up -d
 #
@@ -24,14 +24,14 @@
 # The first registered account becomes the admin and registration closes
 # after that: create it before exposing the instance to the internet.
 #
-# Data lives in ./autocron/. Do not copy ./autocron/db while the stack is
+# Data lives in ./brumy/. Do not copy ./brumy/db while the stack is
 # running (a live copy of a database directory can be inconsistent): use the
-# nightly dumps in ./autocron/backups (DB + uploads) and keep .env with them.
+# nightly dumps in ./brumy/backups (DB + uploads) and keep .env with them.
 #
 # Update: take a backup first (docker compose exec -u www-data api php bin/console
 # app:backup:create), then docker compose pull && docker compose up -d.
 # AUTO_MIGRATE=true applies database migrations on start, so an update changes
-# the schema; to stay on a known version set AUTOCRON_TAG to a release without
+# the schema; to stay on a known version set BRUMY_TAG to a release without
 # the v (e.g. 0.1.2) instead of the default "latest".
 #
 # For development use Lando (lando start), not this file.
@@ -56,7 +56,7 @@ x-logging: &default-logging
 
 services:
   api:
-    image: ${AUTOCRON_REGISTRY:-ghcr.io/marcofabrini}/autocron-app:${AUTOCRON_TAG:-latest}
+    image: ${BRUMY_REGISTRY:-ghcr.io/marcofabrini}/brumy-app:${BRUMY_TAG:-latest}
     environment:
       APP_ENV: prod
       AUTO_MIGRATE: "true"
@@ -71,9 +71,9 @@ services:
     ports:
       - "127.0.0.1:${API_PORT:-8080}:80"
     volumes:
-      - ./autocron/uploads:/var/storage/uploads
-      - ./autocron/backups:/var/backups
-      - ./autocron/jwt:/app/config/jwt
+      - ./brumy/uploads:/var/storage/uploads
+      - ./brumy/backups:/var/backups
+      - ./brumy/jwt:/app/config/jwt
     depends_on:
       db:
         condition: service_healthy
@@ -103,7 +103,7 @@ services:
       ofelia.job-exec.messenger-retry.command: "php bin/console messenger:failed:retry --force --limit=50 --no-interaction"
 
   messenger:
-    image: ${AUTOCRON_REGISTRY:-ghcr.io/marcofabrini}/autocron-app:${AUTOCRON_TAG:-latest}
+    image: ${BRUMY_REGISTRY:-ghcr.io/marcofabrini}/brumy-app:${BRUMY_TAG:-latest}
     command:
       - php
       - bin/console
@@ -132,7 +132,7 @@ services:
       - path: .env
         required: false
     volumes:
-      - ./autocron/uploads:/var/storage/uploads
+      - ./brumy/uploads:/var/storage/uploads
     # Il worker parte solo quando api è healthy, cioè dopo le migrazioni (l'entrypoint le esegue
     # prima di avviare il server). La tabella messenger_messages la crea la migrazione e i
     # transport hanno auto_setup: false: se il worker la creasse per primo su un DB vuoto, il
@@ -153,7 +153,7 @@ services:
       MARIADB_PASSWORD: "${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env (generate with: openssl rand -hex 32)}"
       MARIADB_RANDOM_ROOT_PASSWORD: "true"
     volumes:
-      - ./autocron/db:/var/lib/mysql
+      - ./brumy/db:/var/lib/mysql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -179,4 +179,4 @@ services:
 
 networks:
   default:
-    name: autocron
+    name: brumy

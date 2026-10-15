@@ -68,7 +68,7 @@ final class AuthController extends AbstractController
     use ProblemDetailsResponseTrait;
 
     /** Lock nominale (GET_LOCK) che serializza la registrazione del primo utente. */
-    private const REGISTER_LOCK = 'autocron:first-registration';
+    private const REGISTER_LOCK = 'brumy:first-registration';
 
     private const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
     private const AVATAR_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];

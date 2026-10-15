@@ -192,7 +192,7 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         ($this->client->getContainer()->get(SendReminderNotificationHandler::class))(new SendReminderNotificationMessage((int) $reminder->getId()));
         $to = [];
         foreach (static::getMailerMessages() as $msg) {
-            if ($msg instanceof Email && $msg->getSubject() === 'AutoCron — Scadenza: Tagliando passaggio') {
+            if ($msg instanceof Email && $msg->getSubject() === 'Brumy — Scadenza: Tagliando passaggio') {
                 foreach ($msg->getTo() as $addr) {
                     $to[] = $addr->getAddress();
                 }

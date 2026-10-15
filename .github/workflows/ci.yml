@@ -20,7 +20,7 @@ jobs:
       mariadb:
         image: mariadb:11.4
         env:
-          MARIADB_DATABASE: autocron
+          MARIADB_DATABASE: brumy
           MARIADB_ROOT_PASSWORD: ci_test_root_password
         ports: ['3306:3306']
         options: >-
@@ -31,7 +31,7 @@ jobs:
       APP_ENV: test
       APP_DEBUG: '0'
       APP_SECRET: ci_test_secret_dummy
-      DATABASE_URL: mysql://root:ci_test_root_password@127.0.0.1:3306/autocron?serverVersion=mariadb-11.4.0&charset=utf8mb4
+      DATABASE_URL: mysql://root:ci_test_root_password@127.0.0.1:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4
       JWT_SECRET_KEY: '%kernel.project_dir%/config/jwt/private.pem'
       JWT_PUBLIC_KEY: '%kernel.project_dir%/config/jwt/public.pem'
       JWT_PASSPHRASE: ci_test_jwt_passphrase
@@ -131,7 +131,7 @@ jobs:
     needs: [backend, frontend]
 
     # tag vX.Y.Z → :X.Y.Z, :X.Y, :<sha> e :latest (latest solo per le versioni stabili, non per i
-    # pre-release come v1.0.0-rc.1): AUTOCRON_TAG si può fissare a una versione
+    # pre-release come v1.0.0-rc.1): BRUMY_TAG si può fissare a una versione
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
@@ -148,7 +148,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ steps.owner.outputs.owner }}/autocron-app
+          images: ghcr.io/${{ steps.owner.outputs.owner }}/brumy-app
           flavor: |
             latest=auto
           tags: |
@@ -174,11 +174,11 @@ jobs:
           target: prod
           platforms: linux/amd64
           load: true
-          tags: autocron-app:smoke
+          tags: brumy-app:smoke
           cache-from: type=gha
 
       - name: Smoke test
-        run: scripts/smoke-image.sh autocron-app:smoke
+        run: scripts/smoke-image.sh brumy-app:smoke
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -221,8 +221,8 @@ jobs:
           target: prod
           platforms: linux/amd64
           load: true
-          tags: autocron-app:smoke
+          tags: brumy-app:smoke
           cache-from: type=gha
 
       - name: Smoke test
-        run: scripts/smoke-image.sh autocron-app:smoke
+        run: scripts/smoke-image.sh brumy-app:smoke

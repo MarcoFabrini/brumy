@@ -51,26 +51,26 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — Reminder: '.$desc,
+                'subject' => 'Brumy — Reminder: '.$desc,
                 'heading' => $overdue ? 'Reminder overdue' : 'Upcoming reminder',
                 'greeting' => sprintf('Hi %s,', $first),
                 'paragraphs' => [
                     sprintf($overdue ? 'A reminder for your vehicle %s is overdue:' : 'You have an upcoming reminder for your vehicle %s:', $vehicle),
                     $deadline !== '' ? sprintf('%s — %s', $desc, $deadline) : $desc,
                 ],
-                'button' => ['label' => 'Open AutoCron', 'url' => $this->link('')],
-                'footer' => "You're receiving this because you have access to this vehicle in AutoCron.",
+                'button' => ['label' => 'Open Brumy', 'url' => $this->link('')],
+                'footer' => "You're receiving this because you have access to this vehicle in Brumy.",
             ]
             : [
-                'subject' => 'AutoCron — Scadenza: '.$desc,
+                'subject' => 'Brumy — Scadenza: '.$desc,
                 'heading' => $overdue ? 'Scadenza superata' : 'Scadenza in arrivo',
                 'greeting' => sprintf('Ciao %s,', $first),
                 'paragraphs' => [
                     sprintf($overdue ? 'È scaduta una scadenza per il tuo veicolo %s:' : 'C\'è una scadenza in arrivo per il tuo veicolo %s:', $vehicle),
                     $deadline !== '' ? sprintf('%s — %s', $desc, $deadline) : $desc,
                 ],
-                'button' => ['label' => 'Apri AutoCron', 'url' => $this->link('')],
-                'footer' => 'Ricevi questa email perché hai accesso a questo veicolo in AutoCron.',
+                'button' => ['label' => 'Apri Brumy', 'url' => $this->link('')],
+                'footer' => 'Ricevi questa email perché hai accesso a questo veicolo in Brumy.',
             ];
 
         return $this->build($loc, $copy);
@@ -105,22 +105,22 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — Reset your password',
+                'subject' => 'Brumy — Reset your password',
                 'heading' => 'Reset your password',
                 'greeting' => sprintf('Hi %s,', $first),
-                'paragraphs' => ['You asked to reset your AutoCron password. This link is valid for 1 hour.'],
+                'paragraphs' => ['You asked to reset your Brumy password. This link is valid for 1 hour.'],
                 'button' => ['label' => 'Reset password', 'url' => $url],
                 'outro' => "If you didn't request this, ignore this email — your password stays unchanged.",
-                'footer' => 'AutoCron — self-hosted vehicle management.',
+                'footer' => 'Brumy — self-hosted vehicle management.',
             ]
             : [
-                'subject' => 'AutoCron — Reimposta la tua password',
+                'subject' => 'Brumy — Reimposta la tua password',
                 'heading' => 'Reimposta la password',
                 'greeting' => sprintf('Ciao %s,', $first),
-                'paragraphs' => ['Hai richiesto di reimpostare la password del tuo account AutoCron. Il link è valido 1 ora.'],
+                'paragraphs' => ['Hai richiesto di reimpostare la password del tuo account Brumy. Il link è valido 1 ora.'],
                 'button' => ['label' => 'Reimposta password', 'url' => $url],
                 'outro' => 'Se non hai richiesto tu il reset, ignora questa email: la password resta invariata.',
-                'footer' => 'AutoCron — gestione veicoli self-host.',
+                'footer' => 'Brumy — gestione veicoli self-host.',
             ];
 
         return $this->build($loc, $copy);
@@ -134,22 +134,22 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — Confirm your email',
+                'subject' => 'Brumy — Confirm your email',
                 'heading' => 'Confirm your email',
                 'greeting' => sprintf('Hi %s,', $first),
-                'paragraphs' => ['Welcome to AutoCron! Confirm your email address to finish setting up your account. This link is valid for 24 hours.'],
+                'paragraphs' => ['Welcome to Brumy! Confirm your email address to finish setting up your account. This link is valid for 24 hours.'],
                 'button' => ['label' => 'Confirm email', 'url' => $url],
-                'outro' => "If you didn't create an AutoCron account, ignore this email.",
-                'footer' => 'AutoCron — self-hosted vehicle management.',
+                'outro' => "If you didn't create an Brumy account, ignore this email.",
+                'footer' => 'Brumy — self-hosted vehicle management.',
             ]
             : [
-                'subject' => 'AutoCron — Conferma il tuo indirizzo email',
+                'subject' => 'Brumy — Conferma il tuo indirizzo email',
                 'heading' => 'Conferma la tua email',
                 'greeting' => sprintf('Ciao %s,', $first),
-                'paragraphs' => ['Benvenuto in AutoCron! Conferma il tuo indirizzo email per completare la registrazione. Il link è valido 24 ore.'],
+                'paragraphs' => ['Benvenuto in Brumy! Conferma il tuo indirizzo email per completare la registrazione. Il link è valido 24 ore.'],
                 'button' => ['label' => 'Conferma email', 'url' => $url],
                 'outro' => 'Se non ti sei registrato tu, ignora questa email.',
-                'footer' => 'AutoCron — gestione veicoli self-host.',
+                'footer' => 'Brumy — gestione veicoli self-host.',
             ];
 
         return $this->build($loc, $copy);
@@ -170,32 +170,32 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — Invitation to '.$orgName,
+                'subject' => 'Brumy — Invitation to '.$orgName,
                 'heading' => "You've been invited",
                 'greeting' => null,
                 'paragraphs' => [
                     $inviterName !== null
-                        ? sprintf('%s invited you to join the organization "%s" on AutoCron.', $inviterName, $orgName)
-                        : sprintf('You have been invited to join the organization "%s" on AutoCron.', $orgName),
+                        ? sprintf('%s invited you to join the organization "%s" on Brumy.', $inviterName, $orgName)
+                        : sprintf('You have been invited to join the organization "%s" on Brumy.', $orgName),
                     'Accept the invitation to start sharing vehicles — you can create your account on the spot if you don\'t have one. This link is valid for 7 days.',
                 ],
                 'button' => ['label' => 'Accept invitation', 'url' => $url],
                 'outro' => "If you weren't expecting this invitation, ignore this email.",
-                'footer' => 'AutoCron — self-hosted vehicle management.',
+                'footer' => 'Brumy — self-hosted vehicle management.',
             ]
             : [
-                'subject' => 'AutoCron — Invito a '.$orgName,
+                'subject' => 'Brumy — Invito a '.$orgName,
                 'heading' => 'Sei stato invitato',
                 'greeting' => null,
                 'paragraphs' => [
                     $inviterName !== null
-                        ? sprintf('%s ti ha invitato a unirti all\'organizzazione "%s" su AutoCron.', $inviterName, $orgName)
-                        : sprintf('Sei stato invitato a unirti all\'organizzazione "%s" su AutoCron.', $orgName),
+                        ? sprintf('%s ti ha invitato a unirti all\'organizzazione "%s" su Brumy.', $inviterName, $orgName)
+                        : sprintf('Sei stato invitato a unirti all\'organizzazione "%s" su Brumy.', $orgName),
                     'Accetta l\'invito per condividere i veicoli — se non hai un account puoi crearlo al momento. Il link è valido 7 giorni.',
                 ],
                 'button' => ['label' => 'Accetta invito', 'url' => $url],
                 'outro' => 'Se non ti aspettavi questo invito, ignora questa email.',
-                'footer' => 'AutoCron — gestione veicoli self-host.',
+                'footer' => 'Brumy — gestione veicoli self-host.',
             ];
 
         return $this->build($loc, $copy);
@@ -226,24 +226,24 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — Your role in '.$orgName.' has changed',
+                'subject' => 'Brumy — Your role in '.$orgName.' has changed',
                 'heading' => 'Your role has changed',
                 'greeting' => sprintf('Hi %s,', $first),
                 'paragraphs' => [
                     sprintf('%s changed your role in the organization "%s": you are now %s.', $actorName, $orgName, $role),
                 ],
-                'button' => ['label' => 'Open AutoCron', 'url' => $this->link('')],
-                'footer' => "You're receiving this because you are a member of this organization in AutoCron.",
+                'button' => ['label' => 'Open Brumy', 'url' => $this->link('')],
+                'footer' => "You're receiving this because you are a member of this organization in Brumy.",
             ]
             : [
-                'subject' => 'AutoCron — Il tuo ruolo in '.$orgName.' è cambiato',
+                'subject' => 'Brumy — Il tuo ruolo in '.$orgName.' è cambiato',
                 'heading' => 'Il tuo ruolo è cambiato',
                 'greeting' => sprintf('Ciao %s,', $first),
                 'paragraphs' => [
                     sprintf('%s ha cambiato il tuo ruolo nell\'organizzazione "%s": ora sei %s.', $actorName, $orgName, $role),
                 ],
-                'button' => ['label' => 'Apri AutoCron', 'url' => $this->link('')],
-                'footer' => 'Ricevi questa email perché fai parte di questa organizzazione in AutoCron.',
+                'button' => ['label' => 'Apri Brumy', 'url' => $this->link('')],
+                'footer' => 'Ricevi questa email perché fai parte di questa organizzazione in Brumy.',
             ];
 
         return $this->build($loc, $copy);
@@ -274,12 +274,12 @@ final class MailBuilder
             }
             $paragraphs[] = 'Reminders, totals and charts of this vehicle, history included, are now yours.';
             $copy = [
-                'subject' => 'AutoCron — '.$vehicleName.' is now yours',
+                'subject' => 'Brumy — '.$vehicleName.' is now yours',
                 'heading' => 'You are now the owner of a vehicle',
                 'greeting' => sprintf('Hi %s,', $newOwner->getFirstName()),
                 'paragraphs' => $paragraphs,
                 'button' => ['label' => 'Open the vehicle', 'url' => $this->link('/vehicles/'.$vehicle->getId())],
-                'footer' => "You're receiving this because you are a member of this organization in AutoCron.",
+                'footer' => "You're receiving this because you are a member of this organization in Brumy.",
             ];
         } else {
             $first = $self
@@ -291,12 +291,12 @@ final class MailBuilder
             }
             $paragraphs[] = 'Promemoria, totali e grafici di questo veicolo, storico incluso, ora sono tuoi.';
             $copy = [
-                'subject' => 'AutoCron — '.$vehicleName.' ora è tuo',
+                'subject' => 'Brumy — '.$vehicleName.' ora è tuo',
                 'heading' => 'Sei il nuovo proprietario di un veicolo',
                 'greeting' => sprintf('Ciao %s,', $newOwner->getFirstName()),
                 'paragraphs' => $paragraphs,
                 'button' => ['label' => 'Apri il veicolo', 'url' => $this->link('/vehicles/'.$vehicle->getId())],
-                'footer' => 'Ricevi questa email perché fai parte di questa organizzazione in AutoCron.',
+                'footer' => 'Ricevi questa email perché fai parte di questa organizzazione in Brumy.',
             ];
         }
 
@@ -317,7 +317,7 @@ final class MailBuilder
 
         $copy = $loc === 'en'
             ? [
-                'subject' => 'AutoCron — '.$vehicleName.' has a new owner',
+                'subject' => 'Brumy — '.$vehicleName.' has a new owner',
                 'heading' => 'Vehicle ownership transferred',
                 'greeting' => sprintf('Hi %s,', $previousOwner->getFirstName()),
                 'paragraphs' => [
@@ -325,11 +325,11 @@ final class MailBuilder
                     $keepAccess ? 'You keep read-only access to the vehicle.' : 'You no longer have direct access to the vehicle.',
                     'Its reminders, totals and charts now belong to the new owner.',
                 ],
-                'button' => ['label' => 'Open AutoCron', 'url' => $this->link('')],
-                'footer' => "You're receiving this because you owned this vehicle in AutoCron.",
+                'button' => ['label' => 'Open Brumy', 'url' => $this->link('')],
+                'footer' => "You're receiving this because you owned this vehicle in Brumy.",
             ]
             : [
-                'subject' => 'AutoCron — '.$vehicleName.' ha un nuovo proprietario',
+                'subject' => 'Brumy — '.$vehicleName.' ha un nuovo proprietario',
                 'heading' => 'Proprietà del veicolo trasferita',
                 'greeting' => sprintf('Ciao %s,', $previousOwner->getFirstName()),
                 'paragraphs' => [
@@ -337,8 +337,8 @@ final class MailBuilder
                     $keepAccess ? 'Mantieni l\'accesso al veicolo in sola lettura.' : 'Non hai più un accesso diretto al veicolo.',
                     'Promemoria, totali e grafici ora appartengono al nuovo proprietario.',
                 ],
-                'button' => ['label' => 'Apri AutoCron', 'url' => $this->link('')],
-                'footer' => 'Ricevi questa email perché eri il proprietario di questo veicolo in AutoCron.',
+                'button' => ['label' => 'Apri Brumy', 'url' => $this->link('')],
+                'footer' => 'Ricevi questa email perché eri il proprietario di questo veicolo in Brumy.',
             ];
 
         return $this->build($loc, $copy);

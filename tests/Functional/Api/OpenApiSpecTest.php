@@ -38,7 +38,7 @@ final class OpenApiSpecTest extends ApiTestCase
 
     public function testSpecHasTitleAndVersion(): void
     {
-        self::assertSame('AutoCron API', $this->spec['info']['title']);
+        self::assertSame('Brumy API', $this->spec['info']['title']);
         self::assertSame('1.0.0', $this->spec['info']['version']);
     }
 

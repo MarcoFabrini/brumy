@@ -1,4 +1,4 @@
-# Components — Convenzioni AutoCron
+# Components — Convenzioni Brumy
 
 Tutta la UI è composta da componenti **piccoli, riusabili, single-responsibility**.
 Mai duplicare markup Tailwind tra pagine: estrai sempre.

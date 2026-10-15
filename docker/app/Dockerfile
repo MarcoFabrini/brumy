@@ -49,7 +49,7 @@ RUN apk add --no-cache $PHPIZE_DEPS linux-headers \
     && docker-php-ext-enable xdebug \
     && apk del $PHPIZE_DEPS
 
-COPY docker/app/php.ini       /usr/local/etc/php/conf.d/autocron.ini
+COPY docker/app/php.ini       /usr/local/etc/php/conf.d/brumy.ini
 COPY docker/app/xdebug.ini    /usr/local/etc/php/conf.d/xdebug.ini
 COPY docker/app/Caddyfile.dev /etc/frankenphp/Caddyfile
 
@@ -76,7 +76,7 @@ FROM base AS prod
 # Senza compose (docker run) l'immagine non deve partire in modalità dev
 ENV APP_ENV=prod
 
-COPY docker/app/php.ini      /usr/local/etc/php/conf.d/autocron.ini
+COPY docker/app/php.ini      /usr/local/etc/php/conf.d/brumy.ini
 COPY docker/app/opcache.ini  /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/app/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

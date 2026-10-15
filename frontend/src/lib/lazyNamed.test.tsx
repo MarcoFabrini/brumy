@@ -7,7 +7,7 @@ import { mockLocationReload } from '@/test/mockReload';
 import { clearChunkReloadFlag } from './chunkRecovery';
 import { lazyNamed } from './lazyNamed';
 
-const KEY = 'autocron:chunk-reload-at';
+const KEY = 'brumy:chunk-reload-at';
 
 function Hello() {
   return <p>Ciao dal chunk</p>;

@@ -8,7 +8,7 @@ parameters:
     app_default_uri_default: 'http://localhost'
     app_mailer_dsn_default: 'null://null'
     app.mailer_from: '%env(default:app_mailer_from_default:MAILER_FROM)%'
-    app_mailer_from_default: 'noreply@autocron.local'
+    app_mailer_from_default: 'noreply@brumy.local'
     # Fuso di calendario dell'istanza (scadenze dei promemoria). Override: APP_TIMEZONE.
     app.timezone: '%env(default:app_timezone_default:APP_TIMEZONE)%'
     app_timezone_default: 'Europe/Rome'

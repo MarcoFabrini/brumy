@@ -68,9 +68,9 @@ final class BackupCreateCommandTest extends KernelTestCase
         $brokenDb->method('getParams')->willReturn([
             'host' => '127.0.0.1',
             'port' => 1, // porta chiusa: connection refused immediato
-            'user' => 'autocron',
+            'user' => 'brumy',
             'password' => 'wrong',
-            'dbname' => 'autocron',
+            'dbname' => 'brumy',
         ]);
 
         $command = new BackupCreateCommand($brokenDb, '/tmp', $this->backupsDir);
@@ -138,7 +138,7 @@ final class BackupCreateCommandTest extends KernelTestCase
 
     public function testUploadsAreArchivedAndTheTarballIsPrivate(): void
     {
-        $uploads = sys_get_temp_dir().'/autocron_backup_uploads_'.bin2hex(random_bytes(4));
+        $uploads = sys_get_temp_dir().'/brumy_backup_uploads_'.bin2hex(random_bytes(4));
         (new Filesystem())->dumpFile($uploads.'/2025/01/file.pdf', 'contenuto allegato');
 
         try {
@@ -163,7 +163,7 @@ final class BackupCreateCommandTest extends KernelTestCase
 
     public function testEmptyUploadsDirectorySkipsTheTarball(): void
     {
-        $uploads = sys_get_temp_dir().'/autocron_backup_empty_'.bin2hex(random_bytes(4));
+        $uploads = sys_get_temp_dir().'/brumy_backup_empty_'.bin2hex(random_bytes(4));
         (new Filesystem())->mkdir($uploads);
 
         try {
