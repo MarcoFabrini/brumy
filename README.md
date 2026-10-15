@@ -101,9 +101,50 @@ docker compose pull && docker compose up -d
 
 DB migrations run automatically on startup, so an update can change the schema: take a backup first. To stay on a known version set `BRUMY_TAG` in `.env` to a release without the `v` (e.g. `0.1.2`, or `0.1` for its latest patch) instead of the default `latest`, which follows the newest release.
 
-#### Moving an install created under a different name
+<!-- TEMPORARY: guide for installs created before the rename to Brumy. Remove it in a later release. -->
+#### Upgrading an install created before the rename (temporary)
 
-If your data folder, database name or `.env` variable prefix come from an older name of the project, `scripts/migrate-instance.sh <old-name>` moves everything to the current names without losing data: it exports the database, moves `./<old-name>/` to `./brumy/`, rewrites the `.env` (a copy stays in `.env.pre-rename`), imports the data into the new database and keeps the old database folder in `./brumy/db.pre-rename`. Run `docker compose down` with the old `compose.yml` first, replace it with the new one, run the script in the same folder, then `docker compose pull && docker compose up -d`.
+Up to v0.1.9 the project was called **autocron**. From v0.2.0 the image, the data folder (`./autocron/` becomes `./brumy/`), the database and user name, the Docker network and the `.env` prefix (`AUTOCRON_*` becomes `BRUMY_*`) all use the new name. Installing from scratch needs nothing special; an existing install must be migrated, otherwise `docker compose up -d` starts an empty database and your data would look gone (it stays untouched in `./autocron/`).
+
+`scripts/migrate-instance.sh` does the move without losing data: it exports the database, moves the folder, rewrites your `.env` (a copy stays in `.env.pre-rename`), imports the data into the new database and keeps the old database folder in `./brumy/db.pre-rename`. Nothing is deleted. From the folder that holds your `compose.yml` and `.env`:
+
+```bash
+# 1. backup, and keep copies of the old files
+docker compose exec -u www-data api php bin/console app:backup:create
+cp compose.yml compose.yml.old && cp .env .env.old
+cp -a ./autocron/backups ~/backup-before-rename
+
+# 2. stop the stack with the old compose.yml (no -v: the data is in ./autocron, not in volumes)
+docker compose down
+
+# 3. fetch the new compose.yml and the script (keep your own .env)
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
+mkdir -p scripts
+curl -o scripts/migrate-instance.sh https://raw.githubusercontent.com/MarcoFabrini/brumy/main/scripts/migrate-instance.sh
+chmod +x scripts/migrate-instance.sh
+
+# 4. migrate: it prints "Fatto: N tabelle importate" when the import is complete
+scripts/migrate-instance.sh autocron
+
+# 5. start
+docker compose pull && docker compose up -d
+docker compose ps && docker compose logs --tail 50 api
+```
+
+Before step 5, check your reverse proxy: the Docker network is now called `brumy`, so anything attached to the old network name must be updated. After the update, reinstall the PWA on your phone (new name) and expect the saved theme to reset once. Sessions stay valid because the JWT keys move with the folder.
+
+Once everything works, remove `./brumy/db.pre-rename`, `.env.pre-rename`, `.env.old` and `compose.yml.old`.
+
+If something goes wrong before step 5, go back with:
+
+```bash
+docker compose down
+mv ./brumy ./autocron && mv ./autocron/db.pre-rename ./autocron/db
+cp .env.old .env && cp compose.yml.old compose.yml
+docker compose up -d
+```
+
+If you run the script from an older copy and it stops with `Permission denied` on `./brumy/db`, undo the folder move with `mv ./brumy ./autocron` and run `sudo scripts/migrate-instance.sh autocron`, then `sudo chown "$USER": .env .env.pre-rename`. The current script from `main` does not need `sudo`.
 
 ### Backup
 
@@ -262,9 +303,50 @@ docker compose pull && docker compose up -d
 
 Le migrazioni DB girano da sole all'avvio, quindi un aggiornamento può cambiare lo schema: fai prima un backup. Per restare su una versione precisa imposta `BRUMY_TAG` in `.env` a una release senza la `v` (es. `0.1.2`, oppure `0.1` per la sua ultima patch) invece del default `latest`, che segue l'ultima release.
 
-#### Spostare un'installazione creata con un altro nome
+<!-- TEMPORANEA: guida per le installazioni create prima del rename in Brumy. Da togliere in un rilascio successivo. -->
+#### Aggiornare un'installazione creata prima del rename (temporanea)
 
-Se la cartella dei dati, il nome del database o il prefisso delle variabili del `.env` vengono da un nome precedente del progetto, `scripts/migrate-instance.sh <vecchio-nome>` porta tutto ai nomi attuali senza perdere dati: esporta il database, sposta `./<vecchio-nome>/` in `./brumy/`, riscrive il `.env` (una copia resta in `.env.pre-rename`), importa i dati nel database nuovo e tiene la vecchia cartella del database in `./brumy/db.pre-rename`. Prima fai `docker compose down` con il vecchio `compose.yml`, poi sostituiscilo con quello nuovo, lancia lo script nella stessa cartella e infine `docker compose pull && docker compose up -d`.
+Fino alla v0.1.9 il progetto si chiamava **autocron**. Dalla v0.2.0 immagine, cartella dei dati (`./autocron/` diventa `./brumy/`), nome di database e utente, rete Docker e prefisso del `.env` (`AUTOCRON_*` diventa `BRUMY_*`) usano il nome nuovo. Chi installa da zero non deve fare nulla di particolare; un'installazione esistente va migrata, altrimenti `docker compose up -d` avvia un database vuoto e i dati sembrerebbero spariti (restano intatti in `./autocron/`).
+
+`scripts/migrate-instance.sh` fa lo spostamento senza perdere dati: esporta il database, sposta la cartella, riscrive il tuo `.env` (una copia resta in `.env.pre-rename`), importa i dati nel database nuovo e tiene la vecchia cartella del database in `./brumy/db.pre-rename`. Non cancella nulla. Dalla cartella che contiene `compose.yml` e `.env`:
+
+```bash
+# 1. backup, e copia dei file vecchi
+docker compose exec -u www-data api php bin/console app:backup:create
+cp compose.yml compose.yml.old && cp .env .env.old
+cp -a ./autocron/backups ~/backup-prima-del-rename
+
+# 2. ferma lo stack con il compose.yml vecchio (senza -v: i dati sono in ./autocron, non in volumi)
+docker compose down
+
+# 3. scarica il compose.yml nuovo e lo script (tieni il tuo .env)
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
+mkdir -p scripts
+curl -o scripts/migrate-instance.sh https://raw.githubusercontent.com/MarcoFabrini/brumy/main/scripts/migrate-instance.sh
+chmod +x scripts/migrate-instance.sh
+
+# 4. migra: a import completato stampa "Fatto: N tabelle importate"
+scripts/migrate-instance.sh autocron
+
+# 5. avvia
+docker compose pull && docker compose up -d
+docker compose ps && docker compose logs --tail 50 api
+```
+
+Prima del passo 5 controlla il reverse proxy: la rete Docker ora si chiama `brumy`, quindi ciò che è collegato al vecchio nome va aggiornato. Dopo l'aggiornamento reinstalla la PWA sul telefono (nome nuovo) e aspettati che il tema salvato si azzeri una volta. Le sessioni restano valide perché le chiavi JWT si spostano con la cartella.
+
+Quando tutto funziona, elimina `./brumy/db.pre-rename`, `.env.pre-rename`, `.env.old` e `compose.yml.old`.
+
+Se qualcosa va storto prima del passo 5, torni indietro con:
+
+```bash
+docker compose down
+mv ./brumy ./autocron && mv ./autocron/db.pre-rename ./autocron/db
+cp .env.old .env && cp compose.yml.old compose.yml
+docker compose up -d
+```
+
+Se lanci lo script da una copia più vecchia e si ferma con `Permission denied` su `./brumy/db`, annulla lo spostamento con `mv ./brumy ./autocron` e lancia `sudo scripts/migrate-instance.sh autocron`, poi `sudo chown "$USER": .env .env.pre-rename`. Lo script attuale su `main` non richiede `sudo`.
 
 ### Backup
 

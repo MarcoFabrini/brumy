@@ -86,7 +86,8 @@ until docker exec "$TMP_NAME" mariadb-admin ping --silent >/dev/null 2>&1; do
 done
 docker exec "$TMP_NAME" mariadb-dump --single-transaction --routines --triggers --events \
     --default-character-set=utf8mb4 "$OLD_DB" > "$DUMP"
-docker rm -f "$TMP_NAME" >/dev/null
+docker stop -t 120 "$TMP_NAME" >/dev/null
+docker rm "$TMP_NAME" >/dev/null
 grep -q '^-- Dump completed' "$DUMP" || fail "l'esportazione non è completa"
 EXPECTED_TABLES="$(grep -c '^CREATE TABLE' "$DUMP" || true)"
 [ "$EXPECTED_TABLES" -gt 0 ] || fail "l'esportazione non contiene tabelle"
@@ -95,9 +96,11 @@ echo "2/5 Sposto ./$OLD in ./$NEW"
 mv "./$OLD" "./$NEW"
 
 echo "3/5 Metto da parte la vecchia cartella del database in ./$NEW/db.pre-rename"
-mv "./$NEW/db" "./$NEW/db.pre-rename"
-mkdir -p "./$NEW/backups"
-gzip -c "$DUMP" > "./$NEW/backups/pre-rename-$(date +%Y%m%d-%H%M%S).sql.gz"
+# Le cartelle dati appartengono a root o all'utente dei container: si lavora da un container, così lo script
+# non richiede sudo.
+docker run --rm -v "$(pwd)/$NEW:/data" "$IMAGE" mv /data/db /data/db.pre-rename
+docker run --rm -i -v "$(pwd)/$NEW:/data" "$IMAGE" sh -c \
+    'mkdir -p /data/backups && gzip -c > "/data/backups/pre-rename-$(date +%Y%m%d-%H%M%S).sql.gz"' < "$DUMP"
 
 echo "4/5 Aggiorno il .env (copia in .env.pre-rename)"
 cp .env .env.pre-rename
