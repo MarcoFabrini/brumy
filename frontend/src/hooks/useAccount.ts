@@ -142,7 +142,7 @@ export interface InvitationPreview {
 export function useInvitationPreview(token: string) {
   return useQuery({
     queryKey: ['invitation', token],
-    queryFn: () => authFetch<InvitationPreview>(`/api/auth/invitation/${token}`, { skipRefresh: true }),
+    queryFn: () => authFetch<InvitationPreview>(`/api/auth/invitation/${encodeURIComponent(token)}`, { skipRefresh: true }),
     enabled: token.length > 0,
     retry: false,
   });

@@ -34,6 +34,11 @@ final class PushSubscriptionVoter extends Voter
         if (!$user instanceof User) {
             return false;
         }
-        return $subject->getUser()->getId() === $user->getId();
+
+        // Entrambe le azioni sono riservate al proprietario; un attributo nuovo non viene concesso per riflesso.
+        return match ($attribute) {
+            self::VIEW, self::DELETE => $subject->getUser()->getId() === $user->getId(),
+            default => false,
+        };
     }
 }

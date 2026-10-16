@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\MessageHandler;
 
+use App\Service\LogRedactor;
 use App\Entity\Reminder;
 use App\Entity\User;
 use App\Enum\ReminderUrgency;
@@ -164,7 +165,7 @@ final class SendReminderNotificationHandler
         } catch (\Throwable $e) {
             $this->logger->error('Reminder push failed', [
                 'user_id' => $user->getId(),
-                'error' => $e->getMessage(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
 
             return 0;
@@ -181,8 +182,7 @@ final class SendReminderNotificationHandler
         } catch (\Throwable $e) {
             $this->logger->error('Reminder email failed', [
                 'user_id' => $user->getId(),
-                'email' => $user->getEmail(),
-                'error' => $e->getMessage(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
 
             return false;

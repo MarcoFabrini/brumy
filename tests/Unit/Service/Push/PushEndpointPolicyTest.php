@@ -58,5 +58,8 @@ final class PushEndpointPolicyTest extends TestCase
         yield 'rete interna' => ['https://redis:6379/'];
         yield 'metadata' => ['http://169.254.169.254/latest/meta-data'];
         yield 'senza host' => ['https:///fcm.googleapis.com'];
+        yield 'host con backslash' => ['https://evil.test\\.fcm.googleapis.com/x'];
+        yield 'host con percent-encoding' => ['https://fcm%2egoogleapis.com/x'];
+        yield 'host con caratteri non DNS' => ['https://fcm_x.googleapis.com/x'];
     }
 }

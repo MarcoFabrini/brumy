@@ -27,7 +27,7 @@ final class DecimalStringValidator extends ConstraintValidator
             throw new UnexpectedValueException($value, 'string');
         }
 
-        $pattern = sprintf('/^(\d{1,%d})(\.\d{1,%d})?$/', $constraint->maxIntegerDigits, $constraint->maxDecimals);
+        $pattern = sprintf('/^(\d{1,%d})(\.\d{1,%d})?$/D', $constraint->maxIntegerDigits, $constraint->maxDecimals);
         if (preg_match($pattern, $value) !== 1) {
             $this->context->buildViolation($constraint->message)->addViolation();
 

@@ -115,6 +115,11 @@ final class GdprDeleteService
                     ->setParameter('org', $org)
                     ->getSingleColumnResult();
                 array_push($filesToDelete, ...$paths);
+                // I diff degli audit log (targa, VIN, note...) sono dati dell'org: con la FK SET NULL sopravviverebbero
+                // alla sua rimozione, quindi vanno cancellati qui, nella stessa transazione.
+                $this->em->createQuery('DELETE FROM '.AuditLog::class.' l WHERE l.organization = :org')
+                    ->setParameter('org', $org)
+                    ->execute();
                 $this->em->remove($org);
                 ++$deletedOrgs;
             } else {

@@ -38,10 +38,21 @@ final class RecurringSchedule
         \DateTimeImmutable $today,
         ?\DateTimeImmutable $recurringUntil = null,
     ): array {
+        return $this->expand($period, $start, $today, $recurringUntil, 0);
+    }
+
+    /** @return list<\DateTimeImmutable> addebiti dall'indice $firstIndex fino a `min($today, $recurringUntil)` inclusi */
+    private function expand(
+        RecurringPeriod $period,
+        \DateTimeImmutable $start,
+        \DateTimeImmutable $today,
+        ?\DateTimeImmutable $recurringUntil,
+        int $firstIndex,
+    ): array {
         $limit = $recurringUntil !== null && $recurringUntil < $today ? $recurringUntil : $today;
 
         $charges = [];
-        for ($n = 0; $n < self::MAX_OCCURRENCES; ++$n) {
+        for ($n = $firstIndex; $n < self::MAX_OCCURRENCES; ++$n) {
             $date = $this->charge($period, $start, $n);
             if ($date > $limit) {
                 break; // le date crescono con n: oltre il limite non c'è più niente da contare
@@ -50,6 +61,29 @@ final class RecurringSchedule
         }
 
         return $charges;
+    }
+
+    /**
+     * Primo indice che può cadere dentro la finestra che inizia a `$from` (mai oltre il primo che ci cade davvero):
+     * serve a non generare anni di addebiti già passati solo per scartarli. Il costo di una richiesta segue così
+     * la finestra e non la lontananza della data di inizio.
+     */
+    private function firstIndexFrom(RecurringPeriod $period, \DateTimeImmutable $start, \DateTimeImmutable $from): int
+    {
+        if ($from <= $start) {
+            return 0;
+        }
+
+        if ($period === RecurringPeriod::WEEKLY) {
+            $steps = intdiv((int) $start->diff($from)->days, 7);
+        } else {
+            $monthIndex = static fn (\DateTimeImmutable $d): int => (int) $d->format('Y') * 12 + (int) $d->format('n') - 1;
+            // Con il giorno ridotto a fine mese un addebito resta nello stesso mese di calendario: indice mensile esatto.
+            $steps = intdiv($monthIndex($from) - $monthIndex($start), self::months($period));
+        }
+
+        // Un passo di margine: l'arrotondamento per difetto non deve mai saltare un addebito dentro la finestra.
+        return max(0, $steps - 1);
     }
 
     /**
@@ -67,7 +101,7 @@ final class RecurringSchedule
         ?\DateTimeImmutable $recurringUntil = null,
     ): array {
         return array_values(array_filter(
-            $this->chargesUpTo($period, $start, $today, $recurringUntil),
+            $this->expand($period, $start, $today, $recurringUntil, $this->firstIndexFrom($period, $start, $from)),
             static fn (\DateTimeImmutable $date): bool => $date >= $from && $date < $until,
         ));
     }

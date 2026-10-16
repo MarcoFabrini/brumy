@@ -138,7 +138,7 @@ final class MemberNotifier
             $this->logger->error('Member notification email failed', [
                 'event' => $event,
                 'user_id' => $recipient->getId(),
-                'error' => $e->getMessage(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
         }
 
@@ -148,7 +148,7 @@ final class MemberNotifier
             $this->logger->error('Member notification push failed', [
                 'event' => $event,
                 'user_id' => $recipient->getId(),
-                'error' => $e->getMessage(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
         }
     }

@@ -18,7 +18,7 @@ function share(id: number, role: VehicleShare['role'], userId: number, first: st
     role,
     acceptedAt: '2026-09-01T00:00:00+00:00',
     createdAt: '2026-09-01T00:00:00+00:00',
-    user: { id: userId, email: `${first.toLowerCase()}@test.it`, firstName: first, lastName: last },
+    user: { id: userId, firstName: first, lastName: last },
   };
 }
 

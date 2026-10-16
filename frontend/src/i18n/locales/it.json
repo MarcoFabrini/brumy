@@ -619,7 +619,8 @@
       "no_keys": "Genera prima una coppia VAPID prima di abilitare le notifiche",
       "endpoint_not_allowed": "Servizio di notifica non supportato",
       "not_found": "Dispositivo non trovato",
-      "web_fields_required": "Dati di sottoscrizione incompleti: riattiva le notifiche su questo browser"
+      "web_fields_required": "Dati di sottoscrizione incompleti: riattiva le notifiche su questo browser",
+      "too_many_subscriptions": "Troppi dispositivi registrati: rimuovine qualcuno prima di aggiungerne un altro"
     },
     "settings": {
       "instance_admin_required": "Solo l'amministratore dell'istanza (il primo utente registrato) può modificare queste impostazioni"
@@ -749,6 +750,7 @@
       "file_too_large": "File troppo grande (max 10 MB)",
       "mime_not_allowed": "Formato non supportato (solo JPG, PNG, WebP, PDF)",
       "entity_required": "Riferimento mancante",
+      "busy": "Troppi caricamenti in corso per questa organizzazione: riprova tra qualche secondo",
       "too_many_files": "Troppi allegati su questo elemento (massimo 20)",
       "quota_exceeded": "Spazio allegati dell'organizzazione esaurito: elimina dei file per caricarne altri"
     },
@@ -817,6 +819,7 @@
       "owner_role_forbidden": "Solo un proprietario può assegnare il ruolo di proprietario",
       "already_exists": "Questa persona fa già parte dell'organizzazione",
       "cannot_remove_owner": "Il proprietario dell'organizzazione non può essere rimosso: declassalo prima",
+      "cannot_remove_admin": "Solo un proprietario può rimuovere un amministratore",
       "cannot_change_owner_role": "Un amministratore non può modificare il ruolo di un proprietario",
       "cannot_change_admin_role": "Solo un proprietario può modificare il ruolo di un amministratore",
       "cannot_change_own_role": "Non puoi cambiare il tuo ruolo",

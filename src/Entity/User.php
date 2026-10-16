@@ -26,7 +26,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'bigint')]
-    #[Groups(['user:read', 'user:list'])]
+    #[Groups(['user:read', 'user:list', 'user:name'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 180, unique: true)]
@@ -45,13 +45,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(name: 'first_name', length: 100)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 100)]
-    #[Groups(['user:read', 'user:list'])]
+    #[Groups(['user:read', 'user:list', 'user:name'])]
     private string $firstName;
 
     #[ORM\Column(name: 'last_name', length: 100)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 100)]
-    #[Groups(['user:read', 'user:list'])]
+    #[Groups(['user:read', 'user:list', 'user:name'])]
     private string $lastName;
 
     #[ORM\Column(length: 5, options: ['default' => 'it'])]

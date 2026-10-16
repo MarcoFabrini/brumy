@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
+import { sameOriginPushUrl } from './lib/pushUrl';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -61,7 +62,8 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data as { url?: string })?.url ?? '/';
+  // L'URL arriva dal payload del push: si naviga solo dentro la stessa origine.
+  const url = sameOriginPushUrl((event.notification.data as { url?: unknown } | null)?.url, self.location.origin);
 
   event.waitUntil(
     (async () => {

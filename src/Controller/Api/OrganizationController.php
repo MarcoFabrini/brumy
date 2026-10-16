@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Service\LogRedactor;
 use App\Dto\Request\MemberInviteRequest;
 use App\Dto\Request\MemberRoleRequest;
 use App\Dto\Request\OrganizationRequest;
@@ -301,8 +302,8 @@ final class OrganizationController extends AbstractController
         } catch (\Throwable $e) {
             $this->logger->error('Invitation email failed', [
                 'org_id' => $org->getId(),
-                'email' => $email,
-                'error' => $e->getMessage(),
+                'invitation_id' => $invitation->getId(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
         }
 
@@ -388,6 +389,7 @@ final class OrganizationController extends AbstractController
         ],
         responses: [
             new OA\Response(response: 204, description: 'Removed'),
+            new OA\Response(response: 403, description: 'member.cannot_remove_admin (only an owner can remove an admin; an admin may only remove themselves)'),
             new OA\Response(response: 404, description: 'member.not_found'),
             new OA\Response(response: 409, description: 'member.cannot_remove_owner'),
         ],
@@ -407,10 +409,20 @@ final class OrganizationController extends AbstractController
             return $this->problem('member.cannot_remove_owner', 409);
         }
 
-        // I veicoli del membro passano a chi lo rimuove (altrimenti resterebbero senza proprietario
-        // e nessuno riceverebbe più le notifiche); le sue altre share dell'org cadono con la membership.
         /** @var User $actor */
         $actor = $this->getUser();
+
+        // Gli admin li rimuove solo un owner (come per il cambio ruolo): un admin può solo andarsene da sé.
+        $actorRole = $this->memberRepo->findMembership($actor, $org)?->getRole();
+        if ($member->getRole() === OrgRole::ADMIN
+            && $member->getUser()->getId() !== $actor->getId()
+            && $actorRole !== OrgRole::OWNER
+        ) {
+            return $this->problem('member.cannot_remove_admin', 403);
+        }
+
+        // I veicoli del membro passano a chi lo rimuove (altrimenti resterebbero senza proprietario
+        // e nessuno riceverebbe più le notifiche); le sue altre share dell'org cadono con la membership.
         $this->memberRemover->remove($member, $actor);
 
         return new JsonResponse(null, 204);
@@ -421,7 +433,11 @@ final class OrganizationController extends AbstractController
     private function mustFind(int $id): Organization
     {
         $org = $this->orgRepo->find($id);
-        if (!$org) {
+        // Per chi non ha nessun legame con l'org (nemmeno un invito in attesa) l'id inesistente e quello altrui
+        // sono indistinguibili: stesso 404. Un membro senza i permessi giusti resta 403 dal voter.
+        /** @var User $user */
+        $user = $this->getUser();
+        if (!$org || $this->memberRepo->findMembership($user, $org) === null) {
             throw $this->createNotFoundException('org.not_found');
         }
         return $org;

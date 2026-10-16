@@ -2,6 +2,12 @@
 	root * /app/public/frontend
 	encode gzip
 
+	# Tetto al corpo di ogni richiesta, sopra il massimo di un upload (post_max_size 13M in php.ini): un corpo
+	# JSON enorme non viene nemmeno letto dall'app. Oltre il limite Caddy risponde 413.
+	request_body {
+		max_size 14MB
+	}
+
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	header X-Frame-Options "SAMEORIGIN"
 	header X-Content-Type-Options "nosniff"
@@ -10,7 +16,7 @@
 	# script-src senza 'unsafe-inline': la SPA ha un solo <script type="module" src> e il service worker registrato dal bundle (/sw.js)
 	# (nessuno script inline in index.html). 'unsafe-inline' resta solo su style-src, per gli stili inline
 	# di Radix/recharts. Se una futura dipendenza richiedesse uno script inline, serve un hash/nonce, non il wildcard.
-	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
 
 	@assets path_regexp \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp)$
 

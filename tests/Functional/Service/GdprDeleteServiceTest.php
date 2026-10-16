@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional\Service;
 
+use App\Entity\AuditLog;
 use App\Entity\EmailVerificationToken;
 use App\Entity\OrganizationInvitation;
 use App\Entity\Organization;
@@ -13,6 +14,7 @@ use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Entity\Vehicle;
 use App\Entity\VehicleShare;
+use App\Enum\AuditAction;
 use App\Enum\OrgRole;
 use App\Enum\PushPlatform;
 use App\Enum\ShareRole;
@@ -113,6 +115,37 @@ final class GdprDeleteServiceTest extends KernelTestCase
 
         self::assertSame(1, $summary['deleted_orgs']);
         self::assertNull($this->em()->find(Organization::class, $orgId));
+    }
+
+    public function testAnonymizeDeletesAuditDiffsOfTheSoloOwnedOrganizationOnly(): void
+    {
+        $user = UserFactory::createOne();
+        $solo = OrganizationFactory::createOne(['slug' => 'solo-audit']);
+        OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $solo, 'role' => OrgRole::OWNER]);
+        $other = UserFactory::createOne();
+        $shared = OrganizationFactory::createOne(['slug' => 'shared-audit']);
+        OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $shared, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $other, 'organization' => $shared, 'role' => OrgRole::OWNER]);
+
+        $ids = [];
+        foreach ([$solo, $shared] as $org) {
+            $log = (new AuditLog())
+                ->setOrganization($org)
+                ->setUser($user)
+                ->setEntityClass('Vehicle')
+                ->setEntityId('1')
+                ->setAction(AuditAction::UPDATED)
+                ->setChanges(['licensePlate' => ['AA111AA', 'BB222BB']]);
+            $this->em()->persist($log);
+            $this->em()->flush();
+            $ids[$org->getSlug()] = $log->getId();
+        }
+
+        $this->service()->anonymize($user);
+
+        $this->em()->clear();
+        self::assertNull($this->em()->find(AuditLog::class, $ids['solo-audit']), 'I diff dell\'org eliminata non devono restare');
+        self::assertNotNull($this->em()->find(AuditLog::class, $ids['shared-audit']), 'Le org che restano tengono il loro audit');
     }
 
     public function testAnonymizeClearsAvatarAndRemovesInvitationsToOldEmail(): void

@@ -45,8 +45,11 @@ async function attemptRefresh(): Promise<RefreshResult> {
     });
     if (res.status === 400 || res.status === 401) return 'invalid';
     if (!res.ok) return 'unavailable';
-    const data = (await res.json()) as { access_token: string };
-    useAuthStore.getState().setAccessToken(data.access_token);
+    const data: unknown = await res.json();
+    // La risposta è del nostro server, ma entra come dato non tipizzato: si controlla invece di forzare il tipo.
+    const token = typeof data === 'object' && data !== null && 'access_token' in data ? data.access_token : null;
+    if (typeof token !== 'string' || token === '') return 'unavailable';
+    useAuthStore.getState().setAccessToken(token);
     return 'ok';
   } catch {
     return 'unavailable';

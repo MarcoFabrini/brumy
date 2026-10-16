@@ -209,6 +209,71 @@ final class AuthControllerTest extends ApiTestCase
         self::assertResponseStatusCodeSame(401);
     }
 
+    public function testLoginWithOverlongPasswordAnswersTheSameForKnownAndUnknownEmail(): void
+    {
+        UserFactory::createOne(['email' => 'known@test.it']);
+        $overlong = str_repeat('a', 5000);
+
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'known@test.it', 'password' => $overlong]);
+        $knownStatus = $this->client->getResponse()->getStatusCode();
+        $knownBody = $this->jsonBody();
+
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'ghost@test.it', 'password' => $overlong]);
+        $unknownStatus = $this->client->getResponse()->getStatusCode();
+        $unknownBody = $this->jsonBody();
+
+        // Prima del tetto sulla lunghezza: 401 per l'email registrata e 500 per la sconosciuta (oracolo di esistenza).
+        self::assertSame(422, $knownStatus);
+        self::assertSame($knownStatus, $unknownStatus);
+        self::assertSame($knownBody['errors'] ?? null, $unknownBody['errors'] ?? null);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function malformedLogoutBodies(): iterable
+    {
+        yield 'refresh_token non stringa' => ['{"refresh_token":["x"]}'];
+        yield 'refresh_token numerico' => ['{"refresh_token":123}'];
+        yield 'corpo scalare' => ['"solo-una-stringa"'];
+        yield 'corpo lista' => ['[1,2]'];
+    }
+
+    #[DataProvider('malformedLogoutBodies')]
+    public function testLogoutIgnoresMalformedBodiesWithoutServerError(string $rawBody): void
+    {
+        $this->client->request('POST', '/api/auth/logout', server: ['CONTENT_TYPE' => 'application/json'], content: $rawBody);
+
+        self::assertResponseStatusCodeSame(204);
+    }
+
+    public function testAvatarDownloadCarriesNosniff(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+        $this->client->request(
+            'POST',
+            '/api/auth/avatar',
+            files: ['file' => $this->makeUploadedFile('me.png', $this->pngBytes(), 'image/png')],
+            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
+        );
+        self::assertResponseIsSuccessful();
+
+        $this->client->request('GET', '/api/auth/avatar', server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('nosniff', $this->client->getResponse()->headers->get('X-Content-Type-Options'));
+    }
+
+    public function testChangePasswordRejectsAnOverlongCurrentPassword(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+
+        $this->jsonRequest('PUT', '/api/auth/password', [
+            'currentPassword' => str_repeat('a', 5000),
+            'newPassword' => 'nuovapw12345',
+        ], accessToken: $token);
+
+        self::assertResponseStatusCodeSame(422);
+    }
+
     // -------------------- REFRESH --------------------
 
     public function testRefreshMobileViaBodyRotatesToken(): void
@@ -361,6 +426,35 @@ final class AuthControllerTest extends ApiTestCase
         $fresh = static::getContainer()->get(UserRepository::class)->find($user->getId());
         self::assertInstanceOf(User::class, $fresh);
         self::assertNotSame('takeover@test.it', $fresh->getEmail());
+    }
+
+    public function testUpdateProfileEmailChangeInvalidatesPendingResetTokens(): void
+    {
+        [$user, , $token] = $this->createAuthenticatedUser();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $raw = bin2hex(random_bytes(32));
+        $em->persist(new PasswordResetToken($user, hash('sha256', $raw), (new \DateTimeImmutable())->modify('+1 hour')));
+        $em->flush();
+
+        $this->jsonRequest('PUT', '/api/auth/profile', [
+            'email' => 'nuovo-indirizzo@test.it',
+            'firstName' => 'A',
+            'lastName' => 'B',
+            'locale' => 'it',
+            'currentPassword' => UserFactory::DEFAULT_PASSWORD,
+        ], accessToken: $token);
+        self::assertResponseIsSuccessful();
+
+        // Il link spedito al vecchio indirizzo non deve più permettere di cambiare la password.
+        $this->jsonRequest('POST', '/api/auth/reset-password', ['token' => $raw, 'password' => 'presa-di-possesso1']);
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('auth.invalid_reset_token', $this->jsonBody()['title']);
+
+        $this->jsonRequest('POST', '/api/auth/login', [
+            'email' => 'nuovo-indirizzo@test.it',
+            'password' => UserFactory::DEFAULT_PASSWORD,
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     public function testUpdateProfileEmailChangeResetsVerification(): void

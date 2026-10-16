@@ -100,14 +100,18 @@ echo "3/5 Metto da parte la vecchia cartella del database in ./$NEW/db.pre-renam
 # non richiede sudo.
 docker run --rm -v "$(pwd)/$NEW:/data" "$IMAGE" mv /data/db /data/db.pre-rename
 docker run --rm -i -v "$(pwd)/$NEW:/data" "$IMAGE" sh -c \
-    'mkdir -p /data/backups && gzip -c > "/data/backups/pre-rename-$(date +%Y%m%d-%H%M%S).sql.gz"' < "$DUMP"
+    'mkdir -p /data/backups && umask 077 && gzip -c > "/data/backups/pre-rename-$(date +%Y%m%d-%H%M%S).sql.gz"' < "$DUMP"
 
 echo "4/5 Aggiorno il .env (copia in .env.pre-rename)"
 cp .env .env.pre-rename
+# I valori finiscono nella parte di sostituzione di sed: "/" e "&" vanno protetti, altrimenti rompono il .env.
+sed_escape() {
+    printf '%s' "$1" | sed 's/[\/&]/\\&/g'
+}
 sed -i \
     -e "s/^\(#*\)${OLD_PREFIX}_/\1BRUMY_/" \
-    -e "s/^MARIADB_DATABASE=.*/MARIADB_DATABASE=$NEW_DB/" \
-    -e "s/^MARIADB_USER=.*/MARIADB_USER=$NEW_USER/" \
+    -e "s/^MARIADB_DATABASE=.*/MARIADB_DATABASE=$(sed_escape "$NEW_DB")/" \
+    -e "s/^MARIADB_USER=.*/MARIADB_USER=$(sed_escape "$NEW_USER")/" \
     .env
 
 echo "5/5 Avvio il database nuovo e importo i dati"

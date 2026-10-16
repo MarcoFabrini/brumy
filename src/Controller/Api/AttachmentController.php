@@ -127,6 +127,7 @@ final class AttachmentController extends AbstractController
             new OA\Response(response: 413, description: 'upload.file_too_large / upload.quota_exceeded'),
             new OA\Response(response: 415, description: 'upload.mime_not_allowed'),
             new OA\Response(response: 422, description: 'upload.too_many_files'),
+            new OA\Response(response: 429, description: 'upload.busy (another upload of the same organization holds the quota lock)'),
         ],
     )]
     #[Route('', name: 'upload', methods: ['POST'])]
@@ -164,42 +165,49 @@ final class AttachmentController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $vehicle);
 
         $size = $file->getSize();
-        $quotaError = $this->quota->violation($org, $type, $entityId, $size);
-        if ($quotaError === AttachmentQuota::TOO_MANY_FILES) {
-            return $this->problem($quotaError, 422);
-        }
-        if ($quotaError !== null) {
-            return $this->problem($quotaError, 413);
-        }
+        /** @var User $user */
+        $user = $this->getUser();
 
-        // La colonna è di 255 caratteri: un nome più lungo farebbe fallire l'INSERT DOPO aver salvato il file.
-        $originalFilename = self::fitFilename($file->getClientOriginalName());
+        // Controllo della quota, salvataggio e inserimento sotto un lock per organizzazione: due upload
+        // concorrenti non possono più superare insieme il tetto.
+        $response = $this->quota->serialized($org, function () use ($file, $org, $type, $entityId, $size, $mime, $user): JsonResponse {
+            $quotaError = $this->quota->violation($org, $type, $entityId, $size);
+            if ($quotaError === AttachmentQuota::TOO_MANY_FILES) {
+                return $this->problem($quotaError, 422);
+            }
+            if ($quotaError !== null) {
+                return $this->problem($quotaError, 413);
+            }
 
-        // Lo store fisico avviene PRIMA del persist DB: se DB fallisce, cleanup manuale
-        $storedPath = $this->storage->store($file, $type->value);
+            // La colonna è di 255 caratteri: un nome più lungo farebbe fallire l'INSERT DOPO aver salvato il file.
+            $originalFilename = self::fitFilename($file->getClientOriginalName());
 
-        try {
-            /** @var User $user */
-            $user = $this->getUser();
-            $attachment = (new Attachment())
-                ->setOrganization($org)
-                ->setEntityType($type)
-                ->setEntityId($entityId)
-                ->setOriginalFilename($originalFilename)
-                ->setStoredPath($storedPath)
-                ->setMimeType($mime)
-                ->setSizeBytes($size)
-                ->setUploadedBy($user);
+            // Lo store fisico avviene PRIMA del persist DB: se DB fallisce, cleanup manuale
+            $storedPath = $this->storage->store($file, $type->value);
 
-            $this->em->persist($attachment);
-            $this->em->flush();
-        } catch (\Throwable $e) {
-            // Compensazione: il DB ha fallito, rimuoviamo il file
-            $this->storage->delete($storedPath);
-            throw $e;
-        }
+            try {
+                $attachment = (new Attachment())
+                    ->setOrganization($org)
+                    ->setEntityType($type)
+                    ->setEntityId($entityId)
+                    ->setOriginalFilename($originalFilename)
+                    ->setStoredPath($storedPath)
+                    ->setMimeType($mime)
+                    ->setSizeBytes($size)
+                    ->setUploadedBy($user);
 
-        return $this->jsonGroups($attachment, ['attachment:read'], 201);
+                $this->em->persist($attachment);
+                $this->em->flush();
+            } catch (\Throwable $e) {
+                // Compensazione: il DB ha fallito, rimuoviamo il file
+                $this->storage->delete($storedPath);
+                throw $e;
+            }
+
+            return $this->jsonGroups($attachment, ['attachment:read'], 201);
+        });
+
+        return $response ?? $this->problem('upload.busy', 429);
     }
 
     /**

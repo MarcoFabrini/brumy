@@ -36,6 +36,15 @@ describe('api client — sessione e refresh', () => {
     expect(useAuthStore.getState().status).toBe('authenticated');
   });
 
+  it('risposta di refresh senza access_token valido: non si salva niente e non si fa logout', async () => {
+    fetchMock.mockResolvedValueOnce(response(200, { access_token: 42 }));
+
+    await expect(refreshAccessToken()).resolves.toBe('unavailable');
+
+    expect(useAuthStore.getState().accessToken).toBe('old-token');
+    expect(useAuthStore.getState().status).toBe('authenticated');
+  });
+
   it('refresh rifiutato due volte di fila (401): sessione finita → logout', async () => {
     vi.useFakeTimers();
     fetchMock

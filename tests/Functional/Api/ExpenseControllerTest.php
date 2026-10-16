@@ -31,6 +31,25 @@ final class ExpenseControllerTest extends ApiTestCase
         self::assertSame('yearly', $this->jsonBody()['recurringPeriod']);
     }
 
+    public function testCreateExpenseRejectsADateBefore1970(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+
+        $this->jsonRequest('POST', '/api/expenses', [
+            'vehicleId' => $vehicle->getId(),
+            'occurredAt' => '1850-01-01',
+            'category' => 'insurance',
+            'description' => 'Polizza',
+            'amount' => '10.00',
+            'recurring' => true,
+            'recurringPeriod' => 'weekly',
+        ], accessToken: $token);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('occurredAt', $this->jsonBody()['errors'][0]['field']);
+    }
+
     public function testCreateNonRecurringExpense(): void
     {
         [, $org, $token] = $this->createAuthenticatedUser();

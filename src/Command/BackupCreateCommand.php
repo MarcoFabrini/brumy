@@ -90,7 +90,9 @@ final class BackupCreateCommand extends Command
             timeout: 600,
         );
         $this->streamGzipped($dumpProc, $dbDumpPath);
-        @chmod($dbDumpPath, 0600); // contiene dati personali: leggibile solo dal proprietario
+        // Contiene dati personali: leggibile solo dal proprietario. Il file nasce già 0600 (umask in streamGzipped);
+        // il chmod resta come cintura e, se fallisce, il backup non passa per buono.
+        $fs->chmod($dbDumpPath, 0600);
         $io->success("DB dump → $dbDumpPath (".$this->humanSize(filesize($dbDumpPath) ?: 0).')');
 
         // 2. Uploads tarball
@@ -102,14 +104,18 @@ final class BackupCreateCommand extends Command
                     escapeshellarg($uploadsTarPath),
                     escapeshellarg($this->attachmentsRoot),
                 );
+                // umask restrittiva anche per il processo figlio: il tar nasce 0600, non 0644 fino al chmod.
+                $previousUmask = umask(0o077);
                 try {
                     Process::fromShellCommandline($tarCmd, timeout: 600)->mustRun();
                 } catch (\Throwable $e) {
                     // Un tar troncato non deve restare (la retention lo conserverebbe come se fosse valido).
                     @unlink($uploadsTarPath);
                     throw $e;
+                } finally {
+                    umask($previousUmask);
                 }
-                @chmod($uploadsTarPath, 0600);
+                $fs->chmod($uploadsTarPath, 0600);
                 $io->success("Uploads tar → $uploadsTarPath (".$this->humanSize(filesize($uploadsTarPath) ?: 0).')');
             } else {
                 $io->info('Uploads dir vuota o inesistente, skip tar.');
@@ -134,7 +140,13 @@ final class BackupCreateCommand extends Command
      */
     private function streamGzipped(Process $process, string $destination): void
     {
-        $gz = gzopen($destination, 'wb');
+        // Il file viene creato qui: con umask 077 non è mai leggibile da altri, nemmeno mentre il dump è in corso.
+        $previousUmask = umask(0o077);
+        try {
+            $gz = gzopen($destination, 'wb');
+        } finally {
+            umask($previousUmask);
+        }
         if ($gz === false) {
             throw new \RuntimeException("Impossibile scrivere $destination");
         }

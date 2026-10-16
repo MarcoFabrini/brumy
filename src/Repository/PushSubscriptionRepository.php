@@ -45,6 +45,11 @@ class PushSubscriptionRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('s')->delete()->getQuery()->execute();
     }
 
+    public function countForUser(User $user): int
+    {
+        return $this->count(['user' => $user]);
+    }
+
     public function findByWebEndpoint(User $user, string $endpoint): ?PushSubscription
     {
         return $this->findOneBy(['user' => $user, 'endpoint' => $endpoint]);

@@ -314,10 +314,12 @@ final class AuthController extends AbstractController
     #[Route('/logout', name: 'logout', methods: ['POST'])]
     public function logout(Request $request): JsonResponse
     {
+        // Rotta pubblica: il corpo può essere qualsiasi JSON (scalare, lista, refresh_token non stringa) e non deve dare 500.
+        $body = json_decode($request->getContent() ?: '{}', true);
         $rawToken = $request->cookies->get(RefreshTokenService::COOKIE_NAME)
-            ?? (json_decode($request->getContent() ?: '{}', true)['refresh_token'] ?? null);
+            ?? (is_array($body) ? ($body['refresh_token'] ?? null) : null);
 
-        if ($rawToken && ($refresh = $this->refreshTokens->findValid($rawToken))) {
+        if (is_string($rawToken) && $rawToken !== '' && ($refresh = $this->refreshTokens->findValid($rawToken))) {
             $this->refreshTokens->revoke($refresh);
         }
 
@@ -340,8 +342,8 @@ final class AuthController extends AbstractController
         ),
         responses: [
             new OA\Response(response: 200, description: 'New access_token + active_org_id'),
-            new OA\Response(response: 403, description: 'auth.not_member'),
-            new OA\Response(response: 404, description: 'org.not_found'),
+            new OA\Response(response: 403, description: 'auth.not_member (membership still pending)'),
+            new OA\Response(response: 404, description: 'org.not_found (unknown id, or no relation with the organization)'),
         ],
     )]
     #[Route('/switch-org', name: 'switch_org', methods: ['POST'])]
@@ -350,13 +352,13 @@ final class AuthController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
         $org = $this->orgRepo->find($payload->organizationId);
-        if (!$org) {
+        $membership = $org !== null ? $this->memberRepo->findMembership($user, $org) : null;
+        // Nessun legame con l'org: stesso 404 dell'id inesistente, così gli id non si possono enumerare.
+        if ($org === null || $membership === null) {
             return $this->problem('org.not_found', 404);
         }
-
-        $membership = $this->memberRepo->findMembership($user, $org);
-        if (!$membership || !$membership->isAccepted()) {
-            return $this->problem('auth.not_member', 403);
+        if (!$membership->isAccepted()) {
+            return $this->problem('auth.not_member', 403); // invito ancora in attesa
         }
 
         $accessToken = $this->jwtManager->createFromPayload($user, [
@@ -461,6 +463,8 @@ final class AuthController extends AbstractController
             // La nuova email va riverificata; le altre sessioni (potenzialmente di un attaccante) decadono.
             $user->resetEmailVerification();
             $this->em->flush();
+            // Un link di reset già spedito al vecchio indirizzo non deve restare spendibile dopo il cambio.
+            $this->resetTokenRepo->invalidateAllForUser($user);
             $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
             $this->refreshTokens->revokeAllForUser($user);
             $this->issueAndSendVerification($user);
@@ -613,6 +617,7 @@ final class AuthController extends AbstractController
 
         $response = new BinaryFileResponse($absolutePath);
         $response->headers->set('Content-Type', $mime);
+        $response->headers->set('X-Content-Type-Options', 'nosniff'); // come per gli allegati, anche senza il proxy davanti
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, 'avatar');
         return $response;
     }

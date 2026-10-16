@@ -68,6 +68,8 @@ when@test:
         rate_limiter:
             login_ip:
                 limit: 100000
+            api:
+                limit: 100000
             token_actions:
                 limit: 100000
         session:

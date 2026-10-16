@@ -301,6 +301,22 @@ describe('MembersCard — layout mobile e rimozione', () => {
     expect(screen.getByText(/Bartolomeo-Maria-Giuseppe Neri/).closest('div')).toHaveClass('min-w-0');
   });
 
+  it("un admin non vede il pulsante di rimozione sugli altri admin, un owner sì", async () => {
+    const list = [asMember(1, 'admin', 'Anna'), asMember(2, 'admin', 'Bruno'), asMember(3, 'member', 'Carla')];
+
+    mockMembers(list);
+    const first = renderCard('admin');
+    await screen.findByText(/Carla/);
+    // Anna è l'utente corrente, Bruno è admin: resta solo Carla (member).
+    expect(screen.getAllByRole('button', { name: 'Rimuovi' })).toHaveLength(1);
+    first.unmount();
+
+    mockMembers([asMember(1, 'owner', 'Anna'), asMember(2, 'admin', 'Bruno'), asMember(3, 'member', 'Carla')]);
+    renderCard('owner');
+    await screen.findByText(/Carla/);
+    expect(screen.getAllByRole('button', { name: 'Rimuovi' })).toHaveLength(2);
+  });
+
   it('la conferma di rimozione dice che i veicoli passano a chi rimuove e suggerisce di trasferirli prima', async () => {
     mockMembers([asMember(1, 'owner', 'Anna'), asMember(3, 'member', 'Carla')]);
     const user = userEvent.setup();

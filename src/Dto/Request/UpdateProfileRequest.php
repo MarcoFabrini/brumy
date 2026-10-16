@@ -26,6 +26,7 @@ final class UpdateProfileRequest
         public string $locale = 'it',
 
         /** Obbligatoria solo se l'email cambia: un access token rubato non deve bastare per prendere l'account. */
+        #[Assert\Length(max: 200)]
         public ?string $currentPassword = null,
     ) {
     }

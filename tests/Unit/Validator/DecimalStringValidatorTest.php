@@ -44,6 +44,7 @@ final class DecimalStringValidatorTest extends ConstraintValidatorTestCase
     public static function invalidValuesProvider(): iterable
     {
         yield 'too many decimals' => ['120.500', 2];
+        yield 'trailing newline' => ["12.5\n", 2];
         yield 'negative' => ['-1', 2];
         yield 'comma separator' => ['120,50', 2];
         yield 'not numeric' => ['abc', 2];

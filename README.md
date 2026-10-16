@@ -202,6 +202,10 @@ The JWT keys are **not** in the backups: if `./brumy/jwt` is empty the app gener
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security vulnerabilities: [SECURITY.md](SECURITY.md) (do not open public issues).
 
+### Use of AI
+
+Parts of this project, including source code, tests and documentation, were written with the help of AI coding assistants. The maintainer decides what gets built, reviews the changes and is responsible for the result. The code goes through the automated test suites (backend and frontend), static analysis and a production-image smoke test before every release, but, as with any software, it can still contain mistakes: please report them, and report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
 ### License
 
 [AGPL-3.0-or-later](LICENSE)
@@ -403,6 +407,10 @@ Le chiavi JWT **non** sono nei backup: se `./brumy/jwt` è vuota l'app ne genera
 ### Sviluppo e contributi
 
 Vedi [CONTRIBUTING.md](CONTRIBUTING.md). Vulnerabilità: [SECURITY.md](SECURITY.md) (non aprire issue pubbliche).
+
+### Uso dell'AI
+
+Parti di questo progetto, tra cui codice sorgente, test e documentazione, sono state scritte con l'aiuto di assistenti di programmazione basati su AI. Il manutentore decide cosa si costruisce, rivede le modifiche ed è responsabile del risultato. Prima di ogni rilascio il codice passa dalle suite di test automatici (backend e frontend), dall'analisi statica e da uno smoke test dell'immagine di produzione, ma, come ogni software, può contenere errori: segnalali, e segnala le vulnerabilità come descritto in [SECURITY.md](SECURITY.md).
 
 ### Licenza
 

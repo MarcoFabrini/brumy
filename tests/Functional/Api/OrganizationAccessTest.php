@@ -53,22 +53,37 @@ final class OrganizationAccessTest extends ApiTestCase
         self::assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM organization_invitations WHERE id = ?', [$invitation->getId()]));
     }
 
-    public function testManagingAnotherOrganizationDirectlyIsForbidden(): void
+    public function testAnotherOrganizationIsIndistinguishableFromAnUnknownOne(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+        [, $foreign] = $this->createAuthenticatedUser();
+
+        $this->jsonRequest('GET', '/api/organizations/'.$foreign->getId(), accessToken: $token);
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('org.not_found', $this->jsonBody()['title']);
+        $foreignBody = $this->jsonBody();
+
+        $this->jsonRequest('GET', '/api/organizations/999999', accessToken: $token);
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame($foreignBody, $this->jsonBody(), 'Stessa risposta: gli id delle altre org non si enumerano');
+    }
+
+    public function testManagingAnotherOrganizationDirectlyIsNotFound(): void
     {
         [, $orgA, $tokenA] = $this->createAuthenticatedUser();
         [, $orgB] = $this->createAuthenticatedUser();
         $victim = OrganizationMemberFactory::createOne(['organization' => $orgB, 'user' => UserFactory::createOne(), 'role' => OrgRole::MEMBER]);
 
         $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId().'/members/'.$victim->getId(), accessToken: $tokenA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
         $this->jsonRequest('POST', '/api/organizations/'.$orgB->getId().'/members', ['email' => 'x@test.it', 'role' => 'member'], accessToken: $tokenA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
         $this->jsonRequest('GET', '/api/organizations/'.$orgB->getId().'/invitations', accessToken: $tokenA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
         $this->jsonRequest('PUT', '/api/organizations/'.$orgB->getId(), ['name' => 'Rubata'], accessToken: $tokenA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
         $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId(), accessToken: $tokenA);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
 
         self::assertSame($orgB->getName(), $this->db()->fetchOne('SELECT name FROM organizations WHERE id = ?', [$orgB->getId()]));
     }

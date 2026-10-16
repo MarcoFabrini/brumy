@@ -13,6 +13,10 @@ LEAK_RE="$W1|$W2|$W3"
 
 GITHUB_REMOTE="${1:-}"
 [ -n "$GITHUB_REMOTE" ] || usage
+# Un URL che inizia con "-" verrebbe letto da git come un'opzione.
+case "$GITHUB_REMOTE" in
+    -*) echo "Remote non valido: '$GITHUB_REMOTE'" >&2; exit 2 ;;
+esac
 shift
 
 TAG=""

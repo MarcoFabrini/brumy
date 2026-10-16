@@ -59,6 +59,9 @@ final class WebPushSenderTest extends KernelTestCase
         $client = (new \ReflectionProperty($webPush, 'client'))->getValue($webPush);
         self::assertInstanceOf(Client::class, $client);
         self::assertFalse($client->getConfig('allow_redirects'));
+        // Un push service lento non deve tenere occupato per mezzo minuto l'unico worker.
+        self::assertSame(10, $client->getConfig('timeout'));
+        self::assertSame(5, $client->getConfig('connect_timeout'));
     }
 
     public function testStoredSubscriptionWithDisallowedEndpointIsNotSentAndIsMarkedGone(): void

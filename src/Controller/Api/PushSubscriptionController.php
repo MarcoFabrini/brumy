@@ -27,6 +27,11 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[IsGranted('ROLE_USER')]
 final class PushSubscriptionController extends AbstractController
 {
+    use ProblemDetailsResponseTrait;
+
+    /** Dispositivi registrabili per utente: ogni riga è una richiesta HTTP in più a ogni notifica. */
+    private const MAX_SUBSCRIPTIONS_PER_USER = 20;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PushSubscriptionRepository $repo,
@@ -69,6 +74,7 @@ final class PushSubscriptionController extends AbstractController
         responses: [
             new OA\Response(response: 201, description: 'Subscription registered', content: new OA\JsonContent(ref: new Model(type: PushSubscription::class, groups: ['push:read']))),
             new OA\Response(response: 400, description: 'push.web_fields_required'),
+            new OA\Response(response: 422, description: 'push.too_many_subscriptions'),
         ],
     )]
     #[Route('', name: 'create', methods: ['POST'])]
@@ -76,6 +82,14 @@ final class PushSubscriptionController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
+
+        // Tetto per utente: ogni riga è una richiesta HTTP in più a ogni notifica, nell'unico worker.
+        if ($payload->endpoint
+            && $this->repo->findByWebEndpoint($user, $payload->endpoint) === null
+            && $this->repo->countForUser($user) >= self::MAX_SUBSCRIPTIONS_PER_USER
+        ) {
+            return $this->problem('push.too_many_subscriptions', 422);
+        }
 
         $sub = $this->upsertSubscription($user, $payload);
         $sub

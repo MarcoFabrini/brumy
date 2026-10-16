@@ -130,13 +130,14 @@ final class OrganizationControllerTest extends ApiTestCase
         });
     }
 
-    public function testGetReturnsForbiddenForNonMember(): void
+    public function testGetReturnsNotFoundForNonMember(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
         $other = OrganizationFactory::createOne();
 
+        // Come un id inesistente: l'esistenza di org altrui non si deduce dallo status.
         $this->jsonRequest('GET', '/api/organizations/'.$other->getId(), accessToken: $token);
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
     }
 
     public function testUpdateRequiresAdminRole(): void
@@ -413,6 +414,6 @@ final class OrganizationControllerTest extends ApiTestCase
             'organizationId' => $other->getId(),
         ], accessToken: $token);
 
-        self::assertResponseStatusCodeSame(403);
+        self::assertResponseStatusCodeSame(404);
     }
 }

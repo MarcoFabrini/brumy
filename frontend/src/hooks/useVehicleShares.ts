@@ -10,9 +10,9 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export type ShareRole = 'viewer' | 'editor' | 'admin';
 
+/** Solo nomi: le share non espongono l'email dei colleghi (la vede chi gestisce i membri dell'org). */
 interface ShareUser {
   id: number;
-  email: string;
   firstName: string;
   lastName: string;
 }

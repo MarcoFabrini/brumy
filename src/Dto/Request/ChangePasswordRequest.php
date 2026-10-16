@@ -10,6 +10,7 @@ final class ChangePasswordRequest
 {
     public function __construct(
         #[Assert\NotBlank]
+        #[Assert\Length(max: 200)]
         public string $currentPassword = '',
 
         #[Assert\NotBlank]

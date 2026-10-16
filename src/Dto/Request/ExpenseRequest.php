@@ -18,6 +18,9 @@ final class ExpenseRequest
 
         #[Assert\NotBlank]
         #[Assert\Date]
+        // Date ISO: il confronto tra stringhe è quello cronologico. Un inizio di secoli fa non ha senso per una
+        // spesa e, con una cadenza ravvicinata, farebbe generare migliaia di addebiti a ogni lettura.
+        #[Assert\GreaterThanOrEqual('1970-01-01')]
         public string $occurredAt = '',
 
         public ExpenseCategory $category = ExpenseCategory::OTHER,

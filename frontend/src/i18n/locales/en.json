@@ -619,7 +619,8 @@
       "no_keys": "Generate a VAPID keypair before enabling notifications",
       "endpoint_not_allowed": "Unsupported push service",
       "not_found": "Device not found",
-      "web_fields_required": "Incomplete subscription data: enable notifications again on this browser"
+      "web_fields_required": "Incomplete subscription data: enable notifications again on this browser",
+      "too_many_subscriptions": "Too many registered devices: remove one before adding another"
     },
     "settings": {
       "instance_admin_required": "Only the instance administrator (the first registered user) can change these settings"
@@ -733,6 +734,7 @@
       "file_too_large": "File too large (max 10 MB)",
       "mime_not_allowed": "Unsupported format (only JPG, PNG, WebP, PDF)",
       "entity_required": "Missing reference",
+      "busy": "Too many uploads in progress for this organization: try again in a few seconds",
       "too_many_files": "Too many attachments on this item (maximum 20)",
       "quota_exceeded": "The organization's attachment storage is full: delete some files to upload more"
     },
@@ -817,6 +819,7 @@
       "owner_role_forbidden": "Only an owner can assign the owner role",
       "already_exists": "This person is already a member of the organization",
       "cannot_remove_owner": "The organization's owner cannot be removed: demote them first",
+      "cannot_remove_admin": "Only an owner can remove an admin",
       "cannot_change_owner_role": "An admin cannot change an owner's role",
       "cannot_change_admin_role": "Only an owner can change an admin's role",
       "cannot_change_own_role": "You cannot change your own role",

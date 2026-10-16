@@ -68,6 +68,33 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         self::assertSame('web', $this->jsonBody()['platform']);
     }
 
+    public function testTooManySubscriptionsAreRejectedButExistingOnesStillUpsert(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+        $payload = static fn (int $i): array => [
+            'platform' => 'web',
+            'endpoint' => 'https://fcm.googleapis.com/fcm/send/dev-'.$i,
+            'p256dh' => 'p256dh',
+            'authSecret' => 'auth',
+        ];
+
+        for ($i = 0; $i < 20; ++$i) {
+            $this->jsonRequest('POST', '/api/push-subscriptions', $payload($i), accessToken: $token);
+            self::assertResponseStatusCodeSame(201);
+        }
+
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(20), accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('push.too_many_subscriptions', $this->jsonBody()['title']);
+
+        // Un dispositivo già registrato si può sempre aggiornare (rotazione delle chiavi, etichetta).
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(3), accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+
+        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        self::assertCount(20, $this->jsonBody());
+    }
+
     public function testUpsertSameEndpointDoesNotDuplicate(): void
     {
         [, , $token] = $this->createAuthenticatedUser();

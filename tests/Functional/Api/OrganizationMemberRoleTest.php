@@ -151,7 +151,7 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         self::assertResponseStatusCodeSame(401);
     }
 
-    public function testCallerOfAnotherOrganizationIsForbidden(): void
+    public function testCallerOfAnotherOrganizationGetsNotFound(): void
     {
         [, $org] = $this->createAuthenticatedUser();
         $target = $this->addMember($org, OrgRole::MEMBER);
@@ -160,7 +160,8 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         $memberId = $this->membership($target, $org)->getId();
         $this->jsonRequest('PATCH', '/api/organizations/'.$org->getId().'/members/'.$memberId, ['role' => 'admin'], $this->tokenFor($stranger, $strangerOrg));
 
-        self::assertResponseStatusCodeSame(403);
+        // 404 come per un'org inesistente: chi non ne fa parte non ne deduce l'esistenza. Il ruolo non cambia.
+        self::assertResponseStatusCodeSame(404);
         self::assertSame(OrgRole::MEMBER, $this->roleOf($target, $org));
     }
 

@@ -374,7 +374,7 @@ final class VehicleController extends AbstractController
         summary: 'List vehicle shares (user-to-user within organization)',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [
-            new OA\Response(response: 200, description: 'Array of shares', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: VehicleShare::class, groups: ['share:read', 'user:list'])))),
+            new OA\Response(response: 200, description: 'Array of shares', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: VehicleShare::class, groups: ['share:read', 'user:name'])))),
         ],
     )]
     #[Route('/{id}/shares', name: 'shares_list', methods: ['GET'], requirements: ['id' => '\d+'])]
@@ -383,7 +383,8 @@ final class VehicleController extends AbstractController
         $vehicle = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::SHARE, $vehicle);
 
-        return $this->jsonGroups($this->shareRepo->findByVehicle($vehicle), ['share:read', 'user:list']);
+        // Solo nomi (gruppo user:name): le email dei colleghi le vede solo chi gestisce i membri dell'organizzazione.
+        return $this->jsonGroups($this->shareRepo->findByVehicle($vehicle), ['share:read', 'user:name']);
     }
 
     #[OA\Get(
@@ -482,7 +483,7 @@ final class VehicleController extends AbstractController
         }
         $this->em->flush();
 
-        return $this->jsonGroups($created, ['share:read', 'user:list'], 201);
+        return $this->jsonGroups($created, ['share:read', 'user:name'], 201);
     }
 
     #[OA\Delete(

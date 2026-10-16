@@ -33,36 +33,54 @@ final class LocalAttachmentStorage implements AttachmentStorageInterface
         $relativeDir = sprintf('%s/%s/%s', $namespace, $now->format('Y'), $now->format('m'));
         $absDir = $this->root.'/'.$relativeDir;
 
-        // 0755 dir + 0644 file: leggibili dal processo app (BinaryFileResponse
-        // li serve direttamente dopo il check di autorizzazione lato Symfony).
+        // 0750 dir + 0640 file: li leggono solo il processo app (BinaryFileResponse li serve dopo il check
+        // di autorizzazione lato Symfony), il worker (stesso utente) e il gruppo; nessun altro utente dell'host.
         if (!$this->fs->exists($absDir)) {
-            $this->fs->mkdir($absDir, 0755);
+            $this->fs->mkdir($absDir, 0750);
         }
 
         $extension = $this->safeExtension($file);
         $filename = bin2hex(random_bytes(16)).($extension ? '.'.$extension : '');
         $file->move($absDir, $filename);
-        $this->fs->chmod($absDir.'/'.$filename, 0644);
+        $this->fs->chmod($absDir.'/'.$filename, 0640);
 
         return $relativeDir.'/'.$filename;
     }
 
     public function delete(string $storedPath): void
     {
-        $abs = $this->absolutePath($storedPath);
-        if ($this->fs->exists($abs)) {
+        $abs = $this->resolve($storedPath);
+        if ($abs !== null && $this->fs->exists($abs)) {
             $this->fs->remove($abs);
         }
     }
 
     public function absolutePath(string $storedPath): string
     {
-        return $this->root.'/'.ltrim($storedPath, '/');
+        return $this->resolve($storedPath)
+            ?? throw new \InvalidArgumentException('Percorso di allegato non valido.');
     }
 
     public function exists(string $storedPath): bool
     {
-        return $this->fs->exists($this->absolutePath($storedPath));
+        $abs = $this->resolve($storedPath);
+
+        return $abs !== null && $this->fs->exists($abs);
+    }
+
+    /**
+     * Percorso assoluto dentro la radice, o null se `$storedPath` ne uscirebbe (segmenti `..`, byte nulli, vuoto).
+     * I percorsi nascono da {@see self::store()} e stanno nel DB, quindi oggi sono sempre validi: il controllo
+     * evita che una riga alterata, o un futuro import, faccia leggere o cancellare file fuori dalla radice.
+     */
+    private function resolve(string $storedPath): ?string
+    {
+        $relative = ltrim($storedPath, '/');
+        if ($relative === '' || str_contains($relative, "\0") || in_array('..', explode('/', $relative), true)) {
+            return null;
+        }
+
+        return $this->root.'/'.$relative;
     }
 
     private function safeExtension(UploadedFile $file): ?string

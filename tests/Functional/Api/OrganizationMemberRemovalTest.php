@@ -233,6 +233,37 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         self::assertSame([], $this->ownedIds($owner, $org));
     }
 
+    public function testAdminCannotRemoveAnotherAdmin(): void
+    {
+        [$admin, $org] = $this->createAuthenticatedUser(OrgRole::ADMIN);
+        $peer = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $peer, 'organization' => $org, 'role' => OrgRole::ADMIN]);
+        $car = $this->ownedVehicle($peer, $org);
+
+        $this->removeMember($admin, $org, $peer);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame('member.cannot_remove_admin', $this->jsonBody()['title']);
+        $this->membership($peer, $org); // fallisce se il peer admin è stato rimosso
+        self::assertSame([$car->getId()], $this->ownedIds($peer, $org), 'Nessun trasferimento di veicoli');
+        self::assertSame([], $this->ownedIds($admin, $org));
+    }
+
+    public function testOwnerCanStillRemoveAnAdminAndAnAdminCanStillRemoveAMember(): void
+    {
+        [$owner, $org] = $this->createAuthenticatedUser();
+        $admin = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $admin, 'organization' => $org, 'role' => OrgRole::ADMIN]);
+        $member = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+
+        $this->removeMember($admin, $org, $member);
+        self::assertResponseStatusCodeSame(204);
+
+        $this->removeMember($owner, $org, $admin);
+        self::assertResponseStatusCodeSame(204);
+    }
+
     public function testAdminLeavingByRemovingThemselvesHandsVehiclesToAnOrgOwner(): void
     {
         [$owner, $org] = $this->createAuthenticatedUser();

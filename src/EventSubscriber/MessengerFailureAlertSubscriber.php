@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use App\Service\LogRedactor;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
@@ -45,10 +46,10 @@ final class MessengerFailureAlertSubscriber implements EventSubscriberInterface
         $this->logger->error('messenger.dlq.alert: handler permanently failed', [
             'message_class' => $message::class,
             'exception' => $throwable::class,
-            'reason' => $throwable->getMessage(),
+            'reason' => LogRedactor::scrub($throwable->getMessage()),
             'receiver' => $event->getReceiverName(),
             // Trace troncato per evitare spam log aggregator
-            'trace_head' => substr($throwable->getTraceAsString(), 0, 1500),
+            'trace_head' => LogRedactor::scrub(substr($throwable->getTraceAsString(), 0, 1500)),
         ]);
     }
 }

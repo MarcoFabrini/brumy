@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\Organization;
 use App\Enum\AttachmentEntityType;
 use App\Repository\AttachmentRepository;
+use Doctrine\DBAL\Connection;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -14,8 +15,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * organizzazione (`ATTACHMENTS_ORG_QUOTA_MB`, 0 = nessun limite). Senza, un membro con permesso di modifica
  * potrebbe riempire il volume dell'istanza caricando file da 10 MB all'infinito.
  *
- * Il controllo avviene prima di salvare il file; due upload concorrenti possono sforare di poco il limite
- * (nessun lock: è un tetto di protezione, non un contatore contabile).
+ * Il controllo avviene prima di salvare il file. Per non farlo sforare da upload concorrenti, controllo e
+ * inserimento girano dentro {@see self::serialized()}, che serializza gli upload della stessa organizzazione
+ * con un lock del database (`GET_LOCK`, come la registrazione del primo utente).
  */
 final class AttachmentQuota
 {
@@ -26,9 +28,35 @@ final class AttachmentQuota
 
     public function __construct(
         private readonly AttachmentRepository $repo,
+        private readonly Connection $connection,
         #[Autowire(env: 'int:default:app_attachments_org_quota_mb_default:ATTACHMENTS_ORG_QUOTA_MB')]
         private readonly int $orgQuotaMb,
     ) {
+    }
+
+    /**
+     * Esegue `$work` tenendo un lock per organizzazione: due upload della stessa org non si sovrappongono tra il
+     * controllo della quota e l'inserimento. Se il lock non arriva in 10 secondi restituisce `null` senza eseguire.
+     *
+     * @template T
+     *
+     * @param \Closure(): T $work
+     *
+     * @return T|null
+     */
+    public function serialized(Organization $org, \Closure $work): mixed
+    {
+        $name = 'brumy_attachments_org_'.$org->getId();
+        $acquired = $this->connection->fetchOne('SELECT GET_LOCK(:name, 10)', ['name' => $name]);
+        if ((int) $acquired !== 1) {
+            return null;
+        }
+
+        try {
+            return $work();
+        } finally {
+            $this->connection->fetchOne('SELECT RELEASE_LOCK(:name)', ['name' => $name]);
+        }
     }
 
     /**

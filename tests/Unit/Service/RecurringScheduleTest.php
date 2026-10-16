@@ -151,6 +151,62 @@ final class RecurringScheduleTest extends TestCase
         self::assertSame(['2026-03-01', '2026-04-01', '2026-05-01'], self::formatted($charges));
     }
 
+    /** @return iterable<string, array{RecurringPeriod, string}> */
+    public static function windowEquivalenceCases(): iterable
+    {
+        foreach (RecurringPeriod::cases() as $period) {
+            foreach (['1999-01-31', '2000-02-29', '2024-03-01', '2025-12-31', '2026-05-15'] as $start) {
+                yield $period->value.' da '.$start => [$period, $start];
+            }
+        }
+    }
+
+    /**
+     * La finestra salta direttamente al primo addebito utile invece di generare tutta la storia: il risultato deve
+     * restare identico a "tutti gli addebiti, poi filtra", per ogni cadenza, per inizi a fine mese e bisestili,
+     * e per finestre prima, dentro e dopo la storia.
+     */
+    #[DataProvider('windowEquivalenceCases')]
+    public function testWindowSkipGivesTheSameChargesAsFilteringTheWholeHistory(RecurringPeriod $period, string $start): void
+    {
+        $today = self::d('2026-06-30');
+        $startDate = self::d($start);
+        $all = $this->schedule->chargesUpTo($period, $startDate, $today);
+
+        foreach (['1990-01-01', '2000-02-29', '2010-07-31', '2024-03-01', '2025-01-31', '2026-02-28', '2026-06-01', '2027-01-01'] as $from) {
+            foreach (['+1 month', '+9 months', '+7 years'] as $span) {
+                $fromDate = self::d($from);
+                $untilDate = $fromDate->modify($span);
+                $expected = array_values(array_filter(
+                    $all,
+                    static fn (\DateTimeImmutable $d): bool => $d >= $fromDate && $d < $untilDate,
+                ));
+
+                self::assertSame(
+                    self::formatted($expected),
+                    self::formatted($this->schedule->chargesInWindow($period, $startDate, $fromDate, $untilDate, $today)),
+                    sprintf('%s da %s, finestra %s +%s', $period->value, $start, $from, $span),
+                );
+            }
+        }
+    }
+
+    public function testWindowSkipKeepsTheOccurrenceCapForPathologicalStarts(): void
+    {
+        // Settimanale da 1834: l'addebito 9999 cade nel 2026-01 circa; oltre il tetto non si genera niente.
+        $start = self::d('1700-01-01');
+        $from = self::d('2020-01-01');
+        $today = self::d('2026-06-30');
+
+        $all = $this->schedule->chargesUpTo(RecurringPeriod::WEEKLY, $start, $today);
+        self::assertCount(RecurringSchedule::MAX_OCCURRENCES, $all);
+        self::assertSame(
+            [],
+            $this->schedule->chargesInWindow(RecurringPeriod::WEEKLY, $start, $from, $today->modify('+1 day'), $today),
+            'La finestra recente cade oltre il tetto: nessun addebito, come prima',
+        );
+    }
+
     public function testWindowAfterTodayAndUntilStillClipCharges(): void
     {
         $charges = $this->schedule->chargesInWindow(

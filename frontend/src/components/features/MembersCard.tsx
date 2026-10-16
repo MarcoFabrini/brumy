@@ -175,7 +175,9 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
                     disabled={changeRole.isPending}
                     onChange={(value) => askRoleChange(m, value)}
                   />
-                  {m.role !== 'owner' && m.user.id !== currentUserId && (
+                  {m.role !== 'owner' &&
+                    m.user.id !== currentUserId &&
+                    !(m.role === 'admin' && currentRole !== 'owner') && (
                     <Button
                       variant="ghost"
                       size="icon"

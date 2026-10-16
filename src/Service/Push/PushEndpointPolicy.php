@@ -42,7 +42,9 @@ final class PushEndpointPolicy
         }
 
         $host = strtolower($parts['host'] ?? '');
-        if ($host === '') {
+        // Solo etichette DNS ASCII: backslash, percent-encoding e simili fanno leggere l'host in modo diverso
+        // a parse_url e al client HTTP.
+        if ($host === '' || preg_match('/^[a-z0-9]([a-z0-9.\-]*[a-z0-9])?$/D', $host) !== 1) {
             return false;
         }
         if (in_array($host, self::ALLOWED_HOSTS, true)) {

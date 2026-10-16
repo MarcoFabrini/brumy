@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Push;
 
+use App\Service\LogRedactor;
 use App\Entity\PushSubscription;
 use App\Repository\PushSettingsRepository;
 use App\Service\SecretCipher;
@@ -32,7 +33,10 @@ final class WebPushSender
      * Opzioni del client HTTP (Guzzle): niente redirect. Un push service legittimo risponde 201/4xx, mai 3xx;
      * seguirli permetterebbe a un endpoint "ammesso" di rimbalzare la POST verso un host interno.
      */
-    private const CLIENT_OPTIONS = ['allow_redirects' => false];
+    private const CLIENT_OPTIONS = ['allow_redirects' => false, 'connect_timeout' => 5];
+
+    /** Tetto per singola richiesta: il default della libreria (30 s) bloccherebbe a lungo l'unico worker. */
+    private const REQUEST_TIMEOUT_SECONDS = 10;
 
     public function __construct(
         private readonly LoggerInterface $logger,
@@ -98,8 +102,8 @@ final class WebPushSender
         try {
             $report = $webPush->sendOneNotification($subObj, $body);
         } catch (\Throwable $e) {
-            $this->logger->error('WebPush transport error', ['error' => $e->getMessage()]);
-            return PushDeliveryResult::failed('transport: '.$e->getMessage());
+            $this->logger->error('WebPush transport error', ['error' => LogRedactor::scrub($e->getMessage())]);
+            return PushDeliveryResult::failed('transport: '.LogRedactor::scrub($e->getMessage()));
         }
 
         if ($report->isSuccess()) {
@@ -109,7 +113,8 @@ final class WebPushSender
         $gone = $report->isSubscriptionExpired();
         $reason = $report->getReason() ?: 'unknown';
         $this->logger->warning('WebPush delivery failed', [
-            'endpoint' => $endpoint,
+            // Solo l'host: l'URL intero è il capability token del dispositivo.
+            'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
             'gone' => $gone,
             'reason' => $reason,
         ]);
@@ -126,7 +131,7 @@ final class WebPushSender
         }
 
         try {
-            return new WebPush(['VAPID' => $vapid], ['TTL' => self::TTL_SECONDS], clientOptions: self::CLIENT_OPTIONS);
+            return new WebPush(['VAPID' => $vapid], ['TTL' => self::TTL_SECONDS], timeout: self::REQUEST_TIMEOUT_SECONDS, clientOptions: self::CLIENT_OPTIONS);
         } catch (\Throwable $e) {
             $this->logger->error('WebPush init failed', ['error' => $e->getMessage()]);
             return null;

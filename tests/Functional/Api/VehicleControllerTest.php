@@ -559,6 +559,35 @@ final class VehicleControllerTest extends ApiTestCase
         self::assertNotContains($me->getId(), array_column($this->jsonBody(), 'id'), 'Non include chi condivide');
     }
 
+    public function testSharesShowNamesOnlyNeverEmailsToAPlainMemberOwner(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
+        $peer = $this->memberOf($org, 'Luca', 'Verdi');
+
+        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        $id = $this->jsonBody()['id'];
+
+        $this->jsonRequest('POST', '/api/vehicles/'.$id.'/shares', ['userIds' => [$peer->getId()]], accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        $created = array_values($this->jsonBody());
+
+        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $listed = array_values($this->jsonBody());
+        self::assertNotEmpty($listed);
+
+        // Un membro semplice non deve poter ricavare le email dei colleghi dalle share (solo id, nome e cognome).
+        foreach ([...$created, ...$listed] as $share) {
+            self::assertSame(['id', 'firstName', 'lastName'], array_keys($share['user']));
+            if (isset($share['invitedBy'])) {
+                self::assertArrayNotHasKey('email', $share['invitedBy']);
+            }
+        }
+        self::assertSame('Luca', $created[0]['user']['firstName']);
+        self::assertStringNotContainsString($peer->getEmail(), (string) $this->client->getResponse()->getContent());
+    }
+
     public function testMemberWhoOwnsAVehicleCanListCandidates(): void
     {
         [, $org, $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);

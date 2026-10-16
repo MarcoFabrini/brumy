@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useVerifyEmail, useResendVerification, useAcceptInvitation, useRegisterInvited } from './useAccount';
+import { useVerifyEmail, useResendVerification, useAcceptInvitation, useRegisterInvited, useInvitationPreview } from './useAccount';
 import i18n from '@/i18n';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { authFetch } from '@/api/client';
@@ -92,6 +92,14 @@ describe('useAccount mutations', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(qc.getQueryData(['vehicles', 'list'])).toBeUndefined();
     expect(qc.getQueryData(['invitation', 'inv-1'])).toEqual({ organizationName: 'Officina' });
+  });
+
+  it("l'anteprima dell'invito codifica il token: un valore con ../ o ? non cambia il percorso richiesto", async () => {
+    mockedAuthFetch.mockResolvedValue({ organizationName: 'Officina' });
+    const { result } = renderHook(() => useInvitationPreview('../me?x=1'), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockedAuthFetch.mock.calls[0]?.[0]).toBe('/api/auth/invitation/..%2Fme%3Fx%3D1');
   });
 
   it.each([

@@ -51,6 +51,7 @@ final class BackupCreateCommandTest extends KernelTestCase
 
         $dumps = glob($this->backupsDir.'/db-*.sql.gz') ?: [];
         self::assertCount(1, $dumps, 'Deve creare esattamente un file di dump');
+        self::assertSame(0600, fileperms($dumps[0]) & 0777, 'Il dump contiene dati personali: solo il proprietario');
 
         // gzip valido con SQL vero dentro (non un file vuoto/troncato/doppiamente
         // compresso): decomprimendolo si ritrova lo schema dell'app.
