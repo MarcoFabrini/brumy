@@ -27,6 +27,7 @@ use App\Repository\OrganizationInvitationRepository;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\OrganizationRepository;
 use App\Repository\PasswordResetTokenRepository;
+use App\Repository\PushSubscriptionRepository;
 use App\Repository\UserRepository;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AfterResponseTasks;
@@ -38,7 +39,10 @@ use App\Service\Storage\AttachmentStorageInterface;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailureException;
+use Lexik\Bundle\JWTAuthenticationBundle\Security\Authenticator\Token\JWTPostAuthenticationToken;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -49,6 +53,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
@@ -101,6 +106,8 @@ final class AuthController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly AttachmentStorageInterface $storage,
         private readonly ActiveOrganizationResolver $activeOrganization,
+        private readonly PushSubscriptionRepository $pushSubscriptions,
+        private readonly Security $security,
     ) {
     }
 
@@ -244,7 +251,14 @@ final class AuthController extends AbstractController
             return $this->problem('auth.invalid_credentials', 401);
         }
 
-        return $this->buildAuthResponse($user, $this->resolveClientType($request));
+        // Null se un reset/cambio password o un cambio email è stato committato dopo la verifica: la password
+        // controllata non è più quella dell'account e la sessione non deve nascere.
+        $refresh = $this->refreshTokens->issueIfCredentialsUnchanged($user);
+        if ($refresh === null) {
+            return $this->problem('auth.invalid_credentials', 401);
+        }
+
+        return $this->buildAuthResponse($user, $this->resolveClientType($request), existingRefresh: $refresh);
     }
 
     #[OA\Post(
@@ -307,7 +321,7 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Logout — revoke refresh + clear cookie',
-        description: 'Accepts refresh token from cookie or body {refresh_token}. Returns 204 even if token missing.',
+        description: 'Accepts refresh token from cookie or body {refresh_token}. Returns 204 even if token missing. Revokes the whole session (refresh token family), including a successor issued by a concurrent rotation. With a valid refresh token it also invalidates every access token of the user already issued, on every device: the other devices keep their refresh token and recover with a refresh. Push subscriptions are not touched.',
         security: [],
         responses: [new OA\Response(response: 204, description: 'Logged out')],
     )]
@@ -329,13 +343,13 @@ final class AuthController extends AbstractController
     }
 
     /**
-     * Cambia l'organization attiva: emette un nuovo JWT con `active_org_id` aggiornato.
-     * Il client deve sostituire il vecchio access token nello state e
+     * Cambia l'organization attiva: emette un nuovo JWT con `active_org_id` aggiornato e la stessa scadenza
+     * del token presentato. Il client deve sostituire il vecchio access token nello state e
      * mantenere lo stesso refresh token (la sessione non cambia).
      */
     #[OA\Post(
         summary: 'Switch active organization',
-        description: 'Issues new JWT with updated active_org_id claim. Refresh token unchanged.',
+        description: 'Issues a new JWT with the updated active_org_id claim and the same expiry as the presented token (it never extends the session: a fresh expiry comes only from a refresh or a credential). Refresh token unchanged.',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: SwitchOrgRequest::class)),
@@ -361,10 +375,7 @@ final class AuthController extends AbstractController
             return $this->problem('auth.not_member', 403); // invito ancora in attesa
         }
 
-        $accessToken = $this->jwtManager->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $org->getId(),
-        ]);
+        $accessToken = $this->reissueAccessToken($user, $org->getId());
 
         // Ricorda l'org scelta sulla sessione, così un refresh non riporta alla prima org.
         $rawRefresh = $request->cookies->get(RefreshTokenService::COOKIE_NAME) ?? $payload->refreshToken;
@@ -411,13 +422,14 @@ final class AuthController extends AbstractController
 
     #[OA\Put(
         summary: 'Update current user profile (name, email, locale)',
-        description: 'Email must stay unique. Re-issues a fresh JWT because the identifier (email) may change.',
+        description: 'Email must stay unique. Without an email change it returns an access_token with the same expiry as the presented one. An email change (requires currentPassword) invalidates every access token and refresh token of the user, deletes the push subscriptions and opens a new session for the current client (access_token + refresh token in cookie or body).',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: UpdateProfileRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'Updated user + fresh access_token'),
+            new OA\Response(response: 200, description: 'Updated user + access_token (new session if the email changed)'),
+            new OA\Response(response: 400, description: 'auth.invalid_current_password'),
             new OA\Response(response: 409, description: 'auth.email_taken'),
             new OA\Response(response: 422, description: 'validation_failed'),
         ],
@@ -466,7 +478,7 @@ final class AuthController extends AbstractController
             // Un link di reset già spedito al vecchio indirizzo non deve restare spendibile dopo il cambio.
             $this->resetTokenRepo->invalidateAllForUser($user);
             $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
-            $this->refreshTokens->revokeAllForUser($user);
+            $this->endAllSessions($user);
             $this->issueAndSendVerification($user);
 
             // Nuova sessione per il client corrente (mantiene l'org attiva).
@@ -477,21 +489,17 @@ final class AuthController extends AbstractController
             );
         }
 
-        // L'email è l'identifier JWT: se cambia, il token in memoria diventa stale.
-        // Riemettiamo un access_token fresco (mantenendo l'org attiva) così il client resta autenticato.
-        $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
-
+        // Email invariata: il token presentato resta valido. La risposta riporta comunque un access_token (contratto
+        // del client), con l'org attiva e la stessa scadenza: un profile update non deve allungare la sessione.
         return $this->json([
-            'access_token' => $activeOrgId !== null
-                ? $this->jwtManager->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $activeOrgId])
-                : $this->jwtManager->create($user),
+            'access_token' => $this->reissueAccessToken($user, $this->activeOrganization->tryResolve()?->getId()),
             'user' => $this->userPayload($user),
         ]);
     }
 
     #[OA\Put(
         summary: 'Change current user password',
-        description: 'Verifies currentPassword, then sets newPassword. Revokes all refresh tokens (logs out other devices) and issues a fresh session for the current client, keeping the active organization.',
+        description: 'Verifies currentPassword, then sets newPassword. Invalidates every access token and refresh token of the user (logs out other devices), deletes the push subscriptions and issues a fresh session for the current client, keeping the active organization.',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: ChangePasswordRequest::class)),
@@ -521,7 +529,7 @@ final class AuthController extends AbstractController
         // Sicurezza: invalida tutte le sessioni esistenti, poi riapri quella corrente
         // mantenendone l'org attiva (altrimenti si ricadrebbe sulla prima membership).
         $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
-        $this->refreshTokens->revokeAllForUser($user);
+        $this->endAllSessions($user);
 
         return $this->buildAuthResponse(
             $user,
@@ -703,7 +711,7 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Reset password with a token from the email',
-        description: 'Consumes a valid (unexpired, unused) token, sets the new password, invalidates all sessions.',
+        description: 'Consumes a valid (unexpired, unused) token, sets the new password, invalidates every access token and refresh token of the user and deletes the push subscriptions.',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
@@ -739,7 +747,7 @@ final class AuthController extends AbstractController
         $this->em->flush();
 
         // Tutte le sessioni esistenti vanno invalidate dopo un reset.
-        $this->refreshTokens->revokeAllForUser($user);
+        $this->endAllSessions($user);
 
         return new JsonResponse(null, 204);
     }
@@ -1017,6 +1025,47 @@ final class AuthController extends AbstractController
             // ottiene sulla propria org personale.
             'isInstanceAdmin' => $this->userRepo->isInstanceAdmin($user),
         ];
+    }
+
+    /**
+     * Transizione di credenziali (reset/cambio password, cambio email): chiude ogni sessione dell'utente, refresh e
+     * access token, e cancella le push subscription di tutti i dispositivi. Chi aveva accesso prima non riceve più
+     * né dati né notifiche; il client corrente riceve una sessione nuova (con la `token_version` aggiornata) e
+     * ri-registra da solo la propria subscription. Le modifiche all'entity `User` vanno flushate prima.
+     */
+    private function endAllSessions(User $user): void
+    {
+        $this->refreshTokens->revokeAllForUser($user);
+        $this->pushSubscriptions->deleteAllForUser($user);
+    }
+
+    /**
+     * Riemette l'access token della richiesta (nuovo `active_org_id`) SENZA estenderne la durata: stesso `exp` del
+     * token presentato. Una scadenza nuova arriva solo da una sessione refresh o da una credenziale
+     * ({@see self::buildAuthResponse()}), altrimenti un access token rubato si rinnoverebbe da solo all'infinito.
+     * Se `exp` non è leggibile si rifiuta con 401: mai una scadenza nuova come ripiego.
+     */
+    private function reissueAccessToken(User $user, ?int $activeOrgId): string
+    {
+        $token = $this->security->getToken();
+        $exp = null;
+        if ($token instanceof JWTPostAuthenticationToken) {
+            try {
+                $exp = $this->jwtManager->parse($token->getCredentials())['exp'] ?? null;
+            } catch (JWTDecodeFailureException) {
+                $exp = null;
+            }
+        }
+        if (!is_int($exp)) {
+            throw new UnauthorizedHttpException('Bearer');
+        }
+
+        $payload = ['exp' => $exp];
+        if ($activeOrgId !== null) {
+            $payload['active_org_id'] = $activeOrgId;
+        }
+
+        return $this->jwtManager->createFromPayload($user, $payload);
     }
 
     private function buildAuthResponse(

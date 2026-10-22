@@ -9,7 +9,9 @@ COPY frontend/ .
 RUN npm run build
 
 # ---- base: solo ciò che serve a far GIRARE l'app (immagine di produzione) ----
-FROM dunglas/frankenphp:1.12-php8.5-alpine AS base
+# PHP fissato alla patch: 8.5.12 corregge CVE-2026-109618 e CVE-2026-109619 (RCE via bailout; la seconda colpisce i
+# worker, che riusano il processo tra le richieste). Le immagini 1.12 non hanno ricevuto la 8.5.12.
+FROM dunglas/frankenphp:1.13-php8.5.12-alpine AS base
 
 RUN apk add --no-cache \
     icu-dev \

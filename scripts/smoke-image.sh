@@ -169,6 +169,11 @@ section "Contenuto dell'immagine ($IMAGE)"
 
 php_version="$(in_image 'php -v | head -n 1')"
 assert_contains "PHP 8.5" "$php_version" "PHP 8.5."
+# 8.5.12 corregge CVE-2026-109618 e CVE-2026-109619: un'immagine con un PHP precedente non va pubblicata.
+php_patched="$(in_image 'php -r "echo version_compare(PHP_VERSION, \"8.5.12\", \">=\") ? \"si\" : PHP_VERSION;"')"
+assert_eq "PHP >= 8.5.12 (CVE-2026-109618, CVE-2026-109619)" "si" "$php_patched"
+upload_progress="$(in_image 'php -r "echo var_export((bool) ini_get(\"session.upload_progress.enabled\"), true);"')"
+assert_eq "session.upload_progress disattivato" "false" "$upload_progress"
 
 modules="$(in_image 'php -m')"
 for ext in pdo_mysql intl zip bcmath sodium mbstring opcache; do
@@ -381,6 +386,17 @@ for cmd in app:reminders:dispatch app:backup:create app:refresh-tokens:cleanup m
 done
 if docker exec -u www-data "$APP" php bin/console app:refresh-tokens:cleanup --no-interaction >/dev/null 2>&1; then ok "app:refresh-tokens:cleanup eseguito"; else ko "app:refresh-tokens:cleanup fallito"; fi
 if docker exec -u www-data "$APP" php bin/console app:reminders:dispatch --no-interaction >/dev/null 2>&1; then ok "app:reminders:dispatch eseguito"; else ko "app:reminders:dispatch fallito"; fi
+# La riga esatta del job Ofelia, letta da compose.yml: un'opzione inesistente o un comando che rifiuta
+# --no-interaction farebbero fallire il job a ogni esecuzione senza che nessuno se ne accorga.
+# --time-limit=2 in coda sostituisce quello del job (vince l'ultimo): a coda vuota consume aspetta fino al limite.
+retry_cmd="$(sed -n 's/^ *ofelia\.job-exec\.messenger-retry\.command: "\(.*\)"$/\1/p' "$(dirname "$0")/../compose.yml")"
+if [ -z "$retry_cmd" ]; then
+    ko "job Ofelia messenger-retry non trovato in compose.yml"
+elif docker exec -u www-data "$APP" sh -c "$retry_cmd --time-limit=2" >/dev/null 2>&1; then
+    ok "job Ofelia messenger-retry eseguito ($retry_cmd)"
+else
+    ko "job Ofelia messenger-retry fallito ($retry_cmd)"
+fi
 if docker exec -u www-data "$APP" php bin/console app:backup:create --skip-uploads --no-interaction >/dev/null 2>&1; then
     backups="$(dexec sh -c 'ls /var/backups/db-*.sql.gz 2>/dev/null' || true)"
     assert_contains "app:backup:create scrive il dump (mariadb-dump raggiunge il DB)" "$backups" "db-"

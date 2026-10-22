@@ -45,6 +45,23 @@ class PushSubscriptionRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('s')->delete()->getQuery()->execute();
     }
 
+    /**
+     * Cancella tutte le subscription dell'utente (ogni dispositivo). Usato alle transizioni di credenziali
+     * (reset/cambio password, cambio email): un dispositivo di chi aveva accesso prima smette di ricevere
+     * le notifiche; quello corrente si ri-registra da solo.
+     *
+     * @return int righe eliminate
+     */
+    public function deleteAllForUser(User $user): int
+    {
+        return (int) $this->createQueryBuilder('s')
+            ->delete()
+            ->where('s.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->execute();
+    }
+
     public function countForUser(User $user): int
     {
         return $this->count(['user' => $user]);

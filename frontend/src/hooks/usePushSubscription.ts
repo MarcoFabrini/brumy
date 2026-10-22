@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { authFetch } from '@/api/client';
 import { vapidPublicKeyKey } from '@/hooks/usePushSettings';
+import { hasDifferentServerKey, urlBase64ToUint8Array, webSubscriptionBody } from '@/lib/webPush';
 
 export type PushStatus =
   | 'unsupported' // browser senza Push API / serviceWorker
@@ -11,30 +12,6 @@ export type PushStatus =
   | 'subscribed'
   | 'unsubscribed'
   | 'loading';
-
-function urlBase64ToUint8Array(base64: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(b64);
-  // Backing su ArrayBuffer esplicito (TS strict: no SharedArrayBuffer)
-  const arr = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-function bufferToBase64(buf: ArrayBuffer | null): string {
-  if (!buf) return '';
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-
-/** True se la subscription del browser è stata creata con una chiave VAPID diversa da quella corrente. */
-function hasDifferentServerKey(sub: PushSubscription, vapidKey: string): boolean {
-  const current = sub.options?.applicationServerKey;
-  if (!current) return false;
-  const a = new Uint8Array(current);
-  const b = urlBase64ToUint8Array(vapidKey);
-  return a.length !== b.length || a.some((byte, i) => byte !== b[i]);
-}
 
 const SW_READY_TIMEOUT_MS = 10_000;
 
@@ -155,13 +132,7 @@ export function usePushSubscription() {
         await authFetch<void>('/api/push-subscriptions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            platform: 'web',
-            endpoint: sub.endpoint,
-            p256dh: bufferToBase64(sub.getKey('p256dh')),
-            authSecret: bufferToBase64(sub.getKey('auth')),
-            deviceLabel: navigator.userAgent.split(' ').slice(-1)[0],
-          }),
+          body: webSubscriptionBody(sub),
         });
       } catch (err) {
         // Salvataggio lato server fallito: annulla la sottoscrizione locale

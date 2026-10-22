@@ -14,8 +14,8 @@ use App\Enum\OrgRole;
 use App\Repository\OrganizationInvitationRepository;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\PushSubscriptionRepository;
-use App\Repository\RefreshTokenRepository;
 use App\Service\OrganizationMemberRemover;
+use App\Service\RefreshTokenService;
 use App\Service\Storage\AttachmentStorageInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -32,7 +32,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *    con altri membri attivi (deve trasferire ownership prima).
  * 2. Anonymize PII (email, firstName, lastName, password) → email univoca
  *    pseudo-randomica `deleted-<id>-<hash>@anonymized.local`.
- * 3. Revoke tutti i refresh token attivi.
+ * 3. Revoke tutti i refresh token attivi e invalida gli access token (RefreshTokenService, stesso lock della rotazione).
  * 4. Delete tutte le push subscription (token mobile, endpoint web).
  * 5. Per ogni org dove l'utente è unico membro → delete org (cascade) e dei suoi file allegati.
  *    Negli altri casi le memberships restano (storia partecipazione), ma i veicoli di cui è
@@ -51,7 +51,7 @@ final class GdprDeleteService
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly RefreshTokenRepository $tokenRepo,
+        private readonly RefreshTokenService $refreshTokens,
         private readonly PushSubscriptionRepository $pushRepo,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly AttachmentStorageInterface $storage,
@@ -99,6 +99,12 @@ final class GdprDeleteService
      */
     private function anonymizeInTransaction(User $user, int $userId, array &$filesToDelete): array
     {
+        // Per prima cosa: la revoca prende il lock sulla riga `users` di RefreshTokenService (ordine fisso `users` →
+        // `refresh_tokens`) come primo statement della transazione, così una rotazione concorrente finisce prima o non
+        // trova più il token. Preso più tardi, dopo i lock condivisi delle FK su org e membership, rischierebbe un
+        // deadlock. Revoca anche gli access token già emessi; il numero di refresh token revocati va nel riepilogo.
+        $activeTokens = $this->refreshTokens->revokeAllForUser($user);
+
         $deletedOrgs = 0;
         $keptMemberships = 0;
         $oldEmail = $user->getEmail();
@@ -133,10 +139,6 @@ final class GdprDeleteService
 
         // Gli inviti pendenti spediti dall'utente non devono sopravvivergli
         $this->invitationRepo->deletePendingByInviter($user);
-
-        // Revoke refresh tokens attivi (count prima del revoke per audit)
-        $activeTokens = $this->tokenRepo->countActiveForUser($user);
-        $this->tokenRepo->revokeAllForUser($user);
 
         // Hard-delete push subscriptions (token device + endpoint web)
         $pushSubs = $this->pushRepo->findBy(['user' => $user]);

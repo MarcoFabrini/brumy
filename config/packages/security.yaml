@@ -9,12 +9,11 @@ security:
         Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
             algorithm: auto
 
-    # Doctrine user provider basato su email
+    # Utente del JWT caricato dal claim `user_id` (immutabile), valido solo se `username` è ancora la sua
+    # email e `token_version` la versione corrente (vedi App\Security\JwtUserProvider).
     providers:
-        app_user_provider:
-            entity:
-                class: App\Entity\User
-                property: email
+        jwt_user_provider:
+            id: App\Security\JwtUserProvider
 
     # Gerarchia ruoli
     role_hierarchy:
@@ -37,7 +36,7 @@ security:
         api:
             pattern: ^/api
             stateless: true
-            provider: app_user_provider
+            provider: jwt_user_provider
             jwt: ~
 
     # Accesso pubblico solo agli endpoint auth; tutto il resto richiede ROLE_USER.

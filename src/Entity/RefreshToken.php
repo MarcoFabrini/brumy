@@ -137,11 +137,6 @@ class RefreshToken
         $this->activeOrganizationId = $id;
     }
 
-    public function revoke(): void
-    {
-        $this->revokedAt = new \DateTimeImmutable();
-    }
-
     /**
      * Allinea l'istanza in memoria a una rotazione già scritta in DB da
      * {@see \App\Repository\RefreshTokenRepository::rotateIfActive()} (UPDATE DQL, che non la tocca).

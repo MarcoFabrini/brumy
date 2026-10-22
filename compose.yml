@@ -100,7 +100,11 @@ services:
       ofelia.job-exec.refresh-cleanup.schedule: "0 0 4 * * 0"
       ofelia.job-exec.refresh-cleanup.command: "php bin/console app:refresh-tokens:cleanup --no-interaction"
       ofelia.job-exec.messenger-retry.schedule: "0 30 * * * *"
-      ofelia.job-exec.messenger-retry.command: "php bin/console messenger:failed:retry --force --limit=50 --no-interaction"
+      # messenger:failed:retry non va bene qui: senza id dei messaggi rifiuta --no-interaction e non ha --limit.
+      # Consumare il transport failed fa lo stesso lavoro (un messaggio che fallisce ancora viene ritentato dalla
+      # retry strategy del transport, poi scartato con l'ERROR di MessengerFailureAlertSubscriber).
+      # --time-limit perché a coda vuota consume aspetta invece di uscire.
+      ofelia.job-exec.messenger-retry.command: "php bin/console messenger:consume failed --limit=50 --time-limit=60 --memory-limit=128M --no-interaction"
 
   messenger:
     image: ${BRUMY_REGISTRY:-ghcr.io/marcofabrini}/brumy-app:${BRUMY_TAG:-latest}

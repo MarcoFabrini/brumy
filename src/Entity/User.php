@@ -75,6 +75,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeImmutable $emailVerifiedAt = null;
 
     /**
+     * Versione delle credenziali di sessione, copiata nel claim `token_version` di ogni access token: incrementata
+     * a ogni revoca di sessioni; gli access token con una versione diversa vengono rifiutati
+     * ({@see \App\Security\JwtUserProvider}). Mai esposta (nessun gruppo) e mai impostata a mano: cambia solo
+     * con {@see self::incrementTokenVersion()}, sotto il lock di {@see \App\Service\RefreshTokenService}.
+     */
+    #[ORM\Column(name: 'token_version', options: ['default' => 0])]
+    private int $tokenVersion = 0;
+
+    /**
      * @var Collection<int, OrganizationMember>
      */
     #[ORM\OneToMany(targetEntity: OrganizationMember::class, mappedBy: 'user', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -173,6 +182,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function resetEmailVerification(): self
     {
         $this->emailVerifiedAt = null;
+        return $this;
+    }
+
+    public function getTokenVersion(): int
+    {
+        return $this->tokenVersion;
+    }
+
+    /**
+     * Invalida tutti gli access token emessi finora. Va chiamato solo con la riga `users` riletta sotto lock
+     * (PESSIMISTIC_WRITE) nella stessa transazione del flush: altrimenti due incrementi concorrenti partirebbero
+     * dallo stesso valore e uno andrebbe perso.
+     */
+    public function incrementTokenVersion(): self
+    {
+        ++$this->tokenVersion;
         return $this;
     }
 

@@ -68,9 +68,10 @@ class RefreshTokenRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    public function revokeAllForUser(User $user): void
+    /** Revoca tutti i token ancora attivi dell'utente. Ritorna quanti ne ha revocati. */
+    public function revokeAllForUser(User $user): int
     {
-        $this->createQueryBuilder('rt')
+        return (int) $this->createQueryBuilder('rt')
             ->update()
             ->set('rt.revokedAt', ':now')
             ->where('rt.user = :user')

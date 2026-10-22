@@ -3,6 +3,7 @@ import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
 import { switchOrganization } from '@/api/endpoints/auth';
 import { profileLocale } from '@/lib/format';
+import { resyncThisDevice } from '@/lib/pushResync';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -21,16 +22,22 @@ interface AuthLikeResponse {
   user: Omit<User, 'memberships'>;
 }
 
-/** Aggiorna profilo (nome/email/locale). Riemette JWT (l'email è l'identifier) + ricarica /me. */
+/**
+ * Aggiorna profilo (nome/email/locale) e ricarica /me. La risposta porta sempre un access token: con l'email
+ * cambiata è una sessione nuova (il server ha chiuso tutte le altre e cancellato le push subscription, quindi
+ * questo browser ri-registra la propria).
+ */
 export function useUpdateProfile() {
   return useMutation({
     mutationFn: async (payload: ProfilePayload) => {
+      const previousEmail = useAuthStore.getState().user?.email;
       const res = await authFetch<AuthLikeResponse>('/api/auth/profile', {
         method: 'PUT',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
       useAuthStore.getState().setAccessToken(res.access_token);
+      if (res.user.email !== previousEmail) void resyncThisDevice();
       const me = await authFetch<User>('/api/auth/me');
       useAuthStore.getState().setUser(me);
       return me;
@@ -43,7 +50,10 @@ interface ChangePasswordPayload {
   newPassword: string;
 }
 
-/** Cambia password: verifica corrente, ruota la sessione (nuovo access_token + cookie). */
+/**
+ * Cambia password: verifica corrente, ruota la sessione (nuovo access_token + cookie). Il server chiude tutte le
+ * altre sessioni e cancella le push subscription: questo browser ri-registra la propria.
+ */
 export function useChangePassword() {
   return useMutation({
     mutationFn: async (payload: ChangePasswordPayload) => {
@@ -53,6 +63,7 @@ export function useChangePassword() {
         body: JSON.stringify(payload),
       });
       useAuthStore.getState().setAccessToken(res.access_token);
+      void resyncThisDevice();
     },
   });
 }

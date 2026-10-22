@@ -10,6 +10,7 @@ import { Toaster } from '@/components/ui';
 import { AuthGate, UpdatePrompt } from '@/components/layout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { clearQueryCacheOnSessionChange } from '@/lib/sessionCache';
+import { resyncPushOnSessionStart } from '@/lib/pushResync';
 import { shouldRetryQuery } from '@/lib/queryRetry';
 import { installChunkErrorRecovery } from '@/lib/chunkRecovery';
 import { startServiceWorker } from '@/lib/pwaUpdate';
@@ -27,6 +28,10 @@ const queryClient = new QueryClient({
 // Cache di un altro utente o di un'altra organizzazione mai visibile: si svuota quando la sessione
 // finisce o cambia utente, e quando l'org attiva del token cambia (vedi lib/sessionCache).
 clearQueryCacheOnSessionChange(queryClient);
+
+// A ogni inizio di sessione la subscription push già presente nel browser si ri-registra sul server, che la cancella
+// alle transizioni di credenziali (vedi lib/pushResync).
+resyncPushOnSessionStart();
 
 // Chunk spariti dopo un deploy (scheda rimasta aperta): un reload, poi ci pensa l'ErrorBoundary.
 installChunkErrorRecovery();
