@@ -103,6 +103,14 @@ class VehicleShareRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** Cancella tutte le condivisioni dell'utente sui veicoli dell'org (proprietà compresa). Ritorna quante. */
+    public function deleteAllForUserInOrganization(User $user, Organization $org): int
+    {
+        return (int) $this->getEntityManager()->createQuery(
+            'DELETE FROM '.VehicleShare::class.' s WHERE s.user = :user AND s.vehicle IN (SELECT v.id FROM '.Vehicle::class.' v WHERE v.organization = :org)',
+        )->setParameter('user', $user)->setParameter('org', $org)->execute();
+    }
+
     /**
      * Ruolo delle condivisioni accettate dell'utente sui veicoli dell'org, in UNA query: serve
      * alle liste per sapere quali veicoli sono suoi (`admin`) e quali condivisi con lui.

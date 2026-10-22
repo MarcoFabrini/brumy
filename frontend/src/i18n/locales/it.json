@@ -70,7 +70,11 @@
       "continue": "Continua",
       "banner": "Conferma il tuo indirizzo email.",
       "resend": "Rinvia email",
-      "resent": "Email di verifica inviata."
+      "resent": "Email di verifica inviata.",
+      "pending_banner": "Conferma il nuovo indirizzo {{email}}: apri il link che ti abbiamo mandato. Fino ad allora accedi con l'email attuale.",
+      "email_changed_title": "Email aggiornata",
+      "email_changed_description": "Il nuovo indirizzo è l'email del tuo account. Per sicurezza abbiamo chiuso tutte le sessioni: accedi con la nuova email.",
+      "go_to_login": "Vai al login"
     },
     "invite": {
       "title": "Invito a un'organizzazione",
@@ -306,10 +310,38 @@
     "due_hint": "Almeno data o km",
     "notify_days_before": "Avvisa giorni prima",
     "notify_hint": "Quanti giorni prima ricevere la notifica",
+    "notify_km_before": "Avvisa km prima",
+    "notify_km_hint": "Quanti km prima della scadenza ricevere la notifica",
+    "recurrence": "Ricorrenza",
+    "recurrence_hint": "La prossima scadenza si calcola dalla data e dai km reali del completamento.",
+    "recurrence_every": "Ripeti ogni",
+    "recurrence_every_hint": "Es. 2 anni per la revisione, 1 per il bollo. Vuoto = una tantum.",
+    "recurrence_unit": "Unità",
+    "recurrence_units": {
+      "months": "Mesi",
+      "years": "Anni"
+    },
+    "recurrence_km": "Ripeti ogni (km)",
+    "recurrence_km_hint": "Es. 10000 per olio o tagliando. Vuoto = una tantum.",
+    "every_months_one": "ogni mese",
+    "every_months_other": "ogni {{count}} mesi",
+    "every_years_one": "ogni anno",
+    "every_years_other": "ogni {{count}} anni",
+    "every_km": "ogni {{km}}",
+    "one_off": "Una tantum",
     "completed_at": "Completato il",
+    "completed_km": "Km al completamento",
     "days": "giorni",
     "mark_complete": "Segna come completato",
     "completed": "Promemoria completato",
+    "completed_next": "Promemoria completato, creata la prossima scadenza",
+    "complete_dialog": {
+      "title": "Segna come completato",
+      "description": "Indica quando e a quanti km è stato fatto.",
+      "date": "Data del completamento",
+      "km": "Km al completamento",
+      "recurring_note": "Verrà creata la prossima scadenza a partire da questi valori."
+    },
     "select_vehicle": "Seleziona veicolo",
     "created": "Promemoria creato",
     "updated": "Promemoria aggiornato",
@@ -696,6 +728,11 @@
         "required": "Inserisci i giorni"
       },
       "due_required": "Specifica almeno una scadenza (data o km)",
+      "recurrence_months_requires_due_date": "Per ripetere a tempo serve una scadenza a data",
+      "recurrence_km_requires_due_km": "Per ripetere a km serve una scadenza in km",
+      "recurrence_too_long": "Al massimo 10 anni (120 mesi)",
+      "completed_on_future": "La data di completamento non può essere nel futuro",
+      "already_completed": "Promemoria già completato",
       "not_found": "Promemoria non trovato"
     },
     "maintenance": {
@@ -868,7 +905,9 @@
     "profile_updated": "Profilo aggiornato",
     "password_updated": "Password aggiornata",
     "org_updated": "Organizzazione aggiornata",
-    "email_change_hint": "Per cambiare email serve la password attuale. Dovrai verificare il nuovo indirizzo e le altre sessioni verranno chiuse."
+    "email_change_hint": "Per cambiare email serve la password attuale. Ti mandiamo un link al nuovo indirizzo: l'email cambia quando lo apri e da quel momento tutte le sessioni verranno chiuse.",
+    "email_change_sent": "Ti abbiamo mandato un link a {{email}}: l'email cambia quando lo apri.",
+    "email_pending": "In attesa di conferma: {{email}}"
   },
   "vehicle_picker": {
     "title": "Scegli un veicolo",

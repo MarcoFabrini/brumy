@@ -13,7 +13,7 @@ namespace App\Enum;
 enum ReminderUrgency: string
 {
     case OK = 'ok';
-    /** Entro `notifyDaysBefore` giorni, o entro {@see \App\Entity\Reminder::KM_SOON_THRESHOLD} km. */
+    /** Entro `notifyDaysBefore` giorni, o entro `notifyKmBefore` km dalla scadenza a km. */
     case SOON = 'soon';
     case OVERDUE = 'overdue';
 

@@ -7,8 +7,6 @@ namespace App\Service;
 use App\Entity\Organization;
 use App\Entity\OrganizationMember;
 use App\Entity\User;
-use App\Entity\Vehicle;
-use App\Entity\VehicleShare;
 use App\Repository\OrganizationInvitationRepository;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\VehicleShareRepository;
@@ -65,9 +63,7 @@ final class OrganizationMemberRemover
             }
         }
 
-        $this->em->createQuery(
-            'DELETE FROM '.VehicleShare::class.' s WHERE s.user = :user AND s.vehicle IN (SELECT v.id FROM '.Vehicle::class.' v WHERE v.organization = :org)',
-        )->setParameter('user', $user)->setParameter('org', $org)->execute();
+        $this->shareRepo->deleteAllForUserInOrganization($user, $org);
     }
 
     /**

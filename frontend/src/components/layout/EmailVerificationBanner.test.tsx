@@ -22,6 +22,7 @@ const unverified: User = {
   locale: 'it',
   hasAvatar: false,
   emailVerified: false,
+  pendingEmail: null,
   isInstanceAdmin: false,
   memberships: [],
 };
@@ -69,5 +70,31 @@ describe('EmailVerificationBanner — rinvio', () => {
     await user.click(screen.getByRole('button', { name: 'Rinvia email' }));
 
     expect(await screen.findByText('Troppe richieste: riprova tra qualche istante')).toBeInTheDocument();
+  });
+});
+
+describe('EmailVerificationBanner — cambio email in attesa', () => {
+  beforeEach(async () => {
+    mockedAuthFetch.mockReset();
+    await i18n.changeLanguage('it');
+  });
+
+  it("mostra il nuovo indirizzo da confermare anche se l'email attuale è verificata", () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      accessToken: 'tok',
+      user: { ...unverified, emailVerified: true, pendingEmail: 'nuova@test.it' },
+    });
+    renderBanner();
+
+    expect(screen.getByText(/Conferma il nuovo indirizzo nuova@test\.it/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rinvia email' })).toBeInTheDocument();
+  });
+
+  it('non compare con email verificata e nessun cambio in attesa', () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user: { ...unverified, emailVerified: true } });
+    renderBanner();
+
+    expect(screen.queryByRole('button', { name: 'Rinvia email' })).not.toBeInTheDocument();
   });
 });

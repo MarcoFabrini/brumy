@@ -8,11 +8,15 @@ use App\Entity\Organization;
 use App\Entity\User;
 use App\Entity\Vehicle;
 use App\Enum\OrgRole;
+use App\Enum\ReminderType;
+use App\Service\AppClock;
+use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\ReminderFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\DBAL\Connection;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 final class ReminderControllerTest extends ApiTestCase
 {
@@ -67,10 +71,230 @@ final class ReminderControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', accessToken: $token);
+        // Come il client storico: POST senza body e senza Content-Type.
+        $this->client->request('POST', '/api/reminders/'.$r->getId().'/complete', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+            'HTTP_X_CLIENT_TYPE' => 'mobile',
+        ]);
 
         self::assertResponseIsSuccessful();
-        self::assertNotNull($this->jsonBody()['completedAt']);
+        $body = $this->jsonBody();
+        self::assertNotNull($body['completed']['completedAt']);
+        $today = static::getContainer()->get(AppClock::class)->today()->format('Y-m-d');
+        self::assertStringStartsWith($today, $body['completed']['completedOn']);
+        self::assertNull($body['completed']['completedKm']);
+        self::assertNull($body['next'], 'una tantum: nessun successore');
+    }
+
+    public function testCompletingARecurringReminderCreatesTheNextOneFromTheActualValues(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org, 'initialKm' => 1_000]);
+        $r = ReminderFactory::createOne([
+            'organization' => $org, 'vehicle' => $vehicle, 'type' => ReminderType::SERVICE, 'description' => 'Tagliando',
+            'dueDate' => new \DateTimeImmutable('2026-12-15'), 'dueKm' => 10_000,
+            'recurrenceMonths' => 24, 'recurrenceKm' => 10_000, 'notifyKmBefore' => 500,
+        ]);
+        $id = $r->getId();
+
+        $this->jsonRequest('POST', '/api/reminders/'.$id.'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], accessToken: $token);
+
+        self::assertResponseIsSuccessful();
+        $body = $this->jsonBody();
+        self::assertSame($id, $body['completed']['id']);
+        self::assertStringStartsWith('2026-10-01', $body['completed']['completedOn']);
+        self::assertSame(9_800, $body['completed']['completedKm']);
+        self::assertNotSame($id, $body['next']['id']);
+        self::assertSame(19_800, $body['next']['dueKm']);
+        self::assertStringStartsWith('2028-10-01', $body['next']['dueDate']);
+        self::assertSame(24, $body['next']['recurrenceMonths']);
+        self::assertSame(10_000, $body['next']['recurrenceKm']);
+        self::assertSame(500, $body['next']['notifyKmBefore']);
+        self::assertNull($body['next']['completedAt']);
+        self::assertSame($vehicle->getId(), $body['next']['vehicle']['id']);
+
+        // Tra gli attivi c'è solo il successore.
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), accessToken: $token);
+        self::assertSame([$body['next']['id']], array_column($this->jsonBody(), 'id'));
+    }
+
+    public function testCompletionWritesTheAuditTrailOfBothReminders(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'dueKm' => 10_000, 'recurrenceKm' => 10_000]);
+        $connection = static::getContainer()->get(Connection::class);
+        $connection->executeStatement('DELETE FROM audit_logs');
+
+        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $nextId = $this->jsonBody()['next']['id'];
+
+        $rows = $connection->fetchAllAssociative("SELECT entity_id, action, changes FROM audit_logs WHERE entity_class = 'Reminder' ORDER BY id");
+        $byAction = array_column($rows, null, 'action');
+        self::assertSame((string) $r->getId(), (string) $byAction['updated']['entity_id']);
+        $changes = json_decode((string) $byAction['updated']['changes'], true, flags: \JSON_THROW_ON_ERROR);
+        self::assertSame([null, 9_800], $changes['completedKm']);
+        self::assertArrayHasKey('completedOn', $changes);
+        self::assertSame((string) $nextId, (string) $byAction['created']['entity_id']);
+    }
+
+    public function testCompletionValidatesDateAndKm(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
+        $url = '/api/reminders/'.$r->getId().'/complete';
+        $tomorrow = static::getContainer()->get(AppClock::class)->today()->modify('+1 day')->format('Y-m-d');
+
+        $this->jsonRequest('POST', $url, ['completedOn' => $tomorrow], accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->jsonBody()['title']);
+        self::assertSame([['field' => 'completedOn', 'message' => 'reminder.completed_on_future']], $this->jsonBody()['errors']);
+
+        $this->jsonRequest('POST', $url, ['completedOn' => '30/11/2026'], accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([['field' => 'completedOn', 'message' => 'common.invalid_date']], $this->jsonBody()['errors']);
+
+        $this->jsonRequest('POST', $url, ['completedKm' => 10_000_000], accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([['field' => 'completedKm', 'message' => 'common.km_too_large']], $this->jsonBody()['errors']);
+
+        $this->jsonRequest('GET', '/api/reminders/'.$r->getId(), accessToken: $token);
+        self::assertNull($this->jsonBody()['completedAt'], 'un completamento rifiutato non tocca il promemoria');
+    }
+
+    public function testCompletionKmBelowTheKnownOdometerIsAllowed(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org, 'initialKm' => 0]);
+        RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'km' => 10_500]);
+        $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'dueKm' => 10_000, 'recurrenceKm' => 10_000]);
+
+        // Tagliando registrato in ritardo: nel frattempo è già stato inserito un rifornimento più avanti.
+        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedKm' => 9_800], accessToken: $token);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(19_800, $this->jsonBody()['next']['dueKm']);
+    }
+
+    public function testCompletingTwiceIsAConflictAndCreatesNoSecondSuccessor(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'dueKm' => 10_000, 'recurrenceKm' => 10_000]);
+        $url = '/api/reminders/'.$r->getId().'/complete';
+        $count = static fn (): int => (int) static::getContainer()->get(Connection::class)
+            ->fetchOne('SELECT COUNT(*) FROM reminders WHERE vehicle_id = ?', [$vehicle->getId()]);
+
+        $this->jsonRequest('POST', $url, ['completedKm' => 9_800], accessToken: $token);
+        self::assertResponseIsSuccessful();
+        self::assertSame(2, $count());
+
+        $this->jsonRequest('POST', $url, ['completedKm' => 9_900], accessToken: $token);
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame(['type' => 'about:blank', 'title' => 'reminder.already_completed', 'status' => 409], $this->jsonBody());
+        self::assertSame(2, $count());
+    }
+
+    public function testCompletingAReminderOfAnotherOrganizationIs404(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+        [, $otherOrg] = $this->createAuthenticatedUser();
+        $foreign = ReminderFactory::createOne(['organization' => $otherOrg, 'vehicle' => VehicleFactory::createOne(['organization' => $otherOrg])]);
+
+        $this->jsonRequest('POST', '/api/reminders/'.$foreign->getId().'/complete', ['completedKm' => 1], accessToken: $token);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('reminder.not_found', $this->jsonBody()['title']);
+    }
+
+    public function testCreateAndUpdateAcceptTheRecurrence(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $base = ['type' => 'service', 'description' => 'Tagliando', 'dueDate' => '2026-12-31', 'dueKm' => 10_000];
+
+        $this->jsonRequest('POST', '/api/reminders', [
+            'vehicleId' => $vehicle->getId(), ...$base, 'recurrenceMonths' => 24, 'recurrenceKm' => 10_000, 'notifyKmBefore' => 500,
+        ], accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        $body = $this->jsonBody();
+        self::assertSame([24, 10_000, 500], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
+        $id = $body['id'];
+
+        $this->jsonRequest('PUT', '/api/reminders/'.$id, [...$base, 'recurrenceMonths' => 12, 'recurrenceKm' => 15_000, 'notifyKmBefore' => 800], accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $body = $this->jsonBody();
+        self::assertSame([12, 15_000, 800], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
+
+        // Campi omessi → una tantum con la soglia di default.
+        $this->jsonRequest('PUT', '/api/reminders/'.$id, $base, accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $body = $this->jsonBody();
+        self::assertSame([null, null, 1000], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
+
+        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        $body = $this->jsonBody();
+        self::assertSame([null, null, 1000], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
+        self::assertNull($body['completedOn']);
+        self::assertNull($body['completedKm']);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, list<array{field: string, message: string}>}> */
+    public static function invalidRecurrences(): iterable
+    {
+        yield 'ricorrenza a tempo senza data' => [
+            ['dueKm' => 10_000, 'recurrenceMonths' => 24],
+            [['field' => 'recurrenceMonths', 'message' => 'reminder.recurrence_months_requires_due_date']],
+        ];
+        yield 'ricorrenza a km senza km' => [
+            ['dueDate' => '2026-12-31', 'recurrenceKm' => 10_000],
+            [['field' => 'recurrenceKm', 'message' => 'reminder.recurrence_km_requires_due_km']],
+        ];
+        yield 'zero mesi' => [
+            ['dueDate' => '2026-12-31', 'recurrenceMonths' => 0],
+            [['field' => 'recurrenceMonths', 'message' => 'common.invalid_value']],
+        ];
+        yield 'oltre 120 mesi' => [
+            ['dueDate' => '2026-12-31', 'recurrenceMonths' => 121],
+            [['field' => 'recurrenceMonths', 'message' => 'common.invalid_value']],
+        ];
+        yield 'km di ricorrenza a zero' => [
+            ['dueKm' => 10_000, 'recurrenceKm' => 0],
+            [['field' => 'recurrenceKm', 'message' => 'common.must_be_positive']],
+        ];
+        yield 'km di ricorrenza enormi' => [
+            ['dueKm' => 10_000, 'recurrenceKm' => 10_000_000],
+            [['field' => 'recurrenceKm', 'message' => 'common.km_too_large']],
+        ];
+        yield 'anticipo a km negativo' => [
+            ['dueKm' => 10_000, 'notifyKmBefore' => -1],
+            [['field' => 'notifyKmBefore', 'message' => 'common.invalid_value']],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $fields
+     * @param list<array{field: string, message: string}> $errors
+     */
+    #[DataProvider('invalidRecurrences')]
+    public function testInvalidRecurrenceIsRejectedOnCreateAndUpdate(array $fields, array $errors): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
+        $base = ['type' => 'service', 'description' => 'Tagliando', ...$fields];
+
+        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->jsonBody()['title']);
+        self::assertSame($errors, $this->jsonBody()['errors']);
+
+        $this->jsonRequest('PUT', '/api/reminders/'.$r->getId(), $base, accessToken: $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame($errors, $this->jsonBody()['errors']);
     }
 
     public function testListExcludesCompletedByDefault(): void

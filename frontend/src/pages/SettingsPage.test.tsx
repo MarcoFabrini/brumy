@@ -22,6 +22,7 @@ const user: User = {
   locale: 'it',
   hasAvatar: false,
   emailVerified: true,
+  pendingEmail: null,
   isInstanceAdmin: false,
   memberships: [{ id: 1, role: 'member', organization: { id: 1, name: 'Officina', slug: 'officina' } }],
 };

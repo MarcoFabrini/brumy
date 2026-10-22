@@ -60,6 +60,12 @@ framework:
             policy: 'sliding_window'
             limit: 20
             interval: '1 hour'
+        # Email di verifica e di conferma del cambio email, per utente: senza, il profilo spedirebbe posta a
+        # indirizzi scelti dall'utente al ritmo del limite generico delle scritture (60/min).
+        verification_email:
+            policy: 'fixed_window'
+            limit: 3
+            interval: '15 minutes'
 
 when@test:
     framework:

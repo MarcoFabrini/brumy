@@ -4,6 +4,8 @@ import i18n from '@/i18n';
 export interface User {
   id: number;
   email: string;
+  /** Nuovo indirizzo chiesto dal profilo, in attesa del link di conferma (l'email dell'account non cambia finché non lo apre). */
+  pendingEmail: string | null;
   firstName: string;
   lastName: string;
   locale: 'it' | 'en';

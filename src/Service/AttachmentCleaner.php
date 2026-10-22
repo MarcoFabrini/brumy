@@ -14,18 +14,25 @@ use App\Entity\Vehicle;
 use App\Enum\AttachmentEntityType;
 use App\Service\Storage\AttachmentStorageInterface;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
  * Gli allegati sono polimorfici (`entityType` + `entityId`, senza FK): cancellare un veicolo o un
  * record collegato NON li rimuove da solo. Qui righe e file fisici vengono eliminati insieme
  * all'entità: le righe nella stessa transazione, i file dopo il commit (un file già cancellato
  * con un rollback sarebbe irrecuperabile, un file rimasto orfano no).
+ *
+ * Record e veicoli si cancellano sotto lo stesso lock per organizzazione degli upload
+ * ({@see AttachmentQuota::serialized()}), con la transazione committata prima del rilascio: un upload in coda
+ * ricontrolla il genitore dopo aver preso il lock e non può inserire un allegato per un'entità appena cancellata
+ * (resterebbe invisibile e non cancellabile, ma conterebbe nella quota dell'org).
  */
 final class AttachmentCleaner
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly AttachmentStorageInterface $storage,
+        private readonly AttachmentQuota $quota,
     ) {
     }
 
@@ -40,7 +47,7 @@ final class AttachmentCleaner
         };
 
         $paths = [];
-        $this->em->wrapInTransaction(function () use ($record, $type, &$paths): void {
+        $this->inTransactionUnderUploadLock($record->getOrganization(), function () use ($record, $type, &$paths): void {
             $paths = $this->detach($record->getOrganization(), [$type->value => [(int) $record->getId()]]);
             $this->em->remove($record);
         });
@@ -51,7 +58,7 @@ final class AttachmentCleaner
     public function removeVehicle(Vehicle $vehicle): void
     {
         $paths = [];
-        $this->em->wrapInTransaction(function () use ($vehicle, &$paths): void {
+        $this->inTransactionUnderUploadLock($vehicle->getOrganization(), function () use ($vehicle, &$paths): void {
             $paths = $this->detach($vehicle->getOrganization(), [
                 AttachmentEntityType::VEHICLE->value => [(int) $vehicle->getId()],
                 AttachmentEntityType::MAINTENANCE->value => $this->childIds(Maintenance::class, $vehicle),
@@ -98,6 +105,23 @@ final class AttachmentCleaner
             } catch (\Throwable) {
                 // File già assente o non rimovibile: il DB è coerente, non blocchiamo la richiesta.
             }
+        }
+    }
+
+    /**
+     * Esegue `$work` in una transazione tenendo il lock degli upload dell'org; 429 `upload.busy` se il lock non arriva.
+     *
+     * @param \Closure(): void $work
+     */
+    private function inTransactionUnderUploadLock(Organization $org, \Closure $work): void
+    {
+        $done = $this->quota->serialized($org, function () use ($work): true {
+            $this->em->wrapInTransaction($work);
+
+            return true;
+        });
+        if ($done === null) {
+            throw new TooManyRequestsHttpException(null, 'upload.busy');
         }
     }
 

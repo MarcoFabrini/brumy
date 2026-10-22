@@ -84,6 +84,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private int $tokenVersion = 0;
 
     /**
+     * Nuovo indirizzo chiesto dal profilo, in attesa che l'utente apra il link mandato lì. Finché non lo conferma
+     * l'identificatore (login, inviti, unicità) resta `email`: un indirizzo non dimostrato non diventa mai login.
+     */
+    #[ORM\Column(name: 'pending_email', length: 180, nullable: true)]
+    private ?string $pendingEmail = null;
+
+    /**
      * @var Collection<int, OrganizationMember>
      */
     #[ORM\OneToMany(targetEntity: OrganizationMember::class, mappedBy: 'user', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -178,10 +185,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /** Nuova email = non ancora verificata. */
-    public function resetEmailVerification(): self
+    public function getPendingEmail(): ?string
     {
-        $this->emailVerifiedAt = null;
+        return $this->pendingEmail;
+    }
+
+    /** Chiede di cambiare email: l'identificatore non cambia finché {@see self::confirmPendingEmail()}. */
+    public function requestEmailChange(string $email): self
+    {
+        $email = strtolower(trim($email));
+        $this->pendingEmail = $email === $this->email ? null : $email;
+        return $this;
+    }
+
+    public function cancelPendingEmail(): self
+    {
+        $this->pendingEmail = null;
+        return $this;
+    }
+
+    /** Il link mandato al nuovo indirizzo è stato aperto: diventa l'email dell'account, già verificata. */
+    public function confirmPendingEmail(): self
+    {
+        if ($this->pendingEmail === null) {
+            throw new \LogicException('Nessun cambio email in attesa');
+        }
+        $this->email = $this->pendingEmail;
+        $this->pendingEmail = null;
+        $this->emailVerifiedAt = new \DateTimeImmutable();
         return $this;
     }
 

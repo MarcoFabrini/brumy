@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { REMINDER_KM_SOON, reminderUrgency, type Reminder } from './reminder';
+import {
+  DEFAULT_NOTIFY_KM_BEFORE,
+  recurrenceInterval,
+  reminderUrgency,
+  type Reminder,
+} from './reminder';
 
 const NOW = new Date(2026, 8, 25, 15, 0); // 25/09/2026 15:00 locale
 
@@ -12,7 +17,12 @@ function reminder(over: Partial<Reminder>): Reminder {
     dueDate: null,
     dueKm: null,
     notifyDaysBefore: 7,
+    notifyKmBefore: DEFAULT_NOTIFY_KM_BEFORE,
+    recurrenceMonths: null,
+    recurrenceKm: null,
     completedAt: null,
+    completedOn: null,
+    completedKm: null,
     ...over,
   };
 }
@@ -45,12 +55,18 @@ describe('reminderUrgency — scadenza a chilometri (bug: i km erano ignorati)',
   it('km oltre la soglia: overdue', () => {
     expect(reminderUrgency(km(100_000), { currentKm: 100_001, now: NOW })).toBe('overdue');
   });
-  it('a meno di REMINDER_KM_SOON dalla soglia: soon (anche esattamente sulla soglia)', () => {
+  it('entro i 1000 km di default dalla soglia: soon (anche esattamente sulla soglia)', () => {
     expect(reminderUrgency(km(100_000), { currentKm: 100_000, now: NOW })).toBe('soon');
-    expect(reminderUrgency(km(100_000), { currentKm: 100_000 - REMINDER_KM_SOON, now: NOW })).toBe('soon');
+    expect(reminderUrgency(km(100_000), { currentKm: 99_000, now: NOW })).toBe('soon');
   });
   it('lontano dalla soglia: ok', () => {
-    expect(reminderUrgency(km(100_000), { currentKm: 100_000 - REMINDER_KM_SOON - 1, now: NOW })).toBe('ok');
+    expect(reminderUrgency(km(100_000), { currentKm: 98_999, now: NOW })).toBe('ok');
+  });
+  it('usa notifyKmBefore del promemoria, come il backend', () => {
+    const r = reminder({ dueKm: 100_000, notifyKmBefore: 500 });
+    expect(reminderUrgency(r, { currentKm: 99_500, now: NOW })).toBe('soon');
+    expect(reminderUrgency(r, { currentKm: 99_499, now: NOW })).toBe('ok');
+    expect(reminderUrgency(r, { currentKm: 100_001, now: NOW })).toBe('overdue');
   });
   it('senza chilometraggio noto conta solo la data', () => {
     expect(reminderUrgency(km(100_000), { now: NOW })).toBe('ok');
@@ -61,5 +77,16 @@ describe('reminderUrgency — scadenza a chilometri (bug: i km erano ignorati)',
     expect(reminderUrgency(r, { currentKm: 100_500, now: NOW })).toBe('overdue');
     const r2 = reminder({ dueDate: '2026-09-20', dueKm: 100_000 }); // data scaduta, km lontani
     expect(reminderUrgency(r2, { currentKm: 50_000, now: NOW })).toBe('overdue');
+  });
+});
+
+describe('recurrenceInterval', () => {
+  it('multipli di 12 in anni', () => {
+    expect(recurrenceInterval(24)).toEqual({ unit: 'years', count: 2 });
+    expect(recurrenceInterval(12)).toEqual({ unit: 'years', count: 1 });
+  });
+  it('il resto in mesi', () => {
+    expect(recurrenceInterval(18)).toEqual({ unit: 'months', count: 18 });
+    expect(recurrenceInterval(6)).toEqual({ unit: 'months', count: 6 });
   });
 });

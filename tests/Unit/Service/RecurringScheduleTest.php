@@ -264,6 +264,24 @@ final class RecurringScheduleTest extends TestCase
         self::assertCount(RecurringSchedule::MAX_OCCURRENCES, $charges);
     }
 
+    /** @return iterable<string, array{string, int, string}> */
+    public static function addMonthsCases(): iterable
+    {
+        yield 'revisione ogni 2 anni' => ['2026-11-30', 24, '2028-11-30'];
+        yield '31 gennaio + 1 in anno comune' => ['2027-01-31', 1, '2027-02-28'];
+        yield '31 gennaio + 1 in anno bisestile' => ['2028-01-31', 1, '2028-02-29'];
+        yield '29 febbraio + 24' => ['2028-02-29', 24, '2030-02-28'];
+        yield '31 agosto + 6' => ['2026-08-31', 6, '2027-02-28'];
+        yield 'cambio d\'anno' => ['2026-12-15', 1, '2027-01-15'];
+        yield 'zero mesi' => ['2026-05-31', 0, '2026-05-31'];
+    }
+
+    #[DataProvider('addMonthsCases')]
+    public function testAddMonthsClampsTheDayToTheEndOfTheTargetMonth(string $date, int $months, string $expected): void
+    {
+        self::assertSame($expected, $this->schedule->addMonths(self::d($date), $months)->format('Y-m-d'));
+    }
+
     private static function d(string $date): \DateTimeImmutable
     {
         return new \DateTimeImmutable($date);

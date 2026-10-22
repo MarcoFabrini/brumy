@@ -171,6 +171,11 @@ final class AttachmentController extends AbstractController
         // Controllo della quota, salvataggio e inserimento sotto un lock per organizzazione: due upload
         // concorrenti non possono più superare insieme il tetto.
         $response = $this->quota->serialized($org, function () use ($file, $org, $type, $entityId, $size, $mime, $user): JsonResponse {
+            // Il genitore può essere stato cancellato mentre si aspettava il lock (la cancellazione prende lo stesso
+            // lock, vedi AttachmentCleaner): un allegato per un'entità che non c'è più sarebbe irraggiungibile.
+            if ($this->resolveVehicleForEntity($type, $entityId, $org) === null) {
+                return $this->problem('entity.not_found', 404);
+            }
             $quotaError = $this->quota->violation($org, $type, $entityId, $size);
             if ($quotaError === AttachmentQuota::TOO_MANY_FILES) {
                 return $this->problem($quotaError, 422);
@@ -237,7 +242,9 @@ final class AttachmentController extends AbstractController
             throw $this->createNotFoundException('attachment.file_missing');
         }
 
-        $response = new BinaryFileResponse($this->storage->absolutePath($attachment->getStoredPath()));
+        // BinaryFileResponse è `public` di default: un allegato autorizzato non deve finire in una cache condivisa.
+        $response = new BinaryFileResponse($this->storage->absolutePath($attachment->getStoredPath()), public: false);
+        $response->headers->addCacheControlDirective('no-store');
         $response->headers->set('Content-Type', $attachment->getMimeType());
         // Il file è dell'utente: il browser non deve reinterpretarne il tipo.
         $response->headers->set('X-Content-Type-Options', 'nosniff');

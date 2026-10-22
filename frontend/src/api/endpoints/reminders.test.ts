@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ZodError } from 'zod';
 import { authFetch } from '@/api/client';
 import type { ReminderResponse } from '@/api/types/reminder';
 import {
@@ -22,10 +23,24 @@ const response: ReminderResponse = {
   dueDate: '2026-12-31T00:00:00+00:00',
   dueKm: null,
   notifyDaysBefore: 30,
+  notifyKmBefore: 1000,
+  recurrenceMonths: 24,
+  recurrenceKm: null,
   completedAt: null,
+  completedOn: null,
+  completedKm: null,
 };
 
-const dto = { vehicleId: 3, type: 'inspection', description: 'Revisione', dueDate: '2026-12-31', notifyDaysBefore: 30 } as const;
+const dto = {
+  vehicleId: 3,
+  type: 'inspection',
+  description: 'Revisione',
+  dueDate: '2026-12-31',
+  notifyDaysBefore: 30,
+  notifyKmBefore: 1000,
+  recurrenceMonths: 24,
+  recurrenceKm: null,
+} as const;
 
 describe('endpoint promemoria', () => {
   beforeEach(() => mockedAuthFetch.mockReset());
@@ -44,7 +59,12 @@ describe('endpoint promemoria', () => {
       dueDate: '2026-12-31',
       dueKm: null,
       notifyDaysBefore: 30,
+      notifyKmBefore: 1000,
+      recurrenceMonths: 24,
+      recurrenceKm: null,
       completedAt: null,
+      completedOn: null,
+      completedKm: null,
     });
   });
 
@@ -81,15 +101,43 @@ describe('endpoint promemoria', () => {
     }
   });
 
-  it('complete è un POST senza corpo; delete è un DELETE', async () => {
-    mockedAuthFetch.mockResolvedValue({ ...response, completedAt: '2026-10-05T10:00:00+00:00' });
+  it('complete manda data e km effettivi e adatta completato e successore', async () => {
+    mockedAuthFetch.mockResolvedValue({
+      completed: {
+        ...response,
+        completedAt: '2026-10-05T10:00:00+00:00',
+        completedOn: '2026-10-01T00:00:00+00:00',
+        completedKm: 9800,
+      },
+      next: { ...response, id: 10, dueDate: '2028-10-01T00:00:00+00:00' },
+    });
 
-    const done = await completeReminder(9);
+    const result = await completeReminder(9, { completedOn: '2026-10-01', completedKm: 9800 });
+
+    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/reminders/9/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completedOn: '2026-10-01', completedKm: 9800 }),
+    });
+    expect(result.completed).toMatchObject({ id: 9, completedOn: '2026-10-01', completedKm: 9800 });
+    expect(result.next).toMatchObject({ id: 10, vehicleId: 3, dueDate: '2028-10-01' });
+  });
+
+  it('complete di una tantum: nessun successore; delete è un DELETE', async () => {
+    mockedAuthFetch.mockResolvedValueOnce({ completed: { ...response, completedAt: '2026-10-05T10:00:00+00:00' }, next: null });
+    mockedAuthFetch.mockResolvedValueOnce(undefined);
+
+    const result = await completeReminder(9, { completedOn: '2026-10-05', completedKm: null });
     await deleteReminder(9);
 
-    expect(mockedAuthFetch).toHaveBeenNthCalledWith(1, '/api/reminders/9/complete', { method: 'POST' });
-    expect(done.completedAt).toBe('2026-10-05T10:00:00+00:00');
+    expect(result.next).toBeNull();
     expect(mockedAuthFetch).toHaveBeenNthCalledWith(2, '/api/reminders/9', { method: 'DELETE' });
+  });
+
+  it('una risposta di complete malformata è rifiutata (zod) invece di produrre promemoria incompleti', async () => {
+    mockedAuthFetch.mockResolvedValue({ completed: { ...response, completedKm: '9800' }, next: null });
+
+    await expect(completeReminder(9, { completedOn: '2026-10-01', completedKm: 9800 })).rejects.toBeInstanceOf(ZodError);
   });
 
   it('una risposta senza veicolo (contratto rotto) fallisce invece di produrre un promemoria orfano', async () => {

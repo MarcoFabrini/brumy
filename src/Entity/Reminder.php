@@ -24,8 +24,8 @@ class Reminder implements VehicleScoped
 {
     use TimestampableTrait;
 
-    /** Un promemoria a km è "in scadenza" quando mancano al massimo tanti km. */
-    public const KM_SOON_THRESHOLD = 1000;
+    /** Anticipo di default dell'avviso a km: "in scadenza" quando mancano al massimo tanti km. */
+    public const DEFAULT_NOTIFY_KM_BEFORE = 1000;
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -66,9 +66,41 @@ class Reminder implements VehicleScoped
     #[Groups(['reminder:read', 'reminder:list', 'reminder:write'])]
     private int $notifyDaysBefore = 30;
 
+    /** Un promemoria a km è "in scadenza" quando mancano al massimo tanti km alla scadenza. */
+    #[ORM\Column(name: 'notify_km_before', type: 'integer', options: ['default' => self::DEFAULT_NOTIFY_KM_BEFORE])]
+    #[Groups(['reminder:read', 'reminder:list'])]
+    private int $notifyKmBefore = self::DEFAULT_NOTIFY_KM_BEFORE;
+
+    /**
+     * Ricorrenza a tempo, in mesi: al completamento il successore scade tanti mesi dopo la data
+     * effettiva del completamento. Null = nessuna ricorrenza a tempo.
+     */
+    #[ORM\Column(name: 'recurrence_months', type: 'integer', nullable: true)]
+    #[Groups(['reminder:read', 'reminder:list'])]
+    private ?int $recurrenceMonths = null;
+
+    /**
+     * Ricorrenza a km: al completamento il successore scade tanti km dopo i km effettivi del
+     * completamento. Null = nessuna ricorrenza a km.
+     */
+    #[ORM\Column(name: 'recurrence_km', type: 'integer', nullable: true)]
+    #[Groups(['reminder:read', 'reminder:list'])]
+    private ?int $recurrenceKm = null;
+
+    /** Istante in cui è stato segnato completato: decide {@see self::isCompleted()} e i filtri delle query. */
     #[ORM\Column(name: 'completed_at', type: 'datetime_immutable', nullable: true)]
     #[Groups(['reminder:read', 'reminder:list'])]
     private ?\DateTimeImmutable $completedAt = null;
+
+    /** Data effettiva del lavoro (può precedere `completedAt`): base della scadenza successiva a tempo. */
+    #[ORM\Column(name: 'completed_on', type: 'date_immutable', nullable: true)]
+    #[Groups(['reminder:read', 'reminder:list'])]
+    private ?\DateTimeImmutable $completedOn = null;
+
+    /** Km effettivi del completamento: base della scadenza successiva a km. */
+    #[ORM\Column(name: 'completed_km', type: 'integer', nullable: true)]
+    #[Groups(['reminder:read', 'reminder:list'])]
+    private ?int $completedKm = null;
 
     /** Quando è partita l'ultima notifica (informativo: la deduplica usa `notifiedUrgency`). */
     #[ORM\Column(name: 'last_notified_at', type: 'datetime_immutable', nullable: true)]
@@ -118,9 +150,42 @@ class Reminder implements VehicleScoped
         $this->notifyDaysBefore = $d;
         return $this;
     }
+    public function getNotifyKmBefore(): int { return $this->notifyKmBefore; }
+    public function setNotifyKmBefore(int $km): self
+    {
+        if ($this->notifyKmBefore !== $km) {
+            $this->notifiedUrgency = null;
+        }
+        $this->notifyKmBefore = $km;
+        return $this;
+    }
+    public function getRecurrenceMonths(): ?int { return $this->recurrenceMonths; }
+    /** Non tocca `notifiedUrgency`: la ricorrenza non cambia la scadenza corrente. */
+    public function setRecurrenceMonths(?int $months): self { $this->recurrenceMonths = $months; return $this; }
+    public function getRecurrenceKm(): ?int { return $this->recurrenceKm; }
+    /** Non tocca `notifiedUrgency`: la ricorrenza non cambia la scadenza corrente. */
+    public function setRecurrenceKm(?int $km): self { $this->recurrenceKm = $km; return $this; }
+    public function isRecurring(): bool { return $this->recurrenceMonths !== null || $this->recurrenceKm !== null; }
     public function getCompletedAt(): ?\DateTimeImmutable { return $this->completedAt; }
     public function setCompletedAt(?\DateTimeImmutable $d): self { $this->completedAt = $d; return $this; }
     public function isCompleted(): bool { return $this->completedAt !== null; }
+    public function getCompletedOn(): ?\DateTimeImmutable { return $this->completedOn; }
+    public function getCompletedKm(): ?int { return $this->completedKm; }
+
+    /**
+     * Segna il promemoria completato: `$at` è l'istante del click, `$completedOn`/`$completedKm` la data e i km
+     * effettivi del lavoro. Un promemoria si completa una volta sola.
+     */
+    public function markCompleted(\DateTimeImmutable $completedOn, ?int $completedKm, \DateTimeImmutable $at): self
+    {
+        if ($this->isCompleted()) {
+            throw new \LogicException('Il promemoria è già completato.');
+        }
+        $this->completedAt = $at;
+        $this->completedOn = $completedOn;
+        $this->completedKm = $completedKm;
+        return $this;
+    }
     public function getLastNotifiedAt(): ?\DateTimeImmutable { return $this->lastNotifiedAt; }
     public function getNotifiedUrgency(): ?ReminderUrgency { return $this->notifiedUrgency; }
 
@@ -172,7 +237,7 @@ class Reminder implements VehicleScoped
 
         return match (true) {
             $kmLeft < 0 => ReminderUrgency::OVERDUE,
-            $kmLeft <= self::KM_SOON_THRESHOLD => ReminderUrgency::SOON,
+            $kmLeft <= $this->notifyKmBefore => ReminderUrgency::SOON,
             default => ReminderUrgency::OK,
         };
     }

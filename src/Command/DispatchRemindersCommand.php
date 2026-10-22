@@ -21,7 +21,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
 /**
  * Accoda `SendReminderNotificationMessage` per i promemoria che hanno raggiunto un nuovo
  * livello di urgenza: "in scadenza" (entro `notifyDaysBefore` giorni, o entro
- * {@see Reminder::KM_SOON_THRESHOLD} km dal chilometraggio attuale del veicolo) e poi "scaduto".
+ * `notifyKmBefore` km dal chilometraggio attuale del veicolo, {@see Reminder::DEFAULT_NOTIFY_KM_BEFORE} di default)
+ * e poi "scaduto".
  *
  * Pensato per un cron giornaliero (`0 7 * * *  php bin/console app:reminders:dispatch`).
  *

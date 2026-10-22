@@ -20,6 +20,7 @@ const me: User = {
   locale: 'it',
   hasAvatar: false,
   emailVerified: true,
+  pendingEmail: null,
   isInstanceAdmin: false,
   memberships: [],
 };

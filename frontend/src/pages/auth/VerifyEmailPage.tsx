@@ -15,7 +15,7 @@ export function VerifyEmailPage() {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const errorMessage = useApiErrorMessage();
-  const { mutate, isPending, isSuccess, isError, error } = useVerifyEmail();
+  const { mutate, isPending, isSuccess, isError, error, data } = useVerifyEmail();
   const started = useRef(false);
 
   useEffect(() => {
@@ -49,7 +49,17 @@ export function VerifyEmailPage() {
           </>
         )}
 
-        {isSuccess && (
+        {isSuccess && data.emailChanged && (
+          <>
+            <Heading level={2}>{t('auth.verify.email_changed_title')}</Heading>
+            <Text variant="muted">{t('auth.verify.email_changed_description')}</Text>
+            <Button asChild className="mt-2">
+              <Link to="/login">{t('auth.verify.go_to_login')}</Link>
+            </Button>
+          </>
+        )}
+
+        {isSuccess && !data.emailChanged && (
           <>
             <Heading level={2}>{t('auth.verify.success_title')}</Heading>
             <Text variant="muted">{t('auth.verify.success_description')}</Text>

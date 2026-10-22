@@ -155,6 +155,40 @@ final class MailBuilder
         return $this->build($loc, $copy);
     }
 
+    /** Conferma del cambio email: va al NUOVO indirizzo, che diventa l'email dell'account solo aprendo il link. */
+    public function confirmEmailChange(User $user, string $rawToken): Email
+    {
+        $loc = $this->locale($user);
+        $url = $this->link('/verify-email', $rawToken);
+        $first = $user->getFirstName();
+
+        $copy = $loc === 'en'
+            ? [
+                'subject' => 'Brumy — Confirm your new email address',
+                'heading' => 'Confirm your new email address',
+                'greeting' => sprintf('Hi %s,', $first),
+                'paragraphs' => [
+                    'You asked to use this address for your Brumy account. Open the link to confirm: from then on you will log in with this address, and every open session will be closed. This link is valid for 24 hours.',
+                ],
+                'button' => ['label' => 'Confirm new email', 'url' => $url],
+                'outro' => "If you didn't ask for this, ignore this email: the account address won't change.",
+                'footer' => 'Brumy — self-hosted vehicle management.',
+            ]
+            : [
+                'subject' => 'Brumy — Conferma il nuovo indirizzo email',
+                'heading' => 'Conferma il nuovo indirizzo email',
+                'greeting' => sprintf('Ciao %s,', $first),
+                'paragraphs' => [
+                    'Hai chiesto di usare questo indirizzo per il tuo account Brumy. Apri il link per confermare: da quel momento accederai con questo indirizzo e tutte le sessioni aperte verranno chiuse. Il link è valido 24 ore.',
+                ],
+                'button' => ['label' => 'Conferma nuova email', 'url' => $url],
+                'outro' => "Se non l'hai chiesto tu, ignora questa email: l'indirizzo dell'account non cambia.",
+                'footer' => 'Brumy — gestione veicoli self-host.',
+            ];
+
+        return $this->build($loc, $copy);
+    }
+
     /**
      * Invito a un'organizzazione: l'invitato può non avere ancora un account,
      * quindi accettiamo solo l'email (niente nome) + locale opzionale (default it).

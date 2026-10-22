@@ -70,7 +70,11 @@
       "continue": "Continue",
       "banner": "Confirm your email address.",
       "resend": "Resend email",
-      "resent": "Verification email sent."
+      "resent": "Verification email sent.",
+      "pending_banner": "Confirm your new address {{email}}: open the link we sent you. Until then, log in with your current email.",
+      "email_changed_title": "Email updated",
+      "email_changed_description": "The new address is now your account email. For your security every session has been closed: log in with the new email.",
+      "go_to_login": "Go to login"
     },
     "invite": {
       "title": "Organization invitation",
@@ -306,10 +310,38 @@
     "due_hint": "At least date or km",
     "notify_days_before": "Notify days before",
     "notify_hint": "How many days before to be notified",
+    "notify_km_before": "Notify km before",
+    "notify_km_hint": "How many km before the due km to be notified",
+    "recurrence": "Recurrence",
+    "recurrence_hint": "The next due point is computed from the actual completion date and km.",
+    "recurrence_every": "Repeat every",
+    "recurrence_every_hint": "E.g. 2 years for the inspection, 1 for road tax. Empty = one-off.",
+    "recurrence_unit": "Unit",
+    "recurrence_units": {
+      "months": "Months",
+      "years": "Years"
+    },
+    "recurrence_km": "Repeat every (km)",
+    "recurrence_km_hint": "E.g. 10000 for oil or service. Empty = one-off.",
+    "every_months_one": "every month",
+    "every_months_other": "every {{count}} months",
+    "every_years_one": "every year",
+    "every_years_other": "every {{count}} years",
+    "every_km": "every {{km}}",
+    "one_off": "One-off",
     "completed_at": "Completed on",
+    "completed_km": "Km at completion",
     "days": "days",
     "mark_complete": "Mark as completed",
     "completed": "Reminder completed",
+    "completed_next": "Reminder completed, next due point created",
+    "complete_dialog": {
+      "title": "Mark as completed",
+      "description": "Enter when and at what mileage it was done.",
+      "date": "Completion date",
+      "km": "Odometer at completion",
+      "recurring_note": "The next due point will be created from these values."
+    },
     "select_vehicle": "Select vehicle",
     "created": "Reminder created",
     "updated": "Reminder updated",
@@ -801,6 +833,11 @@
         "required": "Enter a description"
       },
       "due_required": "Set at least one due point (date or km)",
+      "recurrence_months_requires_due_date": "A time-based recurrence needs a due date",
+      "recurrence_km_requires_due_km": "A km-based recurrence needs a due km",
+      "recurrence_too_long": "At most 10 years (120 months)",
+      "completed_on_future": "The completion date cannot be in the future",
+      "already_completed": "Reminder already completed",
       "not_found": "Reminder not found",
       "notify_days": {
         "required": "Enter the number of days"
@@ -868,7 +905,9 @@
     "profile_updated": "Profile updated",
     "password_updated": "Password updated",
     "org_updated": "Organization updated",
-    "email_change_hint": "Changing your email requires your current password. You'll need to verify the new address and other sessions will be signed out."
+    "email_change_hint": "Changing your email needs your current password. We'll send a link to the new address: your email changes when you open it, and from then every session will be closed.",
+    "email_change_sent": "We sent a link to {{email}}: your email changes when you open it.",
+    "email_pending": "Waiting for confirmation: {{email}}"
   },
   "vehicle_picker": {
     "title": "Choose a vehicle",

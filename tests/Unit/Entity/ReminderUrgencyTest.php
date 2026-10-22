@@ -59,14 +59,31 @@ final class ReminderUrgencyTest extends TestCase
     {
         yield 'km superati' => [100_001, ReminderUrgency::OVERDUE];
         yield 'esattamente sulla soglia' => [100_000, ReminderUrgency::SOON];
-        yield 'entro KM_SOON_THRESHOLD' => [100_000 - Reminder::KM_SOON_THRESHOLD, ReminderUrgency::SOON];
-        yield 'appena oltre KM_SOON_THRESHOLD' => [100_000 - Reminder::KM_SOON_THRESHOLD - 1, ReminderUrgency::OK];
+        yield 'entro la soglia di default' => [100_000 - Reminder::DEFAULT_NOTIFY_KM_BEFORE, ReminderUrgency::SOON];
+        yield 'appena oltre la soglia di default' => [100_000 - Reminder::DEFAULT_NOTIFY_KM_BEFORE - 1, ReminderUrgency::OK];
     }
 
     #[DataProvider('kmCases')]
-    public function testKmUrgency(int $currentKm, ReminderUrgency $expected): void
+    public function testKmUrgencyWithDefaultNotifyKmBefore(int $currentKm, ReminderUrgency $expected): void
     {
         $r = (new Reminder())->setDueKm(100_000);
+
+        self::assertSame(1000, $r->getNotifyKmBefore());
+        self::assertSame($expected, $r->urgency($currentKm, $this->today));
+    }
+
+    /** @return iterable<string, array{int, ReminderUrgency}> */
+    public static function customKmCases(): iterable
+    {
+        yield 'km superati' => [100_001, ReminderUrgency::OVERDUE];
+        yield 'esattamente notifyKmBefore' => [99_500, ReminderUrgency::SOON];
+        yield 'un km oltre notifyKmBefore' => [99_499, ReminderUrgency::OK];
+    }
+
+    #[DataProvider('customKmCases')]
+    public function testKmUrgencyUsesTheReminderNotifyKmBefore(int $currentKm, ReminderUrgency $expected): void
+    {
+        $r = (new Reminder())->setDueKm(100_000)->setNotifyKmBefore(500);
 
         self::assertSame($expected, $r->urgency($currentKm, $this->today));
     }
@@ -111,17 +128,57 @@ final class ReminderUrgencyTest extends TestCase
         $r->markNotified(ReminderUrgency::OVERDUE);
 
         // Riscrivere gli stessi valori (come fa un PUT che non cambia nulla) non azzera.
-        $r->setDueDate(new \DateTimeImmutable('2026-09-27'))->setDueKm(100_000)->setNotifyDaysBefore(7);
+        $r->setDueDate(new \DateTimeImmutable('2026-09-27'))->setDueKm(100_000)->setNotifyDaysBefore(7)
+            ->setNotifyKmBefore(Reminder::DEFAULT_NOTIFY_KM_BEFORE);
         self::assertSame(ReminderUrgency::OVERDUE, $r->getNotifiedUrgency());
 
         foreach ([
             fn (Reminder $x) => $x->setDueDate(new \DateTimeImmutable('2026-11-01')),
             fn (Reminder $x) => $x->setDueKm(110_000),
             fn (Reminder $x) => $x->setNotifyDaysBefore(14),
+            fn (Reminder $x) => $x->setNotifyKmBefore(500),
         ] as $change) {
             $r->markNotified(ReminderUrgency::OVERDUE);
             $change($r);
             self::assertNull($r->getNotifiedUrgency(), 'cambiata una scadenza: si riparte da zero');
         }
+    }
+
+    public function testChangingTheRecurrenceKeepsTheNotificationLevel(): void
+    {
+        $r = $this->byDate('2026-09-27')->setDueKm(100_000);
+        $r->markNotified(ReminderUrgency::SOON);
+
+        // La ricorrenza riguarda la scadenza successiva, non quella corrente.
+        $r->setRecurrenceMonths(12)->setRecurrenceKm(10_000);
+
+        self::assertSame(ReminderUrgency::SOON, $r->getNotifiedUrgency());
+        self::assertTrue($r->isRecurring());
+    }
+
+    public function testIsRecurringWithEitherDimension(): void
+    {
+        self::assertFalse((new Reminder())->isRecurring());
+        self::assertTrue((new Reminder())->setRecurrenceMonths(24)->isRecurring());
+        self::assertTrue((new Reminder())->setRecurrenceKm(10_000)->isRecurring());
+    }
+
+    public function testMarkCompletedStoresActualDateAndKm(): void
+    {
+        $at = new \DateTimeImmutable('2026-12-01 10:00:00');
+        $r = $this->byDate('2026-12-15')->markCompleted(new \DateTimeImmutable('2026-11-30'), 9800, $at);
+
+        self::assertTrue($r->isCompleted());
+        self::assertSame($at, $r->getCompletedAt());
+        self::assertSame('2026-11-30', $r->getCompletedOn()?->format('Y-m-d'));
+        self::assertSame(9800, $r->getCompletedKm());
+    }
+
+    public function testMarkCompletedTwiceIsRejected(): void
+    {
+        $r = $this->byDate('2026-12-15')->markCompleted(new \DateTimeImmutable('2026-11-30'), null, new \DateTimeImmutable());
+
+        $this->expectException(\LogicException::class);
+        $r->markCompleted(new \DateTimeImmutable('2026-12-01'), null, new \DateTimeImmutable());
     }
 }

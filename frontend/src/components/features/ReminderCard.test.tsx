@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/i18n';
@@ -21,7 +21,12 @@ const reminder = (overrides: Partial<Reminder>): Reminder => ({
   dueDate: null,
   dueKm: null,
   notifyDaysBefore: 7,
+  notifyKmBefore: 1000,
+  recurrenceMonths: null,
+  recurrenceKm: null,
   completedAt: null,
+  completedOn: null,
+  completedKm: null,
   ...overrides,
 });
 
@@ -40,6 +45,11 @@ describe('ReminderCard', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     mockedAuthFetch.mockResolvedValue([]);
+    await i18n.changeLanguage('it');
+  });
+
+  afterEach(async () => {
+    cleanup();
     await i18n.changeLanguage('it');
   });
 
@@ -63,5 +73,33 @@ describe('ReminderCard', () => {
 
     expect(screen.queryByText('·')).not.toBeInTheDocument();
     expect(screen.queryByText(/km$/)).not.toBeInTheDocument();
+  });
+
+  it('un promemoria ricorrente mostra la ricorrenza a tempo e a km', () => {
+    renderCard(reminder({ dueDate: '2026-12-01', dueKm: 10_000, recurrenceMonths: 12, recurrenceKm: 10_000 }));
+
+    expect(screen.getByText('ogni anno · ogni 10.000 km')).toBeInTheDocument();
+  });
+
+  it('ricorrenza a soli mesi o a soli anni', () => {
+    renderCard(reminder({ dueDate: '2026-12-01', recurrenceMonths: 24 }));
+    expect(screen.getByText('ogni 2 anni')).toBeInTheDocument();
+
+    cleanup();
+    renderCard(reminder({ dueDate: '2026-12-01', recurrenceMonths: 6 }));
+    expect(screen.getByText('ogni 6 mesi')).toBeInTheDocument();
+  });
+
+  it('una tantum: nessun testo di ricorrenza', () => {
+    renderCard(reminder({ dueDate: '2026-12-01', dueKm: 10_000 }));
+
+    expect(screen.queryByText(/ogni/)).not.toBeInTheDocument();
+  });
+
+  it('in inglese', async () => {
+    await i18n.changeLanguage('en');
+    renderCard(reminder({ dueDate: '2026-12-01', dueKm: 10_000, recurrenceMonths: 12, recurrenceKm: 10_000 }));
+
+    expect(screen.getByText('every year · every 10,000 km')).toBeInTheDocument();
   });
 });

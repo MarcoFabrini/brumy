@@ -29,10 +29,13 @@ use App\Repository\OrganizationRepository;
 use App\Repository\PasswordResetTokenRepository;
 use App\Repository\PushSubscriptionRepository;
 use App\Repository\UserRepository;
+use App\Repository\VehicleShareRepository;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AfterResponseTasks;
 use App\Service\AppMailer;
+use App\Service\LogRedactor;
 use App\Service\MailBuilder;
+use App\Service\UserAvatar;
 use App\Service\RefreshRejection;
 use App\Service\RefreshTokenService;
 use App\Service\Storage\AttachmentStorageInterface;
@@ -102,12 +105,16 @@ final class AuthController extends AbstractController
         private readonly RequestStack $requestStack,
         private readonly RateLimiterFactory $forgotPasswordLimiter,
         private readonly RateLimiterFactoryInterface $forgotPasswordIpLimiter,
+        #[Autowire(service: 'limiter.verification_email')]
+        private readonly RateLimiterFactoryInterface $verificationEmailLimiter,
         private readonly AfterResponseTasks $afterResponse,
         private readonly LoggerInterface $logger,
         private readonly AttachmentStorageInterface $storage,
         private readonly ActiveOrganizationResolver $activeOrganization,
         private readonly PushSubscriptionRepository $pushSubscriptions,
         private readonly Security $security,
+        private readonly VehicleShareRepository $shareRepo,
+        private readonly UserAvatar $avatar,
     ) {
     }
 
@@ -232,8 +239,11 @@ final class AuthController extends AbstractController
         Request $request,
         #[MapRequestPayload] LoginRequest $payload,
     ): JsonResponse {
-        $limiter = $this->loginLimiter->create($this->loginLimiterKey($request, $payload->email));
-        if (!$limiter->consume()->isAccepted() || $this->isBlocked($this->loginIpLimiter)) {
+        // Prima il limite per IP, che non scrive nulla: il limiter per (email, IP) salva uno stato per ogni chiave nuova,
+        // e un IP già bloccato non deve poter creare stati (file di cache) con un'email diversa a ogni richiesta.
+        if ($this->isBlocked($this->loginIpLimiter)
+            || !$this->loginLimiter->create($this->loginLimiterKey($request, $payload->email))->consume()->isAccepted()
+        ) {
             return $this->problem('auth.too_many_attempts', 429);
         }
 
@@ -422,16 +432,16 @@ final class AuthController extends AbstractController
 
     #[OA\Put(
         summary: 'Update current user profile (name, email, locale)',
-        description: 'Email must stay unique. Without an email change it returns an access_token with the same expiry as the presented one. An email change (requires currentPassword) invalidates every access token and refresh token of the user, deletes the push subscriptions and opens a new session for the current client (access_token + refresh token in cookie or body).',
+        description: 'Name and locale change at once. A different email (requires currentPassword) does not change the account email: it becomes `pendingEmail` and a confirmation link is sent to it; the change happens when the link is opened (POST /verify-email), which also ends every session of the user. The answer is the same whether or not the new address already has an account (the check runs at confirmation). At most 3 confirmation emails per 15 minutes per user (429 auth.too_many_attempts). Always returns an access_token with the same expiry as the presented one.',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: UpdateProfileRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'Updated user + access_token (new session if the email changed)'),
+            new OA\Response(response: 200, description: 'Updated user (with pendingEmail) + access_token'),
             new OA\Response(response: 400, description: 'auth.invalid_current_password'),
-            new OA\Response(response: 409, description: 'auth.email_taken'),
             new OA\Response(response: 422, description: 'validation_failed'),
+            new OA\Response(response: 429, description: 'auth.too_many_attempts (confirmation emails)'),
         ],
     )]
     #[Route('/profile', name: 'update_profile', methods: ['PUT'])]
@@ -441,22 +451,19 @@ final class AuthController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        $emailChanged = mb_strtolower($payload->email) !== mb_strtolower($user->getEmail());
+        $emailChanged = mb_strtolower(trim($payload->email)) !== $user->getEmail();
         if ($emailChanged
             && ($payload->currentPassword === null || !$this->passwordHasher->isPasswordValid($user, $payload->currentPassword))
         ) {
             return $this->problem('auth.invalid_current_password', 400);
         }
-
-        $existing = $this->userRepo->findOneByEmail($payload->email);
-        if ($existing && $existing->getId() !== $user->getId()) {
-            return $this->problem('auth.email_taken', 409);
+        if ($emailChanged && $this->verificationMailBudgetExhausted($user)) {
+            return $this->problem('auth.too_many_attempts', 429);
         }
 
         $user
             ->setFirstName($payload->firstName)
             ->setLastName($payload->lastName)
-            ->setEmail($payload->email)
             ->setLocale($payload->locale);
 
         $errors = $this->validator->validate($user);
@@ -464,33 +471,19 @@ final class AuthController extends AbstractController
             return $this->validationProblem($errors);
         }
 
-        try {
-            $this->em->flush();
-        } catch (UniqueConstraintViolationException) {
-            // Race: un'altra richiesta ha preso l'email tra il check e il flush.
-            return $this->problem('auth.email_taken', 409);
-        }
-
+        // L'email dell'account non cambia qui: il nuovo indirizzo resta in attesa finché l'utente non apre il link
+        // mandato lì (verifyEmail). Un indirizzo mai dimostrato non diventa login, e la risposta è la stessa che sia
+        // libero o già di un altro account: niente oracolo sugli account dell'istanza.
         if ($emailChanged) {
-            // La nuova email va riverificata; le altre sessioni (potenzialmente di un attaccante) decadono.
-            $user->resetEmailVerification();
-            $this->em->flush();
-            // Un link di reset già spedito al vecchio indirizzo non deve restare spendibile dopo il cambio.
-            $this->resetTokenRepo->invalidateAllForUser($user);
-            $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
-            $this->endAllSessions($user);
-            $this->issueAndSendVerification($user);
-
-            // Nuova sessione per il client corrente (mantiene l'org attiva).
-            return $this->buildAuthResponse(
-                $user,
-                $this->resolveClientType($request),
-                existingRefresh: $this->refreshTokens->issue($user, $activeOrgId),
-            );
+            $user->requestEmailChange($payload->email);
+        }
+        $this->em->flush();
+        if ($emailChanged) {
+            $this->sendEmailChangeConfirmation($user);
         }
 
-        // Email invariata: il token presentato resta valido. La risposta riporta comunque un access_token (contratto
-        // del client), con l'org attiva e la stessa scadenza: un profile update non deve allungare la sessione.
+        // Il token presentato resta valido. La risposta riporta comunque un access_token (contratto del client), con
+        // l'org attiva e la stessa scadenza: un profile update non deve allungare la sessione.
         return $this->json([
             'access_token' => $this->reissueAccessToken($user, $this->activeOrganization->tryResolve()?->getId()),
             'user' => $this->userPayload($user),
@@ -581,19 +574,12 @@ final class AuthController extends AbstractController
             return $this->problem('upload.mime_not_allowed', 415);
         }
 
-        $previousPath = $user->getAvatarPath();
         $storedPath = $this->storage->store($file, 'avatar');
-
         try {
-            $user->setAvatarPath($storedPath);
-            $this->em->flush();
+            $this->avatar->replace($user, $storedPath);
         } catch (\Throwable $e) {
             $this->storage->delete($storedPath);
             throw $e;
-        }
-
-        if ($previousPath !== null) {
-            $this->storage->delete($previousPath);
         }
 
         return $this->json(['hasAvatar' => true]);
@@ -623,7 +609,10 @@ final class AuthController extends AbstractController
         // Content-Type rilevato dal contenuto: i file avatar sono salvati senza estensione.
         $mime = MimeTypes::getDefault()->guessMimeType($absolutePath) ?? 'application/octet-stream';
 
-        $response = new BinaryFileResponse($absolutePath);
+        // BinaryFileResponse è `public` di default: un file autenticato non deve finire in una cache condivisa, e
+        // l'URL è lo stesso per ogni utente (niente cache nemmeno nel browser, che potrebbe servirlo all'account dopo).
+        $response = new BinaryFileResponse($absolutePath, public: false);
+        $response->headers->addCacheControlDirective('no-store');
         $response->headers->set('Content-Type', $mime);
         $response->headers->set('X-Content-Type-Options', 'nosniff'); // come per gli allegati, anche senza il proxy davanti
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, 'avatar');
@@ -641,12 +630,7 @@ final class AuthController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        $path = $user->getAvatarPath();
-        if ($path !== null) {
-            $user->setAvatarPath(null);
-            $this->em->flush();
-            $this->storage->delete($path);
-        }
+        $this->avatar->replace($user, null);
 
         return new JsonResponse(null, 204);
     }
@@ -754,15 +738,16 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Confirm email address with a token from the verification email',
-        description: 'Consumes a valid (unexpired, unused) token and marks the user email as verified.',
+        description: 'Consumes a valid (unexpired, unused) token. With a pending email change it makes `pendingEmail` the account email (verified), invalidates reset tokens and ends every session of the user (access and refresh tokens, push subscriptions): `emailChanged: true`, log in again with the new address. If the address got an account in the meantime: 409 auth.email_taken and the pending change is dropped. Otherwise it marks the current email as verified (`emailChanged: false`).',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: VerifyEmailRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 204, description: 'Email verified'),
+            new OA\Response(response: 200, description: '{emailChanged: bool}'),
             new OA\Response(response: 400, description: 'auth.invalid_verification_token'),
+            new OA\Response(response: 409, description: 'auth.email_taken (the new address got an account meanwhile)'),
         ],
     )]
     #[Route('/verify-email', name: 'verify_email', methods: ['POST'])]
@@ -781,16 +766,44 @@ final class AuthController extends AbstractController
             return $this->problem('auth.invalid_verification_token', 400);
         }
 
-        $token->getUser()->markEmailVerified();
+        $user = $token->getUser();
+        if ($user->getPendingEmail() !== null) {
+            $owner = $this->userRepo->findOneByEmail($user->getPendingEmail());
+            if ($owner !== null && $owner->getId() !== $user->getId()) {
+                $user->cancelPendingEmail();
+                $this->em->flush();
+
+                return $this->problem('auth.email_taken', 409);
+            }
+
+            $user->confirmPendingEmail();
+            try {
+                $this->em->flush();
+            } catch (UniqueConstraintViolationException) {
+                // Race: un'altra richiesta ha preso l'indirizzo tra il controllo e il flush.
+                return $this->problem('auth.email_taken', 409);
+            }
+            // Un link di reset già spedito al vecchio indirizzo non deve restare spendibile dopo il cambio; le
+            // sessioni aperte (potenzialmente di chi aveva accesso prima) decadono.
+            $this->resetTokenRepo->invalidateAllForUser($user);
+            $this->endAllSessions($user);
+
+            return $this->json(['emailChanged' => true]);
+        }
+
+        $user->markEmailVerified();
         $this->em->flush();
 
-        return new JsonResponse(null, 204);
+        return $this->json(['emailChanged' => false]);
     }
 
     #[OA\Post(
         summary: 'Resend the email verification link to the current user',
-        description: 'No-op (still 204) if the email is already verified.',
-        responses: [new OA\Response(response: 204, description: 'Verification email sent if needed')],
+        description: 'Sends the confirmation link again to the pending new address, or else to the current address if it is not verified yet. No-op (still 204) otherwise. At most 3 confirmation emails per 15 minutes per user.',
+        responses: [
+            new OA\Response(response: 204, description: 'Verification email sent if needed'),
+            new OA\Response(response: 429, description: 'auth.too_many_attempts'),
+        ],
     )]
     #[Route('/resend-verification', name: 'resend_verification', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
@@ -798,7 +811,12 @@ final class AuthController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        if (!$user->isEmailVerified()) {
+        if ($this->verificationMailBudgetExhausted($user)) {
+            return $this->problem('auth.too_many_attempts', 429);
+        }
+        if ($user->getPendingEmail() !== null) {
+            $this->sendEmailChangeConfirmation($user);
+        } elseif (!$user->isEmailVerified()) {
             $this->issueAndSendVerification($user);
         }
 
@@ -963,6 +981,12 @@ final class AuthController extends AbstractController
     {
         $org = $invitation->getOrganization();
         $existing = $this->memberRepo->findMembership($user, $org);
+        if ($existing === null || !$existing->isAccepted()) {
+            // Chi (ri)entra parte senza condivisioni: quelle rimaste da una vecchia membership (rimozione con codice
+            // precedente, o dati migrati) ridarebbero accesso o proprietà dei veicoli. Le condivisioni si creano solo
+            // verso membri accettati, quindi qui nessuna è legittima.
+            $this->shareRepo->deleteAllForUserInOrganization($user, $org);
+        }
         if ($existing === null) {
             $this->em->persist(
                 (new OrganizationMember())
@@ -1000,19 +1024,50 @@ final class AuthController extends AbstractController
         } catch (\Throwable $e) {
             $this->logger->error('Email verification send failed', [
                 'user_id' => $user->getId(),
-                'error' => $e->getMessage(),
+                'error' => LogRedactor::scrub($e->getMessage()),
             ]);
         }
     }
 
     /**
-     * @return array{id: int|null, email: string, firstName: string, lastName: string, locale: string, hasAvatar: bool, emailVerified: bool}
+     * Link di conferma per il cambio email in attesa, mandato al nuovo indirizzo dopo la risposta. Se l'indirizzo è già
+     * di un altro account il token si crea comunque ma la mail non parte: stessi passi e stessi tempi di risposta,
+     * e la conferma fallirebbe in ogni caso (verifyEmail ricontrolla l'unicità).
+     */
+    private function sendEmailChangeConfirmation(User $user): void
+    {
+        $pending = $user->getPendingEmail();
+        if ($pending === null) {
+            return;
+        }
+        $this->verificationTokenRepo->invalidateAllForUser($user);
+
+        $rawToken = bin2hex(random_bytes(32));
+        $this->em->persist(new EmailVerificationToken($user, hash('sha256', $rawToken), (new \DateTimeImmutable())->modify('+24 hours')));
+        $this->em->flush();
+
+        if ($this->userRepo->findOneByEmail($pending) !== null) {
+            return;
+        }
+        $mail = $this->mailBuilder->confirmEmailChange($user, $rawToken)->to($pending);
+        $this->afterResponse->defer(fn () => $this->mailer->send($mail), ['user_id' => $user->getId()]);
+    }
+
+    /** Email di verifica e conferma per utente: senza, il profilo diventerebbe un modo per spedire posta a chiunque. */
+    private function verificationMailBudgetExhausted(User $user): bool
+    {
+        return !$this->verificationEmailLimiter->create('user-'.$user->getId())->consume()->isAccepted();
+    }
+
+    /**
+     * @return array{id: int|null, email: string, pendingEmail: string|null, firstName: string, lastName: string, locale: string, hasAvatar: bool, emailVerified: bool}
      */
     private function userPayload(User $user): array
     {
         return [
             'id' => $user->getId(),
             'email' => $user->getEmail(),
+            'pendingEmail' => $user->getPendingEmail(),
             'firstName' => $user->getFirstName(),
             'lastName' => $user->getLastName(),
             'locale' => $user->getLocale(),

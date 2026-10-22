@@ -23,6 +23,7 @@ const baseUser: User = {
   locale: 'it',
   hasAvatar: false,
   emailVerified: true,
+  pendingEmail: null,
   isInstanceAdmin: false,
   memberships: [],
 };
@@ -107,5 +108,35 @@ describe('EditProfileDialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'riapri' }));
     expect(await screen.findByLabelText(/Nome/)).toHaveValue('Marco');
+  });
+
+  it('con un cambio email in attesa lo mostra sotto il campo email', () => {
+    useAuthStore.setState({ user: { ...baseUser, pendingEmail: 'nuova@test.it' } });
+    renderDialog();
+
+    expect(screen.getByText('In attesa di conferma: nuova@test.it')).toBeInTheDocument();
+  });
+
+  it("salvare una nuova email la lascia in attesa: l'email dell'account non cambia", async () => {
+    mockedAuthFetch.mockImplementation(async (path) => {
+      if (path === '/api/auth/profile') return { access_token: 'tok-stessa-scadenza', user: { ...baseUser, pendingEmail: 'nuova@test.it' } };
+      if (path === '/api/auth/me') return { ...baseUser, pendingEmail: 'nuova@test.it' };
+      throw new Error(`unexpected fetch ${String(path)}`);
+    });
+    const user = userEvent.setup();
+    renderDialog();
+
+    const email = screen.getByLabelText(/Email/);
+    await user.clear(email);
+    await user.type(email, 'nuova@test.it');
+    await user.type(screen.getByLabelText(/Password attuale/), 'segreta-123');
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+
+    await waitFor(() => expect(useAuthStore.getState().user?.pendingEmail).toBe('nuova@test.it'));
+    expect(useAuthStore.getState().user?.email).toBe('marco@test.it');
+    expect(mockedAuthFetch).toHaveBeenCalledWith(
+      '/api/auth/profile',
+      expect.objectContaining({ method: 'PUT', body: expect.stringContaining('"currentPassword":"segreta-123"') }),
+    );
   });
 });

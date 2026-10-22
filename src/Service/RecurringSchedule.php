@@ -113,13 +113,22 @@ final class RecurringSchedule
             return $start->modify(sprintf('+%d days', 7 * $n));
         }
 
-        $months = self::months($period) * $n;
-        $total = (int) $start->format('Y') * 12 + ((int) $start->format('n') - 1) + $months;
+        return $this->addMonths($start, self::months($period) * $n);
+    }
+
+    /**
+     * `$date` + `$months` mesi di calendario, con il giorno ridotto all'ultimo del mese di arrivo:
+     * 31/01 + 1 → 28/02 (29/02 negli anni bisestili), 29/02 + 12 → 28/02. Lo usano anche i promemoria
+     * ricorrenti per la scadenza successiva ({@see ReminderCompletion}).
+     */
+    public function addMonths(\DateTimeImmutable $date, int $months): \DateTimeImmutable
+    {
+        $total = (int) $date->format('Y') * 12 + ((int) $date->format('n') - 1) + $months;
         $year = intdiv($total, 12);
         $month = $total % 12 + 1;
-        $lastDay = (int) $start->setDate($year, $month, 1)->format('t');
+        $lastDay = (int) $date->setDate($year, $month, 1)->format('t');
 
-        return $start->setDate($year, $month, min((int) $start->format('j'), $lastDay));
+        return $date->setDate($year, $month, min((int) $date->format('j'), $lastDay));
     }
 
     /** Mesi tra due addebiti consecutivi di una cadenza a mesi. */

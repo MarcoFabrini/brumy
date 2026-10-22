@@ -91,14 +91,16 @@ export function EditProfileDialog({ open, onOpenChange, user }: EditProfileDialo
     mutation.mutate(
       { locale: user.locale, ...data, ...(emailChanged ? { currentPassword } : {}) },
       {
-        onSuccess: () => {
-          toast({ title: t('account.profile_updated'), variant: 'success' });
+        onSuccess: (me) => {
+          toast(
+            emailChanged && me.pendingEmail
+              ? { title: t('account.email_change_sent', { email: me.pendingEmail }), variant: 'success' }
+              : { title: t('account.profile_updated'), variant: 'success' },
+          );
           onOpenChange(false);
         },
         onError: (e) => {
-          if (e instanceof ApiError && e.title === 'auth.email_taken') {
-            form.setError('email', { message: 'auth.email_taken' });
-          } else if (e instanceof ApiError && e.title === 'auth.invalid_current_password') {
+          if (e instanceof ApiError && e.title === 'auth.invalid_current_password') {
             form.setError('currentPassword', { message: 'auth.invalid_current_password' });
           } else if (e instanceof ApiError && e.errors) {
             e.errors.forEach((err) =>
@@ -173,7 +175,12 @@ export function EditProfileDialog({ open, onOpenChange, user }: EditProfileDialo
             </FormField>
           </div>
 
-          <FormField label={t('account.email')} error={tErr(errors.email?.message)} required>
+          <FormField
+            label={t('account.email')}
+            error={tErr(errors.email?.message)}
+            hint={user.pendingEmail ? t('account.email_pending', { email: user.pendingEmail }) : undefined}
+            required
+          >
             {(id) => (
               <Input
                 id={id}

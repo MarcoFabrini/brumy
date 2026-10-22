@@ -97,19 +97,28 @@ final class AccessTokenRevocationTest extends ApiTestCase
         $this->assertRejected($token, 'POST', '/api/auth/switch-org', ['organizationId' => $org->getId()]);
     }
 
-    public function testEmailChangeInvalidatesThePresentedAccessTokenButNotTheReturnedOne(): void
+    /**
+     * Chiedere il cambio email non tocca le sessioni; confermarlo dal link le chiude tutte: ogni access token già
+     * emessi, anche quello riemesso dal profilo, smette di valere. Si rientra con il nuovo indirizzo.
+     */
+    public function testConfirmedEmailChangeInvalidatesEveryAccessToken(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
 
         $this->jsonRequest('PUT', '/api/auth/profile', $this->profile('cambiata@test.it', 'Anna', UserFactory::DEFAULT_PASSWORD), accessToken: $token);
         self::assertResponseIsSuccessful();
-        $fresh = (string) $this->jsonBody()['access_token'];
+        $reissued = (string) $this->jsonBody()['access_token'];
+        $link = $this->lastVerificationToken();
+        $this->jsonRequest('GET', '/api/auth/me', accessToken: $token);
+        self::assertResponseIsSuccessful('La richiesta da sola non chiude le sessioni');
+
+        $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $link]);
+        self::assertResponseIsSuccessful();
 
         $this->assertRejected($token, 'GET', '/api/auth/me');
-
-        $this->jsonRequest('GET', '/api/auth/me', accessToken: $fresh);
+        $this->assertRejected($reissued, 'GET', '/api/auth/me');
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'cambiata@test.it', 'password' => UserFactory::DEFAULT_PASSWORD]);
         self::assertResponseIsSuccessful();
-        self::assertSame('cambiata@test.it', $this->jsonBody()['email']);
     }
 
     public function testLogoutInvalidatesAccessTokensWhileOtherDevicesRecoverWithTheirRefreshToken(): void

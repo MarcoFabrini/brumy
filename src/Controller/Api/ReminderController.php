@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Dto\Request\CompleteReminderRequest;
 use App\Dto\Request\ReminderRequest;
 use App\Dto\Request\UpdateReminderRequest;
 use App\Entity\Reminder;
@@ -12,7 +13,10 @@ use App\Repository\ReminderRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
+use App\Service\AppClock;
 use App\Service\AttachmentCleaner;
+use App\Service\ReminderAlreadyCompletedException;
+use App\Service\ReminderCompletion;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -37,6 +41,8 @@ final class ReminderController extends AbstractController
         private readonly VehicleRepository $vehicleRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
+        private readonly ReminderCompletion $completion,
+        private readonly AppClock $clock,
         private readonly SerializerInterface $serializer,
     ) {
     }
@@ -128,7 +134,10 @@ final class ReminderController extends AbstractController
             ->setDescription($payload->description)
             ->setDueDate($payload->dueDate ? new \DateTimeImmutable($payload->dueDate) : null)
             ->setDueKm($payload->dueKm)
-            ->setNotifyDaysBefore($payload->notifyDaysBefore);
+            ->setNotifyDaysBefore($payload->notifyDaysBefore)
+            ->setNotifyKmBefore($payload->notifyKmBefore)
+            ->setRecurrenceMonths($payload->recurrenceMonths)
+            ->setRecurrenceKm($payload->recurrenceKm);
 
         $this->em->persist($r);
         $this->em->flush();
@@ -156,25 +165,55 @@ final class ReminderController extends AbstractController
             ->setDescription($payload->description)
             ->setDueDate($payload->dueDate ? new \DateTimeImmutable($payload->dueDate) : null)
             ->setDueKm($payload->dueKm)
-            ->setNotifyDaysBefore($payload->notifyDaysBefore);
+            ->setNotifyDaysBefore($payload->notifyDaysBefore)
+            ->setNotifyKmBefore($payload->notifyKmBefore)
+            ->setRecurrenceMonths($payload->recurrenceMonths)
+            ->setRecurrenceKm($payload->recurrenceKm);
 
         $this->em->flush();
         return $this->jsonGroups($r, ['reminder:read', 'vehicle:nested']);
     }
 
     #[OA\Post(
-        summary: 'Mark reminder as completed (sets completed_at)',
+        summary: 'Mark reminder as completed, with the actual date and km',
+        description: 'The body is optional: `completedOn` defaults to today (instance timezone), `completedKm` to the vehicle\'s current km '
+            .'when the reminder recurs by km (null otherwise). A recurring reminder gets a NEW reminder (`next`) whose due date/km '
+            .'are computed from the completion: `completedOn` + `recurrenceMonths`, `completedKm` + `recurrenceKm`. '
+            .'The completion km do not update the vehicle odometer.',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Completed', content: new OA\JsonContent(ref: new Model(type: Reminder::class, groups: ['reminder:read', 'vehicle:nested'])))],
+        requestBody: new OA\RequestBody(required: false, content: new OA\JsonContent(ref: new Model(type: CompleteReminderRequest::class))),
+        responses: [
+            new OA\Response(response: 200, description: 'Completed; `next` is the follow-up reminder or null for a one-off', content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'completed', ref: new Model(type: Reminder::class, groups: ['reminder:read', 'vehicle:nested'])),
+                    new OA\Property(property: 'next', nullable: true, oneOf: [new OA\Schema(ref: new Model(type: Reminder::class, groups: ['reminder:read', 'vehicle:nested']))]),
+                ],
+                type: 'object',
+                required: ['completed', 'next'],
+            )),
+            new OA\Response(response: 409, description: 'reminder.already_completed'),
+            new OA\Response(response: 422, description: 'validation_failed (`completedOn`: common.invalid_date, reminder.completed_on_future; `completedKm`: common.km_too_large)'),
+        ],
     )]
     #[Route('/{id}/complete', name: 'complete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function complete(int $id): JsonResponse
+    public function complete(int $id, #[MapRequestPayload] ?CompleteReminderRequest $payload = null): JsonResponse
     {
+        // Payload nullable: un POST senza body (e senza Content-Type) arriva qui con null e usa i default.
         $r = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $r);
-        $r->setCompletedAt(new \DateTimeImmutable());
-        $this->em->flush();
-        return $this->jsonGroups($r, ['reminder:read', 'vehicle:nested']);
+
+        $completedOn = $payload !== null && $payload->completedOn ? new \DateTimeImmutable($payload->completedOn) : null;
+        if ($completedOn !== null && $completedOn > $this->clock->today()) {
+            return $this->fieldProblem('completedOn', 'reminder.completed_on_future');
+        }
+
+        try {
+            $next = $this->completion->complete($r, $completedOn, $payload?->completedKm);
+        } catch (ReminderAlreadyCompletedException) {
+            return $this->problem('reminder.already_completed', 409);
+        }
+
+        return $this->jsonGroups(['completed' => $r, 'next' => $next], ['reminder:read', 'vehicle:nested']);
     }
 
     #[OA\Delete(

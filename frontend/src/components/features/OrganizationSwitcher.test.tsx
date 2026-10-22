@@ -33,6 +33,7 @@ function setSession(memberships: User['memberships'], activeOrgId = 1) {
       locale: 'it',
       hasAvatar: false,
       emailVerified: true,
+      pendingEmail: null,
       isInstanceAdmin: false,
       memberships,
     },

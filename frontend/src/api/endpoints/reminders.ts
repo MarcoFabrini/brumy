@@ -1,6 +1,9 @@
 import { authFetch } from '@/api/client';
 import {
   adaptReminder,
+  completeReminderResponseSchema,
+  type CompleteReminderDto,
+  type CompleteReminderResult,
   type CreateReminderDto,
   type Reminder,
   type ReminderResponse,
@@ -43,11 +46,19 @@ export async function updateReminder(id: number, body: UpdateReminderDto): Promi
   return adaptReminder(raw);
 }
 
-export async function completeReminder(id: number): Promise<Reminder> {
-  const raw = await authFetch<ReminderResponse>(`/api/reminders/${id}/complete`, {
-    method: 'POST',
-  });
-  return adaptReminder(raw);
+/** Completa con data e km effettivi; se il promemoria è ricorrente il backend crea il successivo (`next`). */
+export async function completeReminder(
+  id: number,
+  body: CompleteReminderDto,
+): Promise<CompleteReminderResult> {
+  const raw = completeReminderResponseSchema.parse(
+    await authFetch<unknown>(`/api/reminders/${id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
+  return { completed: adaptReminder(raw.completed), next: raw.next ? adaptReminder(raw.next) : null };
 }
 
 export function deleteReminder(id: number) {

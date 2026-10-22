@@ -115,6 +115,7 @@ describe('useChangeMemberRole', () => {
         locale: 'it',
         hasAvatar: false,
         emailVerified: true,
+        pendingEmail: null,
         isInstanceAdmin: false,
         memberships: [{ id: 55, role: 'owner', organization: { id: 1, name: 'Org', slug: 'org' } }],
       },

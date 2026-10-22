@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell } from 'lucide-react';
+import { Bell, Repeat } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui';
 import { ReminderBadge } from './ReminderBadge';
+import { ReminderRecurrenceText } from './ReminderRecurrenceText';
 import { useFormat } from '@/hooks/useFormat';
 import { useVehicleName } from '@/hooks/useVehicleName';
-import type { Reminder } from '@/api/types/reminder';
+import { isRecurringReminder, type Reminder } from '@/api/types/reminder';
 
 export interface ReminderCardProps {
   reminder: Reminder;
@@ -42,6 +43,15 @@ export function ReminderCard({ reminder, showVehicleName }: ReminderCardProps) {
               {r.dueDate && <span>{fmt.date(r.dueDate)}</span>}
               {r.dueDate && r.dueKm != null && <span>·</span>}
               {r.dueKm != null && <span>{fmt.km(r.dueKm)}</span>}
+              {isRecurringReminder(r) && (
+                <>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Repeat className="size-3" aria-hidden="true" />
+                    <ReminderRecurrenceText reminder={r} />
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </CardContent>

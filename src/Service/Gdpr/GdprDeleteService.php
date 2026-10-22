@@ -7,7 +7,9 @@ namespace App\Service\Gdpr;
 use App\Entity\Attachment;
 use App\Entity\AuditLog;
 use App\Entity\EmailVerificationToken;
+use App\Entity\Organization;
 use App\Entity\OrganizationInvitation;
+use App\Entity\OrganizationMember;
 use App\Entity\PasswordResetToken;
 use App\Entity\User;
 use App\Enum\OrgRole;
@@ -109,13 +111,12 @@ final class GdprDeleteService
         $keptMemberships = 0;
         $oldEmail = $user->getEmail();
 
-        // Drop org dove user è unico membro (solo proprietario, no altri member)
+        // Drop org dove non resta nessun'altra persona viva (membri pendenti o già anonimizzati non contano):
+        // altrimenti i suoi dati resterebbero conservati senza nessuno che possa vederli o cancellarli.
         foreach ($user->getMemberships()->toArray() as $m) {
             $org = $m->getOrganization();
-            $allMembers = $org->getMembers()->toArray();
-            $otherMembers = array_filter($allMembers, fn ($x) => $x->getUser()->getId() !== $userId);
 
-            if ($otherMembers === []) {
+            if ($this->liveOtherMembers($org, $user) === []) {
                 /** @var list<string> $paths */
                 $paths = $this->em->createQuery('SELECT a.storedPath FROM '.Attachment::class.' a WHERE a.organization = :org')
                     ->setParameter('org', $org)
@@ -169,6 +170,7 @@ final class GdprDeleteService
         // Anonymize PII
         $anonEmail = sprintf('deleted-%d-%s%s', $userId, bin2hex(random_bytes(8)), User::ANONYMIZED_EMAIL_SUFFIX);
         $randomPassword = bin2hex(random_bytes(32));
+        $user->cancelPendingEmail();
         $user
             ->setEmail($anonEmail)
             ->setFirstName('Deleted')
@@ -187,32 +189,38 @@ final class GdprDeleteService
         ];
     }
 
+    /**
+     * Blocca se l'utente è l'ultimo owner vivo di un'org in cui restano altre persone vive. Un co-owner già
+     * anonimizzato o non ancora accettato non conta (stessa regola di {@see OrganizationMemberRepository::countAcceptedOwners()},
+     * usata dal cambio ruolo): altrimenti l'org resterebbe senza nessuno che possa gestirla o cancellarla.
+     */
     private function assertSafeToDelete(User $user): void
     {
         foreach ($user->getMemberships() as $m) {
-            if ($m->getRole() !== OrgRole::OWNER) {
+            if ($m->getRole() !== OrgRole::OWNER || !$m->isAccepted()) {
                 continue;
             }
             $org = $m->getOrganization();
-            $otherOwners = 0;
-            $hasOtherMembers = false;
-            foreach ($org->getMembers() as $other) {
-                if ($other->getUser()->getId() === $user->getId()) {
-                    continue;
-                }
-                $hasOtherMembers = true;
-                if ($other->getRole() === OrgRole::OWNER) {
-                    ++$otherOwners;
-                }
-            }
+            $liveOthers = $this->liveOtherMembers($org, $user);
 
-            if ($hasOtherMembers && $otherOwners === 0) {
+            if ($liveOthers !== [] && $this->memberRepo->countAcceptedOwners($org, $user) === 0) {
                 throw new GdprDeleteBlockedException(sprintf(
                     'User is sole owner of organization "%s" with %d other members. Transfer ownership first.',
                     $org->getSlug(),
-                    $org->getMembers()->count() - 1,
+                    count($liveOthers),
                 ));
             }
         }
+    }
+
+    /** @return list<OrganizationMember> membri accettati e non anonimizzati dell'org, escluso $user */
+    private function liveOtherMembers(Organization $org, User $user): array
+    {
+        return array_values(array_filter(
+            $org->getMembers()->toArray(),
+            static fn (OrganizationMember $x): bool => $x->getUser()->getId() !== $user->getId()
+                && $x->isAccepted()
+                && !$x->getUser()->isAnonymized(),
+        ));
     }
 }

@@ -26,6 +26,7 @@ function me(locale: User['locale']): User {
     locale,
     hasAvatar: false,
     emailVerified: false,
+    pendingEmail: null,
     isInstanceAdmin: true,
     memberships: [],
   };

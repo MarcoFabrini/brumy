@@ -15,6 +15,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\Mime\Email;
 use Zenstruck\Foundry\Test\Factories;
 use Zenstruck\Foundry\Test\ResetDatabase;
 
@@ -134,6 +135,28 @@ abstract class ApiTestCase extends WebTestCase
             {
             }
         });
+    }
+
+    /**
+     * Token del link nell'ultima email di verifica o di conferma del cambio email. Le email registrate valgono solo
+     * per l'ultima richiesta: va letto subito dopo quella che l'ha spedita.
+     */
+    protected function lastVerificationToken(): string
+    {
+        $messages = self::getMailerMessages();
+        $last = end($messages);
+        self::assertInstanceOf(Email::class, $last, 'Nessuna email spedita');
+        if (preg_match('#/verify-email\?token=([a-f0-9]{64})#', (string) $last->getTextBody(), $m) !== 1) {
+            self::fail('Link di verifica non trovato');
+        }
+
+        return $m[1];
+    }
+
+    /** Apre il link dell'ultima email di verifica, come farebbe l'utente (subito dopo la richiesta che l'ha spedita). */
+    protected function openLastVerificationLink(): void
+    {
+        $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $this->lastVerificationToken()]);
     }
 
     // ---------------- multipart helpers ----------------

@@ -37,6 +37,7 @@ function userFixture(overrides: Partial<User> = {}): User {
     locale: 'it',
     hasAvatar: false,
     emailVerified: true,
+    pendingEmail: null,
     isInstanceAdmin: false,
     memberships: [],
     ...overrides,
@@ -51,16 +52,39 @@ describe('useAccount mutations', () => {
   });
 
   it('useVerifyEmail posts the token to the verify endpoint', async () => {
-    mockedAuthFetch.mockResolvedValue(undefined);
+    mockedAuthFetch.mockResolvedValue({ emailChanged: false });
     const { result } = renderHook(() => useVerifyEmail(), { wrapper });
 
     result.current.mutate({ token: 'tok-1' });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ emailChanged: false });
     expect(mockedAuthFetch).toHaveBeenCalledWith(
       '/api/auth/verify-email',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ token: 'tok-1' }) }),
     );
+  });
+
+  it('useVerifyEmail chiude la sessione locale quando il link confermava un cambio email', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok-vecchio', user: userFixture() });
+    mockedAuthFetch.mockResolvedValue({ emailChanged: true });
+    const { result } = renderHook(() => useVerifyEmail(), { wrapper });
+
+    result.current.mutate({ token: 'tok-1' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(useAuthStore.getState().status).toBe('unauthenticated');
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(mockedAuthFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('useVerifyEmail rifiuta una risposta senza emailChanged', async () => {
+    mockedAuthFetch.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useVerifyEmail(), { wrapper });
+
+    result.current.mutate({ token: 'tok-1' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
   it('useResendVerification posts to the resend endpoint', async () => {
@@ -178,11 +202,11 @@ describe('useAccount mutations', () => {
       expect(mockedResync).not.toHaveBeenCalled();
     });
 
-    it("useUpdateProfile la chiede quando l'email è cambiata", async () => {
+    it("useUpdateProfile non la chiede alla richiesta di cambio email: la sessione non cambia finché il link non viene aperto", async () => {
       useAuthStore.setState({ user: storeUser });
       mockedAuthFetch.mockImplementation(async (path) => {
-        if (path === '/api/auth/profile') return { access_token: 'tok-nuova-sessione', user: { email: 'nuova@test.it' } };
-        if (path === '/api/auth/me') return { id: 1, email: 'nuova@test.it', locale: 'it', memberships: [] };
+        if (path === '/api/auth/profile') return { access_token: 'tok-stessa-scadenza', user: { email: 'anna@test.it', pendingEmail: 'nuova@test.it' } };
+        if (path === '/api/auth/me') return { id: 1, email: 'anna@test.it', pendingEmail: 'nuova@test.it', locale: 'it', memberships: [] };
         throw new Error(`unexpected fetch ${path}`);
       });
       const { result } = renderHook(() => useUpdateProfile(), { wrapper });
@@ -190,7 +214,8 @@ describe('useAccount mutations', () => {
       result.current.mutate({ ...profile('nuova@test.it'), currentPassword: 'segreta-123' });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockedResync).toHaveBeenCalledTimes(1);
+      expect(useAuthStore.getState().user?.pendingEmail).toBe('nuova@test.it');
+      expect(mockedResync).not.toHaveBeenCalled();
     });
 
     it("useUpdateProfile non la chiede se l'email non cambia", async () => {

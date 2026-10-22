@@ -48,7 +48,7 @@ final class AfterResponseTasks
             try {
                 $task();
             } catch (\Throwable $e) {
-                $this->logger->error('Task dopo la risposta fallito', $context + ['error' => $e->getMessage()]);
+                $this->logger->error('Task dopo la risposta fallito', $context + ['error' => LogRedactor::scrub($e->getMessage())]);
             }
         }
     }

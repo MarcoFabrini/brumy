@@ -151,6 +151,7 @@ describe('VehicleDetailPage', () => {
       locale: 'it' as const,
       hasAvatar: false,
       emailVerified: true,
+      pendingEmail: null,
       isInstanceAdmin: false,
       memberships: [{ id: 1, role: 'owner' as const, organization: { id: 1, name: 'Org', slug: 'org' } }],
     };

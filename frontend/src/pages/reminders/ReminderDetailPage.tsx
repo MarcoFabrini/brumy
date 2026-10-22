@@ -12,12 +12,14 @@ import {
   Skeleton,
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { ConfirmDialog, ReminderBadge } from '@/components/features';
 import {
-  useCompleteReminder,
-  useDeleteReminder,
-  useReminder,
-} from '@/hooks/useReminders';
+  CompleteReminderDialog,
+  ConfirmDialog,
+  ReminderBadge,
+  ReminderRecurrenceText,
+} from '@/components/features';
+import { isRecurringReminder } from '@/api/types/reminder';
+import { useDeleteReminder, useReminder } from '@/hooks/useReminders';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
@@ -35,9 +37,9 @@ export function ReminderDetailPage() {
   const { data, isLoading, error } = useReminder(reminderId);
   // Veicolo condiviso in sola lettura: niente modifica, eliminazione, allegati.
   const canEdit = useCanEditVehicle(data?.vehicleId ?? 0);
-  const completeMutation = useCompleteReminder();
   const deleteMutation = useDeleteReminder();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -104,32 +106,51 @@ export function ReminderDetailPage() {
               <dt className="text-muted-foreground">{t('reminder.notify_days_before')}</dt>
               <dd className="font-medium">{data.notifyDaysBefore} {t('reminder.days')}</dd>
             </div>
+            {data.dueKm != null && (
+              <div>
+                <dt className="text-muted-foreground">{t('reminder.notify_km_before')}</dt>
+                <dd className="font-medium">{fmt.km(data.notifyKmBefore)}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-muted-foreground">{t('reminder.recurrence')}</dt>
+              <dd className="font-medium">
+                {isRecurringReminder(data) ? <ReminderRecurrenceText reminder={data} /> : t('reminder.one_off')}
+              </dd>
+            </div>
             {data.completedAt && (
               <div>
                 <dt className="text-muted-foreground">{t('reminder.completed_at')}</dt>
-                <dd className="font-medium">{fmt.date(data.completedAt)}</dd>
+                {/* Data effettiva del lavoro; i completamenti precedenti hanno solo l'istante del click. */}
+                <dd className="font-medium">{fmt.date(data.completedOn ?? data.completedAt)}</dd>
+              </div>
+            )}
+            {data.completedKm != null && (
+              <div>
+                <dt className="text-muted-foreground">{t('reminder.completed_km')}</dt>
+                <dd className="font-medium">{fmt.km(data.completedKm)}</dd>
               </div>
             )}
           </dl>
 
           {!isDone && canEdit && (
-            <Button
-              variant="primary"
-              fullWidth
-              disabled={completeMutation.isPending}
-              onClick={() =>
-                completeMutation.mutate(reminderId, {
-                  onSuccess: () => toast({ title: t('reminder.completed'), variant: 'success' }),
-                  onError: (e) => toast({ title: errorMessage(e), variant: 'error' }),
-                })
-              }
-            >
+            <Button variant="primary" fullWidth onClick={() => setCompleteOpen(true)}>
               <Check />
               {t('reminder.mark_complete')}
             </Button>
           )}
         </CardContent>
       </Card>
+
+      <CompleteReminderDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        reminder={data}
+        onCompleted={({ next }) => {
+          // Il ricorrente continua nel successore; una tantum resta qui, ora completato.
+          if (next) navigate(`/reminders/${next.id}`, { replace: true });
+        }}
+      />
 
       <ConfirmDialog
         open={confirmOpen}

@@ -1,3 +1,4 @@
+import { useId, useState, type Ref } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +13,22 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
+  Text,
 } from '@/components/ui';
-import { REMINDER_TYPES, type Reminder } from '@/api/types/reminder';
+import {
+  DEFAULT_NOTIFY_KM_BEFORE,
+  MONTHS_PER_UNIT,
+  RECURRENCE_UNITS,
+  REMINDER_TYPES,
+  recurrenceInterval,
+  type RecurrenceUnit,
+  type Reminder,
+} from '@/api/types/reminder';
 import { reminderSchema, type ReminderFormData } from '@/schemas/reminder.schema';
 import { ApiError } from '@/api/client';
 import { useServerFieldErrors } from '@/hooks/useServerFieldErrors';
 import { useResyncPristineForm } from '@/hooks/useResyncPristineForm';
+import { useFieldErrorMessage } from '@/hooks/useFieldErrorMessage';
 
 export interface ReminderFormProps {
   vehicleId: number;
@@ -28,6 +39,11 @@ export interface ReminderFormProps {
   submitLabel?: string;
   onCancel?: () => void;
 }
+
+/** Input numerico: vuoto → null (il campo è facoltativo). */
+const optionalNumber = (v: unknown) => (v === '' || v == null ? null : Number(v));
+
+const isRecurrenceUnit = (v: string): v is RecurrenceUnit => (RECURRENCE_UNITS as readonly string[]).includes(v);
 
 export function ReminderForm({
   vehicleId,
@@ -47,6 +63,9 @@ export function ReminderForm({
     dueDate: defaultValues?.dueDate ?? null,
     dueKm: defaultValues?.dueKm ?? null,
     notifyDaysBefore: defaultValues?.notifyDaysBefore ?? 30,
+    notifyKmBefore: defaultValues?.notifyKmBefore ?? DEFAULT_NOTIFY_KM_BEFORE,
+    recurrenceMonths: defaultValues?.recurrenceMonths ?? null,
+    recurrenceKm: defaultValues?.recurrenceKm ?? null,
   };
 
   const form = useForm<ReminderFormData>({
@@ -58,8 +77,7 @@ export function ReminderForm({
   const { hasUnmapped } = useServerFieldErrors(form, error);
 
   const errors = form.formState.errors;
-  const tErr = (key: string | undefined) =>
-    key ? t(`errors.${key}`, { defaultValue: key }) : undefined;
+  const tErr = useFieldErrorMessage();
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
@@ -114,30 +132,81 @@ export function ReminderForm({
               type="number"
               inputMode="numeric"
               invalid={!!errors.dueKm}
-              {...form.register('dueKm', {
-                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
-              })}
+              {...form.register('dueKm', { setValueAs: optionalNumber })}
             />
           )}
         </FormField>
       </div>
 
-      <FormField
-        label={t('reminder.notify_days_before')}
-        error={tErr(errors.notifyDaysBefore?.message)}
-        hint={t('reminder.notify_hint')}
-        required
-      >
-        {(id) => (
-          <Input
-            id={id}
-            type="number"
-            inputMode="numeric"
-            invalid={!!errors.notifyDaysBefore}
-            {...form.register('notifyDaysBefore', { valueAsNumber: true })}
-          />
-        )}
-      </FormField>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormField
+          label={t('reminder.notify_days_before')}
+          error={tErr(errors.notifyDaysBefore?.message)}
+          hint={t('reminder.notify_hint')}
+          required
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              invalid={!!errors.notifyDaysBefore}
+              {...form.register('notifyDaysBefore', { valueAsNumber: true })}
+            />
+          )}
+        </FormField>
+        <FormField
+          label={t('reminder.notify_km_before')}
+          error={tErr(errors.notifyKmBefore?.message)}
+          hint={t('reminder.notify_km_hint')}
+          required
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              invalid={!!errors.notifyKmBefore}
+              {...form.register('notifyKmBefore', { valueAsNumber: true })}
+            />
+          )}
+        </FormField>
+      </div>
+
+      <fieldset className="space-y-3 rounded-lg border p-3">
+        <legend className="px-1 text-sm font-semibold">{t('reminder.recurrence')}</legend>
+        <Text variant="muted">{t('reminder.recurrence_hint')}</Text>
+
+        <Controller
+          control={form.control}
+          name="recurrenceMonths"
+          render={({ field }) => (
+            <RecurrenceMonthsFields
+              months={field.value ?? null}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              error={tErr(errors.recurrenceMonths?.message)}
+            />
+          )}
+        />
+
+        <FormField
+          label={t('reminder.recurrence_km')}
+          error={tErr(errors.recurrenceKm?.message)}
+          hint={t('reminder.recurrence_km_hint')}
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              invalid={!!errors.recurrenceKm}
+              {...form.register('recurrenceKm', { setValueAs: optionalNumber })}
+            />
+          )}
+        </FormField>
+      </fieldset>
 
       {error instanceof ApiError && (error.title !== 'validation_failed' || hasUnmapped) && (
         <Alert variant="error">
@@ -156,5 +225,84 @@ export function ReminderForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+interface RecurrenceMonthsFieldsProps {
+  /** Valore del form, sempre in mesi (come il DTO); null = nessuna ricorrenza a tempo. */
+  months: number | null;
+  onChange: (months: number | null) => void;
+  onBlur: () => void;
+  inputRef: Ref<HTMLInputElement>;
+  error?: string;
+}
+
+/**
+ * "Ripeti ogni" N mesi/anni: si ragiona in anni ("ogni 2 anni") ma si salva in mesi. L'unità scelta è
+ * solo presentazione (stato locale); il valore del form resta in mesi, così il limite 1–120 e gli errori
+ * del backend su `recurrenceMonths` valgono sul valore convertito e compaiono sotto questo campo.
+ */
+function RecurrenceMonthsFields({ months, onChange, onBlur, inputRef, error }: RecurrenceMonthsFieldsProps) {
+  const { t } = useTranslation();
+  const hintId = useId();
+  const [preferredUnit, setPreferredUnit] = useState<RecurrenceUnit>(() =>
+    months != null ? recurrenceInterval(months).unit : 'years',
+  );
+  // Un valore che non è un numero intero di anni (es. dati riallineati dal server) si mostra in mesi.
+  const unit: RecurrenceUnit = months != null && months % MONTHS_PER_UNIT.years !== 0 ? 'months' : preferredUnit;
+  const count = months == null ? '' : months / MONTHS_PER_UNIT[unit];
+
+  const changeUnit = (next: string) => {
+    if (!isRecurrenceUnit(next)) return;
+    setPreferredUnit(next);
+    // Il numero scritto resta, cambia ciò che significa: "2" da mesi ad anni diventa 24 mesi.
+    if (count !== '') onChange(count * MONTHS_PER_UNIT[next]);
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+      <FormField label={t('reminder.recurrence_every')} error={error}>
+        {(id) => (
+          <Input
+            id={id}
+            ref={inputRef}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            invalid={!!error}
+            value={count}
+            // Con un errore il campo è descritto dal messaggio di errore (FormField), altrimenti dal suggerimento sotto.
+            aria-describedby={error ? undefined : hintId}
+            onBlur={onBlur}
+            onChange={(e) => {
+              const n = optionalNumber(e.target.value);
+              // Solo interi: 1,5 anni diventerebbe 18 mesi e l'unità cambierebbe mentre si scrive.
+              onChange(n == null ? null : Math.trunc(n) * MONTHS_PER_UNIT[unit]);
+            }}
+          />
+        )}
+      </FormField>
+      <FormField label={t('reminder.recurrence_unit')}>
+        {(id) => (
+          <Select value={unit} onValueChange={changeUnit}>
+            <SelectTrigger id={id}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RECURRENCE_UNITS.map((u) => (
+                <SelectItem key={u} value={u}>
+                  {t(`reminder.recurrence_units.${u}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </FormField>
+      {/* Il suggerimento occupa tutta la riga: in mezza colonna, su 320px, andava a capo su quattro righe. */}
+      <p id={hintId} className="col-span-2 text-sm text-muted-foreground">
+        {t('reminder.recurrence_every_hint')}
+      </p>
+    </div>
   );
 }

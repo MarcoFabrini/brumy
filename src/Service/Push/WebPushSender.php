@@ -111,7 +111,8 @@ final class WebPushSender
         }
 
         $gone = $report->isSubscriptionExpired();
-        $reason = $report->getReason() ?: 'unknown';
+        // Il motivo del rifiuto (messaggio di Guzzle) contiene l'URL intero dell'endpoint: va ripulito come gli altri.
+        $reason = LogRedactor::scrub($report->getReason() ?: 'unknown');
         $this->logger->warning('WebPush delivery failed', [
             // Solo l'host: l'URL intero è il capability token del dispositivo.
             'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
@@ -133,7 +134,7 @@ final class WebPushSender
         try {
             return new WebPush(['VAPID' => $vapid], ['TTL' => self::TTL_SECONDS], timeout: self::REQUEST_TIMEOUT_SECONDS, clientOptions: self::CLIENT_OPTIONS);
         } catch (\Throwable $e) {
-            $this->logger->error('WebPush init failed', ['error' => $e->getMessage()]);
+            $this->logger->error('WebPush init failed', ['error' => LogRedactor::scrub($e->getMessage())]);
             return null;
         }
     }

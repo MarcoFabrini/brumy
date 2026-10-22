@@ -17,7 +17,12 @@ const kmReminder: Reminder = {
   dueDate: null,
   dueKm: 100_000,
   notifyDaysBefore: 7,
+  notifyKmBefore: 1000,
+  recurrenceMonths: null,
+  recurrenceKm: null,
   completedAt: null,
+  completedOn: null,
+  completedKm: null,
 };
 
 function renderBadge(reminder: Reminder) {

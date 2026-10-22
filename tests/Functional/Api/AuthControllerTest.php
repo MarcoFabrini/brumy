@@ -260,6 +260,28 @@ final class AuthControllerTest extends ApiTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame('nosniff', $this->client->getResponse()->headers->get('X-Content-Type-Options'));
+        // Stesso URL per ogni utente: niente cache, né condivisa né del browser.
+        $cacheControl = (string) $this->client->getResponse()->headers->get('Cache-Control');
+        self::assertStringContainsString('no-store', $cacheControl);
+        self::assertStringNotContainsString('public', $cacheControl);
+    }
+
+    /**
+     * Con l'IP già bloccato un login con un'email nuova non crea lo stato del limiter per (email, IP): ogni chiave
+     * nuova sarebbe un file di cache in più, mai ripulito. Audit run-2,
+     * finding `src/Controller/Api/AuthController.php:login-limiter-key-before-ip-gate-unpruned-filesystem-cache`.
+     */
+    public function testABlockedIpDoesNotCreateLimiterStateForNewEmails(): void
+    {
+        $this->keepRateLimiterCountersForTheWholeTest();
+        $ipLimiter = static::getContainer()->get('limiter.login_ip')->create('127.0.0.1');
+        $ipLimiter->consume($ipLimiter->consume(0)->getRemainingTokens());
+
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'mai-vista@test.it', 'password' => 'qualsiasi-123']);
+        self::assertResponseStatusCodeSame(429);
+
+        $emailLimiter = static::getContainer()->get('limiter.login')->create('login-mai-vista@test.it-127.0.0.1');
+        self::assertSame(5, $emailLimiter->consume(0)->getRemainingTokens(), 'Nessun tentativo registrato per la nuova email');
     }
 
     public function testChangePasswordRejectsAnOverlongCurrentPassword(): void
@@ -359,12 +381,17 @@ final class AuthControllerTest extends ApiTestCase
 
     // -------------------- UPDATE PROFILE --------------------
 
-    public function testUpdateProfileChangesNameAndEmail(): void
+    /**
+     * Il nuovo indirizzo diventa l'email dell'account solo aprendo il link mandato lì: fino ad allora login e
+     * identificatore restano quelli di prima. Audit run-2, finding `auth/profile-email-change-claims-unverified-address`.
+     */
+    public function testUpdateProfileChangesNameAtOnceAndEmailOnlyAfterConfirmation(): void
     {
         [$user, , $token] = $this->createAuthenticatedUser();
+        $oldEmail = $user->getEmail();
 
         $this->jsonRequest('PUT', '/api/auth/profile', [
-            'email' => 'nuovo@test.it',
+            'email' => 'Nuovo@test.it',
             'firstName' => 'Anna',
             'lastName' => 'Bianchi',
             'locale' => 'en',
@@ -373,33 +400,114 @@ final class AuthControllerTest extends ApiTestCase
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body, 'Riemette il JWT perché l\'email è l\'identifier');
-        self::assertSame('nuovo@test.it', $body['user']['email']);
+        self::assertArrayHasKey('access_token', $body);
+        self::assertSame($oldEmail, $body['user']['email']);
+        self::assertSame('nuovo@test.it', $body['user']['pendingEmail']);
+        self::assertEmailCount(1);
+        $mail = self::getMailerMessage();
+        self::assertNotNull($mail);
+        self::assertEmailAddressContains($mail, 'To', 'nuovo@test.it');
+        $link = $this->lastVerificationToken();
 
-        $userRepo = static::getContainer()->get(UserRepository::class);
-        $fresh = $userRepo->find($user->getId());
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'nuovo@test.it', 'password' => UserFactory::DEFAULT_PASSWORD]);
+        self::assertResponseStatusCodeSame(401, 'Un indirizzo non confermato non è un login');
+
+        $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $link]);
+        self::assertResponseIsSuccessful();
+        self::assertTrue($this->jsonBody()['emailChanged']);
+
+        static::getContainer()->get(EntityManagerInterface::class)->clear();
+        $fresh = static::getContainer()->get(UserRepository::class)->find($user->getId());
         self::assertInstanceOf(User::class, $fresh);
         self::assertSame('nuovo@test.it', $fresh->getEmail());
+        self::assertNull($fresh->getPendingEmail());
+        self::assertTrue($fresh->isEmailVerified());
         self::assertSame('Anna', $fresh->getFirstName());
         self::assertSame('Bianchi', $fresh->getLastName());
         self::assertSame('en', $fresh->getLocale());
+
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'nuovo@test.it', 'password' => UserFactory::DEFAULT_PASSWORD]);
+        self::assertResponseIsSuccessful();
     }
 
-    public function testUpdateProfileWithEmailOfAnotherUserReturns409(): void
+    /**
+     * Un indirizzo già registrato riceve la stessa risposta di uno libero: il profilo non dice se un'email ha un
+     * account sull'istanza. Nessuna mail parte verso l'account esistente. Audit run-2, finding
+     * `src/Controller/Api/AuthController.php:updateProfile-email-taken-cross-tenant-account-oracle`.
+     */
+    public function testUpdateProfileWithEmailOfAnotherUserLooksLikeAFreeOne(): void
     {
-        [, , $token] = $this->createAuthenticatedUser();
+        [$user, , $token] = $this->createAuthenticatedUser();
+        $oldEmail = $user->getEmail();
         UserFactory::createOne(['email' => 'altro@test.it']);
+        $profile = ['firstName' => 'A', 'lastName' => 'B', 'locale' => 'it', 'currentPassword' => UserFactory::DEFAULT_PASSWORD];
 
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'altro@test.it'] + $profile, accessToken: $token);
+        self::assertResponseStatusCodeSame(200);
+        $taken = $this->jsonBody();
+        self::assertEmailCount(0);
+
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'libero@test.it'] + $profile, accessToken: $token);
+        self::assertResponseStatusCodeSame(200);
+        $free = $this->jsonBody();
+
+        self::assertSame(array_keys($free), array_keys($taken));
+        self::assertSame(array_keys($free['user']), array_keys($taken['user']));
+        self::assertSame($oldEmail, $taken['user']['email']);
+        self::assertSame('altro@test.it', $taken['user']['pendingEmail']);
+        self::assertSame('libero@test.it', $free['user']['pendingEmail']);
+    }
+
+    /** L'indirizzo è stato registrato da qualcun altro dopo la richiesta: la conferma fallisce e l'account resta com'era. */
+    public function testConfirmingAnAddressTakenInTheMeantimeKeepsTheOldEmail(): void
+    {
+        [$user, , $token] = $this->createAuthenticatedUser();
+        $oldEmail = $user->getEmail();
         $this->jsonRequest('PUT', '/api/auth/profile', [
-            'email' => 'altro@test.it',
-            'firstName' => 'A',
-            'lastName' => 'B',
-            'locale' => 'it',
+            'email' => 'conteso@test.it', 'firstName' => 'A', 'lastName' => 'B', 'locale' => 'it',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
         ], accessToken: $token);
+        self::assertResponseIsSuccessful();
+        UserFactory::createOne(['email' => 'conteso@test.it']);
 
+        $this->openLastVerificationLink();
         self::assertResponseStatusCodeSame(409);
         self::assertSame('auth.email_taken', $this->jsonBody()['title']);
+
+        static::getContainer()->get(EntityManagerInterface::class)->clear();
+        $fresh = static::getContainer()->get(UserRepository::class)->find($user->getId());
+        self::assertInstanceOf(User::class, $fresh);
+        self::assertSame($oldEmail, $fresh->getEmail());
+        self::assertNull($fresh->getPendingEmail());
+    }
+
+    /**
+     * Email di verifica e di conferma: al massimo 3 ogni 15 minuti per utente, tra cambio email e reinvio. Audit run-2,
+     * finding `auth/verification-mail-unthrottled-per-user-mail-budget-bypass`.
+     */
+    public function testVerificationEmailsAreLimitedPerUser(): void
+    {
+        $this->keepRateLimiterCountersForTheWholeTest();
+        [$user, , $token] = $this->createAuthenticatedUser();
+        $email = $user->getEmail();
+        $profile = ['firstName' => 'A', 'lastName' => 'B', 'locale' => 'it', 'currentPassword' => UserFactory::DEFAULT_PASSWORD];
+
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'uno@test.it'] + $profile, accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'due@test.it'] + $profile, accessToken: $token);
+        self::assertResponseIsSuccessful();
+        $this->jsonRequest('POST', '/api/auth/resend-verification', accessToken: $token);
+        self::assertResponseStatusCodeSame(204);
+
+        $this->jsonRequest('POST', '/api/auth/resend-verification', accessToken: $token);
+        self::assertResponseStatusCodeSame(429);
+        self::assertSame('auth.too_many_attempts', $this->jsonBody()['title']);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'tre@test.it'] + $profile, accessToken: $token);
+        self::assertResponseStatusCodeSame(429);
+
+        // Cambiare solo il nome non consuma il budget delle email.
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => $email, 'firstName' => 'Nuovo'] + $profile, accessToken: $token);
+        self::assertResponseIsSuccessful();
     }
 
     public function testUpdateProfileEmailChangeRequiresCurrentPassword(): void
@@ -444,6 +552,8 @@ final class AuthControllerTest extends ApiTestCase
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
         ], accessToken: $token);
         self::assertResponseIsSuccessful();
+        $this->openLastVerificationLink();
+        self::assertResponseIsSuccessful();
 
         // Il link spedito al vecchio indirizzo non deve più permettere di cambiare la password.
         $this->jsonRequest('POST', '/api/auth/reset-password', ['token' => $raw, 'password' => 'presa-di-possesso1']);
@@ -457,7 +567,8 @@ final class AuthControllerTest extends ApiTestCase
         self::assertResponseIsSuccessful();
     }
 
-    public function testUpdateProfileEmailChangeResetsVerification(): void
+    /** Il cambio in attesa non tocca l'indirizzo attuale, che resta verificato; quello nuovo nasce verificato. */
+    public function testPendingEmailChangeKeepsTheCurrentAddressVerified(): void
     {
         [$user, , $token] = $this->createAuthenticatedUser();
         $user->markEmailVerified();
@@ -472,7 +583,8 @@ final class AuthControllerTest extends ApiTestCase
         ], accessToken: $token);
 
         self::assertResponseIsSuccessful();
-        self::assertFalse($this->jsonBody()['user']['emailVerified']);
+        self::assertTrue($this->jsonBody()['user']['emailVerified']);
+        self::assertSame('verificami@test.it', $this->jsonBody()['user']['pendingEmail']);
     }
 
     public function testUpdateProfileKeepingOwnEmailSucceeds(): void
@@ -598,9 +710,6 @@ final class AuthControllerTest extends ApiTestCase
         ], accessToken: $token);
 
         self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertSame($orgB->getId(), $this->activeOrgIdOf($body['access_token']));
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $body['refresh_token']]);
         self::assertSame($orgB->getId(), $this->activeOrgIdOf($this->jsonBody()['access_token']));
     }
 
@@ -980,7 +1089,8 @@ final class AuthControllerTest extends ApiTestCase
         $raw = $this->seedVerificationToken('verify@test.it', '+24 hours');
 
         $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $raw]);
-        self::assertResponseStatusCodeSame(204);
+        self::assertResponseStatusCodeSame(200);
+        self::assertFalse($this->jsonBody()['emailChanged']);
 
         static::getContainer()->get(EntityManagerInterface::class)->clear();
         $user = static::getContainer()->get(UserRepository::class)->findOneByEmail('verify@test.it');
@@ -993,7 +1103,7 @@ final class AuthControllerTest extends ApiTestCase
         $raw = $this->seedVerificationToken('reuse-verify@test.it', '+24 hours');
 
         $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $raw]);
-        self::assertResponseStatusCodeSame(204);
+        self::assertResponseStatusCodeSame(200);
 
         $this->jsonRequest('POST', '/api/auth/verify-email', ['token' => $raw]);
         self::assertResponseStatusCodeSame(400);

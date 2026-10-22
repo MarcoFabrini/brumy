@@ -132,6 +132,33 @@ final class GdprExportServiceTest extends KernelTestCase
         self::assertArrayHasKey('due_date', $reminders[0]);
     }
 
+    public function testExportIncludesReminderRecurrenceAndCompletion(): void
+    {
+        $user = UserFactory::createOne();
+        $org = OrganizationFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $user]);
+        $reminder = ReminderFactory::createOne([
+            'vehicle' => $vehicle,
+            'organization' => $org,
+            'dueKm' => 10_000,
+            'recurrenceMonths' => 12,
+            'recurrenceKm' => 10_000,
+            'notifyKmBefore' => 500,
+        ]);
+        $reminder->markCompleted(new \DateTimeImmutable('2026-11-30'), 9800, new \DateTimeImmutable());
+        static::getContainer()->get(EntityManagerInterface::class)->flush();
+
+        $exported = static::getContainer()->get(GdprExportService::class)->export($user)['vehicles_owned'][0]['reminders'][0];
+
+        self::assertSame(12, $exported['recurrence_months']);
+        self::assertSame(10_000, $exported['recurrence_km']);
+        self::assertSame(500, $exported['notify_km_before']);
+        self::assertSame('2026-11-30', $exported['completed_on']);
+        self::assertSame(9800, $exported['completed_km']);
+    }
+
     public function testMemberWhoOwnsCarsExportsThemWithoutBeingOrgOwner(): void
     {
         $member = UserFactory::createOne();

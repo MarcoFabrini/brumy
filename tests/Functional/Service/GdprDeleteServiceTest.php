@@ -54,6 +54,8 @@ final class GdprDeleteServiceTest extends KernelTestCase
         $user = UserFactory::createOne(['email' => 'forget@test.it', 'firstName' => 'Mario', 'lastName' => 'Rossi']);
         $org = OrganizationFactory::createOne();
         OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        $user->requestEmailChange('new-address@test.it');
+        $this->em()->flush();
 
         $summary = $this->service()->anonymize($user);
 
@@ -64,6 +66,7 @@ final class GdprDeleteServiceTest extends KernelTestCase
         self::assertStringEndsWith('@anonymized.local', $refreshed->getEmail());
         self::assertSame('Deleted', $refreshed->getFirstName());
         self::assertSame('User', $refreshed->getLastName());
+        self::assertNull($refreshed->getPendingEmail(), "Anche l'indirizzo in attesa è un dato personale");
     }
 
     public function testAnonymizeRevokesRefreshTokens(): void
@@ -208,6 +211,59 @@ final class GdprDeleteServiceTest extends KernelTestCase
 
         $this->expectException(GdprDeleteBlockedException::class);
         $this->service()->anonymize($owner);
+    }
+
+    /**
+     * Un co-owner già anonimizzato non è un owner vivo: cancellare l'ultimo owner vero lascerebbe l'org, che ha
+     * ancora membri, senza nessuno che possa gestirla o cancellarla. Audit run-2,
+     * finding `gdpr-delete-counts-anonymized-or-pending-owners-as-live`.
+     */
+    public function testAnonymizeBlockedWhenTheOnlyOtherOwnerIsAlreadyAnonymized(): void
+    {
+        $formerOwner = UserFactory::createOne();
+        $owner = UserFactory::createOne();
+        $member = UserFactory::createOne();
+        $org = OrganizationFactory::createOne(['slug' => 'half-erased']);
+        OrganizationMemberFactory::createOne(['user' => $formerOwner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+        $this->service()->anonymize($formerOwner);
+
+        $this->expectException(GdprDeleteBlockedException::class);
+        $this->service()->anonymize($owner);
+    }
+
+    /** Un owner invitato ma non ancora accettato non conta come owner vivo. */
+    public function testAnonymizeBlockedWhenTheOnlyOtherOwnerHasNotAccepted(): void
+    {
+        $owner = UserFactory::createOne();
+        $invited = UserFactory::createOne();
+        $member = UserFactory::createOne();
+        $org = OrganizationFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $invited, 'organization' => $org, 'role' => OrgRole::OWNER, 'acceptedAt' => null]);
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+
+        $this->expectException(GdprDeleteBlockedException::class);
+        $this->service()->anonymize($owner);
+    }
+
+    /** Se tutti gli altri membri sono già anonimizzati l'org non ha più nessuno: si cancella con i suoi dati. */
+    public function testAnonymizeDeletesTheOrganizationWhenEveryOtherMemberIsAnonymized(): void
+    {
+        $formerMember = UserFactory::createOne();
+        $owner = UserFactory::createOne();
+        $org = OrganizationFactory::createOne();
+        $orgId = $org->getId();
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $formerMember, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+        $this->service()->anonymize($formerMember);
+
+        $summary = $this->service()->anonymize($owner);
+
+        self::assertSame(1, $summary['deleted_orgs']);
+        $this->em()->clear();
+        self::assertNull($this->em()->find(Organization::class, $orgId));
     }
 
     public function testAnonymizeAllowedWhenAnotherOwnerExists(): void

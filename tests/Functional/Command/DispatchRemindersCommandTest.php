@@ -95,6 +95,23 @@ final class DispatchRemindersCommandTest extends KernelTestCase
         self::assertSame([$inWindow->getId()], $this->dispatchedIds());
     }
 
+    public function testRespectsPerReminderNotifyKmBefore(): void
+    {
+        // Mancano 700 km con un anticipo di 500: non ancora (con la vecchia soglia fissa di 1000 sarebbe partito).
+        $notYet = VehicleFactory::createOne(['initialKm' => 99_300]);
+        ReminderFactory::createOne([
+            'vehicle' => $notYet, 'organization' => $notYet->getOrganization(),
+            'dueDate' => null, 'dueKm' => 100_000, 'notifyKmBefore' => 500,
+        ]);
+        $inWindow = VehicleFactory::createOne(['initialKm' => 99_600]);
+        $soon = ReminderFactory::createOne([
+            'vehicle' => $inWindow, 'organization' => $inWindow->getOrganization(),
+            'dueDate' => null, 'dueKm' => 100_000, 'notifyKmBefore' => 500,
+        ]);
+
+        self::assertSame([$soon->getId()], $this->dispatchedIds());
+    }
+
     public function testDoesNotRepeatTheSameLevelButEscalatesToOverdue(): void
     {
         $vehicle = VehicleFactory::createOne(['initialKm' => 99_500]);

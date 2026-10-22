@@ -315,4 +315,35 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         self::assertNotNull($freshOrg);
         self::assertNull(static::getContainer()->get(OrganizationMemberRepository::class)->findMembership($secondMailbox, $freshOrg), 'Nessuna membership creata');
     }
+
+    /**
+     * Share rimaste a un ex membro (rimozione fatta con codice precedente o dati migrati): rientrando con un invito
+     * non deve riprendersi proprietà né accessi. Audit run-2,
+     * finding `migrations/Version20261001120000:ownership-backfill-regrants-removed-member-vehicle-ownership`.
+     */
+    public function testRejoiningByInvitationDropsLeftoverShares(): void
+    {
+        $owner = UserFactory::createOne();
+        $formerMember = UserFactory::createOne(['email' => 'former@test.it']);
+        $org = OrganizationFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        $car = VehicleFactory::createOne(['organization' => $org]);
+        $van = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $car, 'user' => $formerMember]);
+        VehicleShareFactory::createOne(['vehicle' => $van, 'user' => $formerMember]);
+        $raw = bin2hex(random_bytes(32));
+        $this->em()->persist(new OrganizationInvitation($org, 'former@test.it', OrgRole::MEMBER, hash('sha256', $raw), new \DateTimeImmutable('+7 days'), $owner));
+        $this->em()->flush();
+        $carId = $car->getId();
+        $vanId = $van->getId();
+
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $this->tokenFor($formerMember, $org));
+        self::assertResponseStatusCodeSame(200);
+
+        $this->em()->clear();
+        $shares = $this->em()->getRepository(VehicleShare::class)->findBy(['user' => $formerMember->getId()]);
+        self::assertSame([], $shares, 'Nessuna share sopravvive al rientro');
+        self::assertNotNull($this->em()->find(Vehicle::class, $carId));
+        self::assertNotNull($this->em()->find(Vehicle::class, $vanId));
+    }
 }

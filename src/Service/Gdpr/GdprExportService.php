@@ -98,6 +98,7 @@ final class GdprExportService
         return [
             'id' => $user->getId(),
             'email' => $user->getEmail(),
+            'pending_email' => $user->getPendingEmail(),
             'first_name' => $user->getFirstName(),
             'last_name' => $user->getLastName(),
             'locale' => $user->getLocale(),
@@ -423,7 +424,12 @@ final class GdprExportService
             'due_date' => $r->getDueDate()?->format('Y-m-d'),
             'due_km' => $r->getDueKm(),
             'notify_days_before' => $r->getNotifyDaysBefore(),
+            'notify_km_before' => $r->getNotifyKmBefore(),
+            'recurrence_months' => $r->getRecurrenceMonths(),
+            'recurrence_km' => $r->getRecurrenceKm(),
             'completed_at' => $r->getCompletedAt()?->format(\DATE_ATOM),
+            'completed_on' => $r->getCompletedOn()?->format('Y-m-d'),
+            'completed_km' => $r->getCompletedKm(),
             'last_notified_at' => $r->getLastNotifiedAt()?->format(\DATE_ATOM),
             'attachments' => $this->serializeAttachments($attachments[AttachmentEntityType::REMINDER->value][(int) $r->getId()] ?? []),
         ];

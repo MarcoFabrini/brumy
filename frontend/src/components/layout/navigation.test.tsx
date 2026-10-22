@@ -38,6 +38,7 @@ function setMemberships(memberships: User['memberships'], activeOrgId: number) {
       locale: 'it',
       hasAvatar: false,
       emailVerified: true,
+      pendingEmail: null,
       isInstanceAdmin: false,
       memberships,
     },

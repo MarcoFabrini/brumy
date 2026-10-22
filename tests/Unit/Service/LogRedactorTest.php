@@ -20,6 +20,15 @@ final class LogRedactorTest extends TestCase
         self::assertStringContainsString('rejected', $scrubbed, 'Il resto del messaggio resta leggibile');
     }
 
+    /** Il motivo di un invio push rifiutato (messaggio di Guzzle) cita l'endpoint intero, che è il token del dispositivo. */
+    public function testThePushEndpointInARejectedDeliveryReasonIsRemoved(): void
+    {
+        $scrubbed = LogRedactor::scrub('Client error: `POST https://fcm.googleapis.com/fcm/send/dEviCeToKeN:APA91b` resulted in a `404 Not Found` response');
+
+        self::assertStringNotContainsString('dEviCeToKeN', $scrubbed);
+        self::assertStringContainsString('404 Not Found', $scrubbed);
+    }
+
     public function testMessagesWithoutPersonalDataAreUnchanged(): void
     {
         self::assertSame('Connection refused', LogRedactor::scrub('Connection refused'));

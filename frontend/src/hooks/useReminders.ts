@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiError } from '@/api/client';
 import {
   completeReminder,
   createReminder,
@@ -8,7 +9,11 @@ import {
   listUpcomingReminders,
   updateReminder,
 } from '@/api/endpoints/reminders';
-import type { CreateReminderDto, UpdateReminderDto } from '@/api/types/reminder';
+import type {
+  CompleteReminderDto,
+  CreateReminderDto,
+  UpdateReminderDto,
+} from '@/api/types/reminder';
 
 export const reminderKeys = {
   all: ['reminders'] as const,
@@ -61,12 +66,21 @@ export function useUpdateReminder(id: number) {
   });
 }
 
+/**
+ * Completamento con data e km effettivi. Invalida tutti i promemoria (lista, dettaglio, upcoming):
+ * il successore di un ricorrente compare tra gli attivi. Statistiche e grafici non cambiano, perché
+ * i km del completamento non alimentano l'odometro del veicolo.
+ */
 export function useCompleteReminder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => completeReminder(id),
+    mutationFn: ({ id, ...body }: CompleteReminderDto & { id: number }) => completeReminder(id, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: reminderKeys.all });
+    },
+    onError: (e) => {
+      // 409: completato nel frattempo (altra scheda o dispositivo): i dati in pagina sono vecchi, si ricaricano.
+      if (e instanceof ApiError && e.status === 409) void qc.invalidateQueries({ queryKey: reminderKeys.all });
     },
   });
 }

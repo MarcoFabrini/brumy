@@ -5,8 +5,8 @@ import { useToast } from '@/hooks/useToast';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 
 /**
- * Banner non bloccante mostrato agli utenti con email non ancora verificata.
- * Permette di rinviare l'email di verifica. Sparisce una volta verificata.
+ * Banner non bloccante mostrato agli utenti con un cambio email in attesa di conferma o con l'email non ancora
+ * verificata. Permette di rinviare il link. Sparisce una volta confermato.
  */
 export function EmailVerificationBanner() {
   const { t } = useTranslation();
@@ -15,11 +15,15 @@ export function EmailVerificationBanner() {
   const errorMessage = useApiErrorMessage();
   const { mutate, isPending } = useResendVerification();
 
-  if (!user || user.emailVerified) return null;
+  if (!user || (user.emailVerified && !user.pendingEmail)) return null;
 
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-      <span>{t('auth.verify.banner')}</span>
+      <span>
+        {user.pendingEmail
+          ? t('auth.verify.pending_banner', { email: user.pendingEmail })
+          : t('auth.verify.banner')}
+      </span>
       <button
         type="button"
         disabled={isPending}

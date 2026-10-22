@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { daysUntil } from '@/lib/format';
 
 export const REMINDER_TYPES = [
@@ -14,16 +15,33 @@ export const REMINDER_TYPES = [
 ] as const;
 export type ReminderType = (typeof REMINDER_TYPES)[number];
 
-export interface ReminderResponse {
-  id: number;
-  vehicle: { id: number; name: string; brand: string; model: string };
-  type: ReminderType;
-  description: string;
-  dueDate: string | null;       // ISO datetime
-  dueKm: number | null;
-  notifyDaysBefore: number;
-  completedAt: string | null;
-}
+/**
+ * Promemoria come lo serializza il backend (`reminder:read` + `vehicle:nested`). Le date arrivano come
+ * datetime ISO. Lo schema valida la risposta del completamento (`completeReminderResponseSchema`); gli
+ * endpoint storici usano lo stesso tipo senza parse.
+ */
+export const reminderResponseSchema = z.object({
+  id: z.number().int(),
+  vehicle: z.object({ id: z.number().int(), name: z.string(), brand: z.string(), model: z.string() }),
+  type: z.enum(REMINDER_TYPES),
+  description: z.string(),
+  dueDate: z.string().nullable(),
+  dueKm: z.number().int().nullable(),
+  notifyDaysBefore: z.number().int(),
+  notifyKmBefore: z.number().int(),
+  recurrenceMonths: z.number().int().nullable(),
+  recurrenceKm: z.number().int().nullable(),
+  completedAt: z.string().nullable(),
+  completedOn: z.string().nullable(),
+  completedKm: z.number().int().nullable(),
+});
+export type ReminderResponse = z.infer<typeof reminderResponseSchema>;
+
+/** Risposta di `POST /api/reminders/{id}/complete`: `next` è il successore di un ricorrente, o null. */
+export const completeReminderResponseSchema = z.object({
+  completed: reminderResponseSchema,
+  next: reminderResponseSchema.nullable(),
+});
 
 export interface Reminder {
   id: number;
@@ -33,7 +51,17 @@ export interface Reminder {
   dueDate: string | null;       // YYYY-MM-DD
   dueKm: number | null;
   notifyDaysBefore: number;
+  /** "In scadenza" quando mancano al massimo tanti km alla scadenza a km. */
+  notifyKmBefore: number;
+  /** Ricorrenza a tempo in mesi (12 = ogni anno); null = nessuna. */
+  recurrenceMonths: number | null;
+  /** Ricorrenza a km; null = nessuna. */
+  recurrenceKm: number | null;
+  /** Istante in cui è stato segnato completato: decide se è completato. */
   completedAt: string | null;   // ISO datetime
+  /** Data effettiva del lavoro (null per i completamenti precedenti alla ricorrenza). */
+  completedOn: string | null;   // YYYY-MM-DD
+  completedKm: number | null;
 }
 
 export interface CreateReminderDto {
@@ -43,9 +71,27 @@ export interface CreateReminderDto {
   dueDate?: string | null;
   dueKm?: number | null;
   notifyDaysBefore: number;
+  notifyKmBefore: number;
+  recurrenceMonths?: number | null;
+  recurrenceKm?: number | null;
 }
 
 export type UpdateReminderDto = CreateReminderDto;
+
+/** Body di `POST /api/reminders/{id}/complete`: data e km EFFETTIVI del lavoro. */
+export interface CompleteReminderDto {
+  completedOn: string;          // YYYY-MM-DD
+  completedKm: number | null;
+}
+
+/** Il promemoria completato e, se ricorrente, il successore con la scadenza successiva. */
+export interface CompleteReminderResult {
+  completed: Reminder;
+  next: Reminder | null;
+}
+
+/** Anticipo di default dell'avviso a km, come `Reminder::DEFAULT_NOTIFY_KM_BEFORE`. */
+export const DEFAULT_NOTIFY_KM_BEFORE = 1000;
 
 export function adaptReminder(raw: ReminderResponse): Reminder {
   return {
@@ -56,18 +102,32 @@ export function adaptReminder(raw: ReminderResponse): Reminder {
     dueDate: raw.dueDate ? raw.dueDate.slice(0, 10) : null,
     dueKm: raw.dueKm,
     notifyDaysBefore: raw.notifyDaysBefore,
+    notifyKmBefore: raw.notifyKmBefore,
+    recurrenceMonths: raw.recurrenceMonths,
+    recurrenceKm: raw.recurrenceKm,
     completedAt: raw.completedAt,
+    completedOn: raw.completedOn ? raw.completedOn.slice(0, 10) : null,
+    completedKm: raw.completedKm,
   };
 }
 
-export type ReminderUrgency = 'overdue' | 'soon' | 'ok' | 'done';
+export const RECURRENCE_UNITS = ['months', 'years'] as const;
+export type RecurrenceUnit = (typeof RECURRENCE_UNITS)[number];
 
-/**
- * Sotto questa distanza (km) dalla soglia un promemoria a chilometri è "in scadenza".
- * Stesso valore e stesse regole del backend (`Reminder::KM_SOON_THRESHOLD` / `Reminder::urgency()`),
- * che è ciò che decide quando parte la notifica: tenerli allineati.
- */
-export const REMINDER_KM_SOON = 1000;
+/** Mesi per unità: la ricorrenza si salva sempre in mesi. */
+export const MONTHS_PER_UNIT: Record<RecurrenceUnit, number> = { months: 1, years: 12 };
+
+/** Ricorrente se ha almeno una ricorrenza (a tempo o a km): al completamento nasce il successivo. */
+export function isRecurringReminder(r: Pick<Reminder, 'recurrenceMonths' | 'recurrenceKm'>): boolean {
+  return r.recurrenceMonths != null || r.recurrenceKm != null;
+}
+
+/** Una ricorrenza in mesi espressa nell'unità più naturale: anni se multiplo di 12 (24 → 2 anni). */
+export function recurrenceInterval(months: number): { unit: RecurrenceUnit; count: number } {
+  return months % 12 === 0 ? { unit: 'years', count: months / 12 } : { unit: 'months', count: months };
+}
+
+export type ReminderUrgency = 'overdue' | 'soon' | 'ok' | 'done';
 
 const URGENCY_RANK = { ok: 0, soon: 1, overdue: 2 } as const;
 
@@ -80,11 +140,16 @@ function dateUrgency(r: Reminder, now: Date): keyof typeof URGENCY_RANK {
   return daysLeft <= r.notifyDaysBefore ? 'soon' : 'ok';
 }
 
+/**
+ * Un promemoria a chilometri è "in scadenza" quando mancano al massimo `notifyKmBefore` km.
+ * Stesse regole del backend (`Reminder::urgency()`), che è ciò che decide quando parte la
+ * notifica: tenerle allineate.
+ */
 function kmUrgency(r: Reminder, currentKm: number | null | undefined): keyof typeof URGENCY_RANK {
   if (r.dueKm == null || currentKm == null) return 'ok';
   const kmLeft = r.dueKm - currentKm;
   if (kmLeft < 0) return 'overdue';
-  return kmLeft <= REMINDER_KM_SOON ? 'soon' : 'ok';
+  return kmLeft <= r.notifyKmBefore ? 'soon' : 'ok';
 }
 
 /**

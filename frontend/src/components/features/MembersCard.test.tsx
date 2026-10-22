@@ -104,6 +104,7 @@ function meAs(role: MemberRole): User {
     locale: 'it',
     hasAvatar: false,
     emailVerified: true,
+    pendingEmail: null,
     isInstanceAdmin: false,
     memberships: [{ id: 1, role, organization: { id: 1, name: 'Org', slug: 'org' } }],
   };

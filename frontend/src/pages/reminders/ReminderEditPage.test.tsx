@@ -22,7 +22,12 @@ const reminder: ReminderResponse = {
   dueDate: '2026-12-01T00:00:00+00:00',
   dueKm: null,
   notifyDaysBefore: 7,
+  notifyKmBefore: 1000,
+  recurrenceMonths: null,
+  recurrenceKm: null,
   completedAt: null,
+  completedOn: null,
+  completedKm: null,
 };
 
 const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({

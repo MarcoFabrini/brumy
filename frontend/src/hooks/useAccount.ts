@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
 import { switchOrganization } from '@/api/endpoints/auth';
@@ -23,21 +24,19 @@ interface AuthLikeResponse {
 }
 
 /**
- * Aggiorna profilo (nome/email/locale) e ricarica /me. La risposta porta sempre un access token: con l'email
- * cambiata è una sessione nuova (il server ha chiuso tutte le altre e cancellato le push subscription, quindi
- * questo browser ri-registra la propria).
+ * Aggiorna profilo (nome/email/locale) e ricarica /me. Una nuova email non cambia subito l'account: diventa
+ * `pendingEmail` e il server manda un link al nuovo indirizzo; la sessione resta questa (l'access token riemesso ha
+ * la stessa scadenza). Le sessioni si chiudono solo quando il link viene aperto.
  */
 export function useUpdateProfile() {
   return useMutation({
     mutationFn: async (payload: ProfilePayload) => {
-      const previousEmail = useAuthStore.getState().user?.email;
       const res = await authFetch<AuthLikeResponse>('/api/auth/profile', {
         method: 'PUT',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
       useAuthStore.getState().setAccessToken(res.access_token);
-      if (res.user.email !== previousEmail) void resyncThisDevice();
       const me = await authFetch<User>('/api/auth/me');
       useAuthStore.getState().setUser(me);
       return me;
@@ -115,20 +114,31 @@ export function useResetPassword() {
   });
 }
 
-/** Conferma l'indirizzo email col token dal link (pubblico, no sessione). */
+const verifyEmailResponseSchema = z.object({ emailChanged: z.boolean() });
+
+/**
+ * Conferma l'indirizzo email col token dal link (pubblico, no sessione). Se il link confermava un cambio email il
+ * server ha chiuso tutte le sessioni: anche questa finisce e si rientra con il nuovo indirizzo.
+ */
 export function useVerifyEmail() {
   return useMutation({
-    mutationFn: (payload: { token: string }) =>
-      authFetch<void>('/api/auth/verify-email', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify(payload),
-        skipRefresh: true,
-      }),
-    onSuccess: () => {
-      // Se l'utente è già dentro, il banner "verifica l'email" deve sparire senza ricaricare.
-      const { status, setUser } = useAuthStore.getState();
+    mutationFn: async (payload: { token: string }) =>
+      verifyEmailResponseSchema.parse(
+        await authFetch<unknown>('/api/auth/verify-email', {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: JSON.stringify(payload),
+          skipRefresh: true,
+        }),
+      ),
+    onSuccess: ({ emailChanged }) => {
+      const { status, setUser, logout } = useAuthStore.getState();
       if (status !== 'authenticated') return;
+      if (emailChanged) {
+        logout();
+        return;
+      }
+      // Se l'utente è già dentro, il banner "verifica l'email" deve sparire senza ricaricare.
       void authFetch<User>('/api/auth/me').then(setUser, () => undefined);
     },
   });

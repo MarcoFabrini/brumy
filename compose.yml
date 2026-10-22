@@ -38,7 +38,7 @@
 
 # URL pubblici derivati da DOMAIN. Stanno nell'environment del container (e non solo
 # esportati dall'entrypoint nel PID 1) perché anche `docker exec` (job Ofelia come
-# messenger:failed:retry) e il worker devono vederli: altrimenti i link nelle email
+# messenger:consume failed) e il worker devono vederli: altrimenti i link nelle email
 # ricadrebbero su http://localhost. Un valore esplicito in .env ha la precedenza.
 # CORS_ALLOW_ORIGIN non è qui: serve solo al processo web e richiede un'espressione
 # regolare con i punti di DOMAIN escapati, che l'interpolazione di compose non sa fare
@@ -93,12 +93,17 @@ services:
       ofelia.job-exec.backup.user: "www-data"
       ofelia.job-exec.refresh-cleanup.user: "www-data"
       ofelia.job-exec.messenger-retry.user: "www-data"
+      ofelia.job-exec.cache-prune.user: "www-data"
       ofelia.job-exec.reminders.schedule: "0 0 7 * * *"
       ofelia.job-exec.reminders.command: "php bin/console app:reminders:dispatch --no-interaction"
       ofelia.job-exec.backup.schedule: "0 0 3 * * *"
       ofelia.job-exec.backup.command: "php bin/console app:backup:create --no-interaction"
       ofelia.job-exec.refresh-cleanup.schedule: "0 0 4 * * 0"
       ofelia.job-exec.refresh-cleanup.command: "php bin/console app:refresh-tokens:cleanup --no-interaction"
+      # Le cache su file (rate limiter compresi) cancellano una voce scaduta solo se la si rilegge: senza prune
+      # le chiavi usate una volta sola (un login con un'email inventata) resterebbero su disco per sempre.
+      ofelia.job-exec.cache-prune.schedule: "0 15 4 * * *"
+      ofelia.job-exec.cache-prune.command: "php bin/console cache:pool:prune --no-interaction"
       ofelia.job-exec.messenger-retry.schedule: "0 30 * * * *"
       # messenger:failed:retry non va bene qui: senza id dei messaggi rifiuta --no-interaction e non ha --limit.
       # Consumare il transport failed fa lo stesso lavoro (un messaggio che fallisce ancora viene ritentato dalla
@@ -170,9 +175,11 @@ services:
   # socket: if you'd rather not give it access, remove this service and run
   # the same commands from the host's crontab with
   # docker compose exec api php bin/console <command>
+  # Jobs are read only from this compose project's containers: without the filter
+  # Ofelia would also run the ofelia.* labels of any other container on the host.
   scheduler:
     image: mcuadros/ofelia:0.4.0-beta.5
-    command: daemon --docker
+    command: daemon --docker --docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:

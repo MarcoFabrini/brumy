@@ -12,6 +12,7 @@ export { AttachmentUploader, type AttachmentUploaderProps } from './AttachmentUp
 export { AttachmentList, type AttachmentListProps } from './AttachmentList';
 export { AttachmentsSection, type AttachmentsSectionProps } from './AttachmentsSection';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
+export { CompleteReminderDialog, type CompleteReminderDialogProps } from './CompleteReminderDialog';
 export { DialogFormActions, type DialogFormActionsProps } from './DialogFormActions';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { SelectVehiclePrompt, type SelectVehiclePromptProps } from './SelectVehiclePrompt';
@@ -35,6 +36,7 @@ export { ExpenseForm, type ExpenseFormProps } from './ExpenseForm';
 export { ReminderBadge, type ReminderBadgeProps } from './ReminderBadge';
 export { ReminderCard, type ReminderCardProps } from './ReminderCard';
 export { ReminderForm, type ReminderFormProps } from './ReminderForm';
+export { ReminderRecurrenceText, type ReminderRecurrenceTextProps } from './ReminderRecurrenceText';
 export { UpcomingRemindersCard } from './UpcomingRemindersCard';
 export { DashboardCharts } from './DashboardCharts';
 export { ChartsSection, type ChartsSectionProps } from './ChartsSection';

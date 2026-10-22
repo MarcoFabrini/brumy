@@ -11,6 +11,7 @@ function userWith(locale: User['locale']): User {
     locale,
     hasAvatar: false,
     emailVerified: true,
+    pendingEmail: null,
     isInstanceAdmin: false,
     memberships: [],
   };

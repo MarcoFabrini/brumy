@@ -386,17 +386,21 @@ for cmd in app:reminders:dispatch app:backup:create app:refresh-tokens:cleanup m
 done
 if docker exec -u www-data "$APP" php bin/console app:refresh-tokens:cleanup --no-interaction >/dev/null 2>&1; then ok "app:refresh-tokens:cleanup eseguito"; else ko "app:refresh-tokens:cleanup fallito"; fi
 if docker exec -u www-data "$APP" php bin/console app:reminders:dispatch --no-interaction >/dev/null 2>&1; then ok "app:reminders:dispatch eseguito"; else ko "app:reminders:dispatch fallito"; fi
-# La riga esatta del job Ofelia, letta da compose.yml: un'opzione inesistente o un comando che rifiuta
+# Le righe esatte dei job Ofelia, lette da compose.yml: un'opzione inesistente o un comando che rifiuta
 # --no-interaction farebbero fallire il job a ogni esecuzione senza che nessuno se ne accorga.
-# --time-limit=2 in coda sostituisce quello del job (vince l'ultimo): a coda vuota consume aspetta fino al limite.
-retry_cmd="$(sed -n 's/^ *ofelia\.job-exec\.messenger-retry\.command: "\(.*\)"$/\1/p' "$(dirname "$0")/../compose.yml")"
-if [ -z "$retry_cmd" ]; then
-    ko "job Ofelia messenger-retry non trovato in compose.yml"
-elif docker exec -u www-data "$APP" sh -c "$retry_cmd --time-limit=2" >/dev/null 2>&1; then
-    ok "job Ofelia messenger-retry eseguito ($retry_cmd)"
-else
-    ko "job Ofelia messenger-retry fallito ($retry_cmd)"
-fi
+# Per messenger-retry, --time-limit=2 in coda sostituisce quello del job (vince l'ultimo): a coda vuota consume aspetta.
+for job in messenger-retry cache-prune; do
+    job_cmd="$(sed -n "s/^ *ofelia\\.job-exec\\.$job\\.command: \"\\(.*\\)\"\$/\\1/p" "$(dirname "$0")/../compose.yml")"
+    extra=""
+    [ "$job" = "messenger-retry" ] && extra=" --time-limit=2"
+    if [ -z "$job_cmd" ]; then
+        ko "job Ofelia $job non trovato in compose.yml"
+    elif docker exec -u www-data "$APP" sh -c "$job_cmd$extra" >/dev/null 2>&1; then
+        ok "job Ofelia $job eseguito ($job_cmd)"
+    else
+        ko "job Ofelia $job fallito ($job_cmd)"
+    fi
+done
 if docker exec -u www-data "$APP" php bin/console app:backup:create --skip-uploads --no-interaction >/dev/null 2>&1; then
     backups="$(dexec sh -c 'ls /var/backups/db-*.sql.gz 2>/dev/null' || true)"
     assert_contains "app:backup:create scrive il dump (mariadb-dump raggiunge il DB)" "$backups" "db-"

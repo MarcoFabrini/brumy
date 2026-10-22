@@ -74,8 +74,14 @@ final class JwtIdentityTest extends ApiTestCase
         $originalEmail = $alice->getEmail();
         $this->jsonRequest('PUT', '/api/auth/profile', $this->profile('v@example.test'), accessToken: $initial);
         self::assertResponseIsSuccessful();
+        $this->openLastVerificationLink();
+        self::assertResponseIsSuccessful();
+        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'v@example.test', 'password' => UserFactory::DEFAULT_PASSWORD]);
+        self::assertResponseIsSuccessful();
         $kept = (string) $this->jsonBody()['access_token'];
         $this->jsonRequest('PUT', '/api/auth/profile', $this->profile($originalEmail), accessToken: $kept);
+        self::assertResponseIsSuccessful();
+        $this->openLastVerificationLink();
         self::assertResponseIsSuccessful();
 
         // V ottiene l'indirizzo ed è membro di un'organizzazione O.

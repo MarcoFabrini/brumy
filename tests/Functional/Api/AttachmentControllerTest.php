@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Tests\Functional\Api;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PreFlushEventArgs;
 use Doctrine\ORM\Events;
 use PHPUnit\Framework\Attributes\DataProvider;
+use App\Entity\Maintenance;
 use App\Enum\AttachmentEntityType;
 use App\Repository\AttachmentRepository;
 use App\Tests\Factory\AttachmentFactory;
@@ -181,6 +185,11 @@ final class AttachmentControllerTest extends ApiTestCase
         $resp = $this->client->getResponse();
         self::assertInstanceOf(\Symfony\Component\HttpFoundation\BinaryFileResponse::class, $resp);
         self::assertSame('image/jpeg', $resp->headers->get('Content-Type'));
+        // Un file autorizzato non va in una cache condivisa (BinaryFileResponse è `public` di default).
+        $cacheControl = (string) $resp->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $cacheControl);
+        self::assertStringContainsString('no-store', $cacheControl);
+        self::assertStringNotContainsString('public', $cacheControl);
     }
 
     #[DataProvider('refuelingAndReminderTypes')]
@@ -413,6 +422,55 @@ final class AttachmentControllerTest extends ApiTestCase
 
         self::assertResponseStatusCodeSame(500);
         self::assertSame($filesBefore, $this->storedFiles(), 'La compensazione rimuove il file già salvato');
+    }
+
+    /**
+     * Il record viene cancellato dopo il controllo iniziale dell'upload (qui: appena caricato, da un'altra
+     * connessione) ma prima che l'upload prenda il lock: l'upload ricontrolla sotto lock e non lascia né riga né file.
+     * Audit run-2, finding `src/Service/AttachmentCleaner.php:upload-vs-parent-delete-orphan-attachments-consume-org-quota`.
+     */
+    public function testUploadForARecordDeletedWhileWaitingCreatesNoOrphan(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $maintenance = MaintenanceFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
+        $maintenanceId = (int) $maintenance->getId();
+        $filesBefore = $this->storedFiles();
+
+        $db = static::getContainer()->get(Connection::class);
+        $other = DriverManager::getConnection($db->getParams());
+        $deleter = new class($other, $maintenanceId) {
+            private bool $done = false;
+
+            public function __construct(private readonly Connection $other, private readonly int $id)
+            {
+            }
+
+            public function postLoad(PostLoadEventArgs $args): void
+            {
+                $entity = $args->getObject();
+                if ($this->done || !$entity instanceof Maintenance || $entity->getId() !== $this->id) {
+                    return;
+                }
+                $this->done = true;
+                $this->other->executeStatement('DELETE FROM maintenances WHERE id = ?', [$this->id]);
+            }
+        };
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->clear(); // il controllo iniziale deve caricare il record dal DB (e far scattare postLoad)
+        $em->getEventManager()->addEventListener([Events::postLoad], $deleter);
+
+        try {
+            $this->uploadTo($token, 'maintenance', $maintenanceId);
+        } finally {
+            $em->getEventManager()->removeEventListener([Events::postLoad], $deleter);
+            $other->close();
+        }
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('entity.not_found', $this->jsonBody()['title']);
+        self::assertSame(0, static::getContainer()->get(AttachmentRepository::class)->count(['entityId' => (string) $maintenanceId]));
+        self::assertSame($filesBefore, $this->storedFiles(), 'Nessun file salvato');
     }
 
     /** @return list<string> percorsi dei file nello storage di test */

@@ -71,6 +71,10 @@ final class CredentialTransitionPushTest extends ApiTestCase
 
         $this->jsonRequest('PUT', '/api/auth/profile', $this->profile('nuova-email@test.it', UserFactory::DEFAULT_PASSWORD), accessToken: $token);
         self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->subscriptionsOf($user), 'La sola richiesta non tocca le subscription');
+
+        $this->openLastVerificationLink();
+        self::assertResponseIsSuccessful();
 
         self::assertSame(0, $this->subscriptionsOf($user));
         self::assertSame(1, $this->subscriptionsOf($other));
