@@ -20,7 +20,7 @@ export const dashboardChartsSchema = z.object({
       spending: z.object({ refuelings: money, maintenances: money, expenses: money, total: money }),
       kmDriven: z.number().int(),
       /** Carburante → km/l, null se nel mese non si chiude nessun intervallo tra pieni. */
-      consumption: z.record(z.number().nullable()),
+      consumption: z.record(z.string(), z.number().nullable()),
     }),
   ),
   /** `fuel`, `maintenance` o una categoria di spesa; importo decrescente, zeri omessi. */

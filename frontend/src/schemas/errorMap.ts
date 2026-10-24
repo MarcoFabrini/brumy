@@ -1,28 +1,27 @@
 import { z } from 'zod';
 
 /**
- * Messaggi zod di default (inglese, es. "Expected integer, received float") → chiavi i18n
+ * Messaggi zod di default (inglese, es. "Invalid input: expected int, received number") → chiavi i18n
  * `errors.common.*`, che `tErr` nei form traduce. Si applica solo dove lo schema NON ha un messaggio
- * esplicito (quelli espliciti hanno la precedenza in zod).
+ * esplicito (quelli espliciti hanno la precedenza in zod); `undefined` lascia il messaggio di zod.
  */
-const errorMap: z.ZodErrorMap = (issue, ctx) => {
+const customError: z.core.$ZodErrorMap = (issue) => {
   switch (issue.code) {
-    case z.ZodIssueCode.invalid_type:
-      if (issue.received === 'undefined' || issue.received === 'null') return { message: 'common.required' };
-      if (issue.expected === 'integer') return { message: 'common.must_be_integer' };
-      if (issue.expected === 'number') return { message: 'common.invalid_number' };
-      return { message: 'common.invalid_value' };
-    case z.ZodIssueCode.too_small:
-      return { message: issue.type === 'string' || issue.type === 'array' ? 'common.too_short' : 'common.too_small' };
-    case z.ZodIssueCode.too_big:
-      return { message: issue.type === 'string' || issue.type === 'array' ? 'common.too_long' : 'common.too_big' };
-    case z.ZodIssueCode.invalid_string:
-    case z.ZodIssueCode.invalid_enum_value:
-    case z.ZodIssueCode.invalid_literal:
-      return { message: 'common.invalid_value' };
+    case 'invalid_type':
+      if (issue.input === undefined || issue.input === null) return 'common.required';
+      if (issue.expected === 'int') return 'common.must_be_integer';
+      if (issue.expected === 'number') return 'common.invalid_number';
+      return 'common.invalid_value';
+    case 'too_small':
+      return issue.origin === 'string' || issue.origin === 'array' ? 'common.too_short' : 'common.too_small';
+    case 'too_big':
+      return issue.origin === 'string' || issue.origin === 'array' ? 'common.too_long' : 'common.too_big';
+    case 'invalid_format':
+    case 'invalid_value':
+      return 'common.invalid_value';
     default:
-      return { message: ctx.defaultError };
+      return undefined;
   }
 };
 
-z.setErrorMap(errorMap);
+z.config({ customError });
