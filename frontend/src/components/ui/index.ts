@@ -50,6 +50,7 @@ export { Heading, type HeadingProps } from './Heading';
 export { Input, type InputProps } from './Input';
 export { Textarea, type TextareaProps } from './Textarea';
 export { Label, type LabelProps } from './Label';
+export { ListRow, ListSection, type ListRowProps, type ListSectionProps } from './List';
 export {
   Select,
   SelectContent,
@@ -78,6 +79,9 @@ export {
 } from './Sheet';
 export { Skeleton } from './Skeleton';
 export { Spinner, type SpinnerProps } from './Spinner';
+export { SwipeActions, type SwipeAction, type SwipeActionsProps } from './SwipeActions';
+export { Switch, type SwitchProps } from './Switch';
+export { SwitchCell } from './SwitchCell';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 export { Text, type TextProps } from './Text';
 export {

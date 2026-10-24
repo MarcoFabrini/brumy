@@ -86,6 +86,31 @@ class ReminderRepository extends ServiceEntityRepository
     }
 
     /**
+     * Tutti i promemoria attivi (con una scadenza a data o a km) dei veicoli attivi che l'utente possiede nell'org: la
+     * tab "Scadenze". Solo i veicoli propri, come {@see self::findUpcomingForOwner()}: non quelli condivisi in sola
+     * lettura né, per owner/admin, quelli degli altri membri. L'ordine per urgenza lo decide chi conosce i km.
+     *
+     * @return list<Reminder>
+     */
+    public function findActiveForOwner(Organization $org, User $owner): array
+    {
+        return $this->createQueryBuilder('r')
+            ->addSelect('vehicle')
+            ->innerJoin('r.vehicle', 'vehicle')
+            ->innerJoin('vehicle.shares', 'vs', 'WITH', 'vs.user = :owner AND vs.role = :ownerRole AND vs.acceptedAt IS NOT NULL')
+            ->where('r.organization = :org')
+            ->andWhere('r.completedAt IS NULL')
+            ->andWhere('r.dueDate IS NOT NULL OR r.dueKm IS NOT NULL')
+            ->andWhere('vehicle.archivedAt IS NULL')
+            ->setParameter('org', $org)
+            ->setParameter('owner', $owner)
+            ->setParameter('ownerRole', ShareRole::ADMIN)
+            ->orderBy('r.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Candidati al job di notifica: promemoria attivi con almeno una scadenza (data o km) e
      * per cui non è già partita la notifica del livello massimo ("scaduto"). Se serva davvero
      * notificare lo decide {@see Reminder::urgency()} + {@see Reminder::needsNotification()}:

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Car, Plus } from 'lucide-react';
-import { Alert, Button, Skeleton } from '@/components/ui';
+import { Alert, Button, ListSection, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import { ArchivedVehiclesSection, EmptyState, VehicleCard } from '@/components/features';
 import { useArchivedVehicles, useVehicles } from '@/hooks/useVehicles';
@@ -23,12 +23,20 @@ export function VehicleListPage() {
       <PageHeader
         srTitle={t('nav.vehicles')}
         action={
-          <Button asChild className="hidden md:inline-flex">
-            <Link to="/vehicles/new">
-              <Plus />
-              {t('vehicle.new')}
-            </Link>
-          </Button>
+          <>
+            {/* Come nelle app iOS: un "+" nella barra su mobile, il pulsante con testo su desktop. */}
+            <Button asChild variant="ghost" size="icon" className="-mr-2 text-primary md:hidden">
+              <Link to="/vehicles/new" aria-label={t('vehicle.new')}>
+                <Plus className="!size-6" />
+              </Link>
+            </Button>
+            <Button asChild className="hidden md:inline-flex">
+              <Link to="/vehicles/new">
+                <Plus />
+                {t('vehicle.new')}
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -59,11 +67,11 @@ export function VehicleListPage() {
       )}
 
       {data && data.length > 0 && (
-        <div className="space-y-3">
+        <ListSection>
           {data.map((vehicle) => (
             <VehicleCard key={vehicle.id} vehicle={vehicle} />
           ))}
-        </div>
+        </ListSection>
       )}
 
       <ArchivedVehiclesSection vehicles={archived.data ?? []} />

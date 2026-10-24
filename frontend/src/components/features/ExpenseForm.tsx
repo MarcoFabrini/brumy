@@ -4,16 +4,15 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
-  Checkbox,
   FormField,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Spinner,
+  SwitchCell,
   Textarea,
 } from '@/components/ui';
 import {
@@ -122,16 +121,13 @@ export function ExpenseForm({
         {(id) => <Input id={id} invalid={!!errors.description} {...form.register('description')} />}
       </FormField>
 
-      <label className="flex items-center gap-3">
-        <Controller
-          control={form.control}
-          name="recurring"
-          render={({ field }) => (
-            <Checkbox checked={field.value} onChange={(e) => field.onChange(e.target.checked)} />
-          )}
-        />
-        <Label className="cursor-pointer">{t('expense.recurring')}</Label>
-      </label>
+      <Controller
+        control={form.control}
+        name="recurring"
+        render={({ field }) => (
+          <SwitchCell label={t('expense.recurring')} checked={field.value} onCheckedChange={field.onChange} />
+        )}
+      />
 
       {recurring && (
         <>

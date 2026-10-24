@@ -45,7 +45,7 @@ describe('useDashboard', () => {
     mockedAuthFetch.mockReset();
   });
 
-  it('somma solo i veicoli propri: né quelli condivisi né quelli di altri membri', async () => {
+  it('solo i veicoli propri, con le loro statistiche: né quelli condivisi né quelli di altri membri', async () => {
     mockedAuthFetch.mockImplementation(async (path: string) => {
       if (path === '/api/vehicles') {
         return [vehicle(1, 'owned'), vehicle(2, 'shared'), vehicle(3, 'organization'), vehicle(4, 'owned')];
@@ -57,13 +57,11 @@ describe('useDashboard', () => {
 
     const { result } = renderHook(() => useDashboard(), { wrapper });
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.statsById.size).toBe(2));
     expect(result.current.vehicles.map((v) => v.id)).toEqual([1, 4]);
     expect(result.current.excludedCount).toBe(2);
-    expect(result.current.totalCost).toBeCloseTo(120.5);
-    expect(result.current.totalRefuelings).toBe(3);
-    expect(result.current.totalMaintenances).toBe(2);
-    expect(result.current.partial).toBe(false);
+    expect(result.current.statsById.get(1)?.totals.cost).toBe('100.50');
+    expect(result.current.statsById.get(4)?.totals.cost).toBe('20.00');
     // Le statistiche dei veicoli non propri non vengono nemmeno chieste.
     expect(mockedAuthFetch).not.toHaveBeenCalledWith('/api/vehicles/2/stats');
     expect(mockedAuthFetch).not.toHaveBeenCalledWith('/api/vehicles/3/stats');

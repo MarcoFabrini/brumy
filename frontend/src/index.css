@@ -4,30 +4,32 @@
 
 @layer base {
   :root {
-    /* shadcn/ui CSS variables — light theme */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Colori di sistema iOS (tema chiaro): sfondo raggruppato #F2F2F7, superfici bianche, separatori sottili.
+       Il blu è un soffio più scuro del systemBlue: il testo bianco sopra resta >= 4.5:1 (themeContrast.test). */
+    --background: 240 24% 96%;
+    --foreground: 0 0% 0%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 211 100% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 6% 93%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 240 10% 94%;
+    /* secondaryLabel ad alto contrasto di Apple: >= 4.5:1 su bianco e sullo sfondo raggruppato */
+    --muted-foreground: 240 2% 43%;
+    --accent: 240 6% 93%;
+    --accent-foreground: 0 0% 0%;
     /* Sfondo del pulsante distruttivo: il testo bianco sopra arriva a >= 4.5:1 */
     --destructive: 0 72% 45%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
     /* Rosso come COLORE DEL TESTO/icona (errori, badge, alert): >= 4.5:1 su background, card e muted */
     --destructive-text: 0 72% 40%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --border: 240 4% 82%;
+    --input: 240 4% 82%;
+    --ring: 211 100% 42%;
+    --radius: 0.75rem;
     /* Serie dei grafici (recharts): stessa tinta per serie nei due temi, più scura sul chiaro */
     --chart-1: 221 83% 53%;
     --chart-2: 161 94% 30%;
@@ -38,27 +40,29 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Colori di sistema iOS (tema scuro): sfondo nero, superfici #1C1C1E / #2C2C2E, separatori #38383A.
+       Il blu sta dove sia il testo bianco sopra sia il blu come testo sul nero restano >= 4.5:1. */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 240 3% 11%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 3% 15%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 212 100% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 3% 17%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 3% 17%;
+    --muted-foreground: 240 3% 62%;
+    --accent: 240 3% 17%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
     /* Il rosso scuro di --destructive su sfondo scuro è ~2:1: per il testo serve uno chiaro */
     --destructive-text: 0 91% 71%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 240 3% 23%;
+    --input: 240 3% 23%;
+    --ring: 211 100% 55%;
     --chart-1: 213 94% 68%;
     --chart-2: 158 64% 52%;
     --chart-3: 43 96% 56%;
@@ -82,9 +86,22 @@
        (overflow-y-auto espliciti) devono poter scrollare, mai html/body. */
     height: 100%;
     overflow: hidden;
+    /* Lo sfondo del documento è quello dell'app: niente fasce bianche nell'effetto elastico o dietro le barre. */
+    background-color: hsl(var(--background));
+  }
+  /* Su iPhone il testo segue la dimensione scelta nelle Impostazioni di iOS (Dynamic Type): con lo zoom a pizzico
+     disattivato è il modo di avere testi più grandi. Le misure Tailwind sono in rem e scalano insieme. */
+  @supports (font: -apple-system-body) {
+    html {
+      font: -apple-system-body;
+    }
+  }
+  /* "Testo grande" del profilo: vale su ogni dispositivo e vince sulla Dynamic Type. */
+  html.text-large {
+    font-size: 118.75%;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
     /* Idem su body: senza, lo scroll in eccesso dentro <main> (overflow-y-auto)
        incatena a body/html e su trackpad/mouse Mac genera un flash del
        rubber-band elastico (schermo bianco momentaneo "sotto" il contenuto). */
@@ -95,15 +112,23 @@
     -webkit-text-size-adjust: 100%;
     /* Smooth scroll */
     scroll-behavior: smooth;
+    /* Come un'app: niente menu di selezione o anteprime tenendo premuto su testi e immagini fuori dai campi. */
+    -webkit-touch-callout: none;
   }
   /* Touch targets minimi su button/link interattivi */
   button, [role="button"], a {
     @apply select-none;
   }
-  /* Disable double-tap zoom on buttons (PWA mobile feel) */
-  button {
+  /* Niente zoom col doppio tocco (come un'app); lo zoom a pizzico è già spento dal viewport. */
+  html,
+  button,
+  a,
+  input,
+  select,
+  textarea {
     touch-action: manipulation;
   }
+
 }
 
 /* Safe area mobile padding (notch/home indicator iPhone).
@@ -127,6 +152,10 @@
   }
   .pt-safe {
     padding-top: max(env(safe-area-inset-top), 0.5rem);
+  }
+  /* Inizio del contenuto su mobile, senza barra fissa in alto: sotto la status bar/notch, o 1rem. */
+  .pt-safe-content {
+    padding-top: max(env(safe-area-inset-top), 1rem);
   }
   /* Scroll orizzontale senza scrollbar visibile (tab menu mobile) */
   .no-scrollbar {

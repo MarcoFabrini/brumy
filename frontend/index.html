@@ -6,11 +6,12 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 
-    <!-- Mobile-first viewport. viewport-fit=cover supporta notch iPhone. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+    <!-- Come un'app: niente zoom a pizzico né al tocco dei campi (iOS non ingrandisce con maximum-scale=1). Testi più grandi: Dynamic Type di iOS o "Testo grande" nel profilo. viewport-fit=cover supporta notch iPhone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 
     <!-- Theme color: dark slate per status bar mobile -->
-    <meta name="theme-color" content="#0f172a" />
+    <!-- Colore delle barre di sistema: lo sfondo dell'app. useThemeEffect lo riallinea al tema scelto nel profilo. -->
+    <meta name="theme-color" content="#f2f2f7" />
 
     <!-- iOS PWA support. Barra di stato "default" (non black-translucent): su iOS 27 con la translucent il viewport è più corto dello schermo dell'inset superiore e la barra inferiore non arriva al bordo. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />

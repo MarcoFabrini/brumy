@@ -5,18 +5,17 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
-  Checkbox,
   FormField,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Spinner,
-  Textarea,
+  SwitchCell,
   Text,
+  Textarea,
 } from '@/components/ui';
 import { FUEL_TYPES } from '@/api/types/vehicle';
 import type { Refueling } from '@/api/types/refueling';
@@ -197,19 +196,14 @@ export function RefuelingForm({
         )}
       </FormField>
 
-      <label className="flex items-center gap-3">
-        <Controller
-          control={form.control}
-          name="fullTank"
-          render={({ field }) => (
-            <Checkbox
-              checked={field.value}
-              onChange={(e) => field.onChange(e.target.checked)}
-            />
-          )}
-        />
-        <Label className="cursor-pointer">{t('refueling.full_tank')}</Label>
-      </label>
+      {/* Interruttore iOS in una cella, come i campi: tocca la riga o l'interruttore. */}
+      <Controller
+        control={form.control}
+        name="fullTank"
+        render={({ field }) => (
+          <SwitchCell label={t('refueling.full_tank')} checked={field.value} onCheckedChange={field.onChange} />
+        )}
+      />
 
       <FormField label={t('refueling.notes')} error={tErr(errors.notes?.message)} hint={t('common.optional')}>
         {(id) => (

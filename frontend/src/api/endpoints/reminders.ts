@@ -1,6 +1,10 @@
 import { authFetch } from '@/api/client';
+import { z } from 'zod';
 import {
   adaptReminder,
+  adaptReminderOverviewItem,
+  reminderOverviewItemSchema,
+  type ReminderOverviewItem,
   completeReminderResponseSchema,
   type CompleteReminderDto,
   type CompleteReminderResult,
@@ -15,12 +19,10 @@ export async function listReminders(vehicleId: number): Promise<Reminder[]> {
   return raw.map(adaptReminder);
 }
 
-/** Scadenze a data in arrivo sui veicoli propri dell'utente (per la dashboard). */
-export async function listUpcomingReminders(days = 30, limit = 5): Promise<Reminder[]> {
-  const raw = await authFetch<ReminderResponse[]>(
-    `/api/reminders/upcoming?days=${days}&limit=${limit}`,
-  );
-  return raw.map(adaptReminder);
+/** Tutte le scadenze attive dei veicoli propri, con urgenza (data e km) e in ordine: la tab "Scadenze". */
+export async function listReminderOverview(): Promise<ReminderOverviewItem[]> {
+  const raw = z.array(reminderOverviewItemSchema).parse(await authFetch<unknown>('/api/reminders/overview'));
+  return raw.map(adaptReminderOverviewItem);
 }
 
 export async function getReminder(id: number): Promise<Reminder> {

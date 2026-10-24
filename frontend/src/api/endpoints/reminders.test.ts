@@ -8,7 +8,6 @@ import {
   deleteReminder,
   getReminder,
   listReminders,
-  listUpcomingReminders,
   updateReminder,
 } from './reminders';
 
@@ -66,16 +65,6 @@ describe('endpoint promemoria', () => {
       completedOn: null,
       completedKm: null,
     });
-  });
-
-  it('le scadenze in arrivo usano finestra e limite richiesti (default 30 giorni, 5 elementi)', async () => {
-    mockedAuthFetch.mockResolvedValue([]);
-
-    await listUpcomingReminders();
-    await listUpcomingReminders(90, 10);
-
-    expect(mockedAuthFetch).toHaveBeenNthCalledWith(1, '/api/reminders/upcoming?days=30&limit=5');
-    expect(mockedAuthFetch).toHaveBeenNthCalledWith(2, '/api/reminders/upcoming?days=90&limit=10');
   });
 
   it('un promemoria a soli chilometri resta senza data', async () => {

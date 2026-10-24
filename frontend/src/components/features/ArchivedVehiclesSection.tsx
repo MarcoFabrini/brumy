@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, ListSection } from '@/components/ui';
 import { VehicleCard } from './VehicleCard';
 import { cn } from '@/lib/utils';
 import type { Vehicle } from '@/api/types/vehicle';
@@ -40,11 +40,11 @@ export function ArchivedVehiclesSection({ vehicles }: ArchivedVehiclesSectionPro
         <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
       </Button>
       {open && (
-        <div id="archived-vehicles" className="space-y-3">
+        <ListSection id="archived-vehicles">
           {vehicles.map((vehicle) => (
             <VehicleCard key={vehicle.id} vehicle={vehicle} />
           ))}
-        </div>
+        </ListSection>
       )}
     </section>
   );

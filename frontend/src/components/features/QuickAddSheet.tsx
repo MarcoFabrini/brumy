@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { Car } from 'lucide-react';
 import {
-  Button,
-  Card,
-  CardContent,
+  ListRow,
+  ListSection,
   Sheet,
   SheetContent,
   SheetDescription,
@@ -13,18 +12,18 @@ import {
   SheetTitle,
   Skeleton,
 } from '@/components/ui';
-import { VehiclePicker } from './VehiclePicker';
-import { VEHICLE_RECORD_ACTIONS } from './vehicleRecordActions';
+import { QuickAddDialog } from './QuickAddDialog';
+import { VEHICLE_RECORD_ACTIONS, type VehicleRecordKind } from './vehicleRecordActions';
 import { useVehicles } from '@/hooks/useVehicles';
-import type { Vehicle } from '@/api/types/vehicle';
+import { useQuickAddStore } from '@/stores/useQuickAddStore';
+import { pickQuickAddVehicle, vehicleIdFromLocation } from '@/lib/quickAddVehicle';
 
 /**
- * QuickAddSheet — hub centrale di tutte le aggiunte (pulsante "+" della BottomNav).
- * Flusso a 2 step: prima si sceglie il veicolo (o "Nuovo veicolo"), poi cosa
- * aggiungere per quel veicolo. Si sceglie solo fra i veicoli propri: non quelli
- * condivisi in sola lettura né, per owner/admin dell'org, quelli degli altri membri
- * (che si gestiscono dal loro dettaglio). Con un solo veicolo proprio il primo step
- * non ha nulla da scegliere e si salta (il "indietro" lo riapre, per aggiungerne un altro).
+ * QuickAddSheet — hub delle aggiunte (pulsante "+" della tab bar), come un action sheet iOS.
+ * Un tocco su cosa registrare apre subito il modulo (QuickAddDialog) col veicolo già scelto: quello che si sta
+ * guardando, altrimenti l'ultimo usato, altrimenti il primo. Si sceglie solo fra i veicoli propri e attivi (non
+ * quelli condivisi in sola lettura né, per owner/admin, quelli degli altri membri, che si gestiscono dal loro
+ * dettaglio). Senza veicoli propri resta solo "Nuovo veicolo".
  */
 export interface QuickAddSheetProps {
   open: boolean;
@@ -34,109 +33,82 @@ export interface QuickAddSheetProps {
 export function QuickAddSheet({ open, onOpenChange }: QuickAddSheetProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
   const { data: vehicles, isLoading } = useVehicles();
+  const lastVehicleId = useQuickAddStore((s) => s.lastVehicleId);
+  const [kind, setKind] = useState<VehicleRecordKind | null>(null);
+  // Il veicolo si fissa quando si sceglie cosa aggiungere: navigare dietro al foglio non lo cambia.
+  const [vehicleId, setVehicleId] = useState<number | null>(null);
 
-  // `null` = automatico: step veicolo, salvo un solo veicolo (nulla da scegliere).
-  const [step, setStep] = useState<'vehicle' | 'entity' | null>(null);
-  const [selected, setSelected] = useState<Vehicle | null>(null);
+  const owned = (vehicles ?? []).filter((v) => v.ownership === 'owned');
 
-  // Reset stato a ogni chiusura per ripartire sempre dal punto di partenza automatico.
-  function handleOpenChange(next: boolean) {
-    if (!next) {
-      setStep(null);
-      setSelected(null);
-    }
-    onOpenChange(next);
+  function choose(next: VehicleRecordKind) {
+    const id = pickQuickAddVehicle(
+      owned.map((v) => v.id),
+      vehicleIdFromLocation(pathname, search),
+      lastVehicleId,
+    );
+    onOpenChange(false);
+    if (id === null) return;
+    setVehicleId(id);
+    setKind(next);
   }
-
-  function go(to: string) {
-    handleOpenChange(false);
-    navigate(to);
-  }
-
-  const list = (vehicles ?? []).filter((v) => v.ownership === 'owned');
-  const onlyVehicle = list.length === 1 ? (list[0] ?? null) : null;
-  const vehicle = selected ?? onlyVehicle;
-  const currentStep = step ?? (onlyVehicle ? 'entity' : 'vehicle');
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto overscroll-contain">
-        {/* Descrizione solo per gli screen reader (Radix la richiede): vale per tutti gli step, il titolo cambia. */}
-        <SheetDescription className="sr-only">{t('quick_add.description')}</SheetDescription>
-        {isLoading ? (
-          // Finché la lista non arriva non si sa se c'è qualcosa da scegliere: niente step veicolo.
-          <>
-            <SheetHeader>
-              <SheetTitle>{t('quick_add.open')}</SheetTitle>
-            </SheetHeader>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-lg" />
-              ))}
-            </div>
-          </>
-        ) : currentStep === 'vehicle' || !vehicle ? (
-          <>
-            <SheetHeader>
-              <SheetTitle>{t('quick_add.choose_vehicle')}</SheetTitle>
-            </SheetHeader>
-            <div className="space-y-3 pt-2">
-              <Button className="w-full" onClick={() => go('/vehicles/new')}>
-                <Plus />
-                {t('quick_add.new_vehicle')}
-              </Button>
-
-              {list.length > 0 && (
-                <VehiclePicker
-                  hideHeading
-                  vehicles={list}
-                  onSelect={(id) => {
-                    setSelected(list.find((v) => v.id === id) ?? null);
-                    setStep('entity');
-                  }}
-                />
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="max-h-[85vh] space-y-4 overflow-y-auto overscroll-contain bg-background px-4">
+          <SheetHeader>
+            <SheetTitle>{t('quick_add.open')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('quick_add.description')}</SheetDescription>
+          </SheetHeader>
+          {isLoading ? (
+            <Skeleton className="h-44 w-full rounded-xl" />
+          ) : (
+            <>
+              {owned.length > 0 && (
+                <ListSection>
+                  {VEHICLE_RECORD_ACTIONS.map(({ kind: k, labelKey, Icon, iconClassName }) => (
+                    <ListRow
+                      key={k}
+                      as="button"
+                      type="button"
+                      onClick={() => choose(k)}
+                      icon={<Icon />}
+                      iconClassName={iconClassName}
+                      label={t(labelKey)}
+                      chevron
+                    />
+                  ))}
+                </ListSection>
               )}
-            </div>
-          </>
-        ) : (
-          <>
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="-ml-2 shrink-0"
-                  onClick={() => setStep('vehicle')}
-                  aria-label={t('actions.back')}
-                >
-                  <ChevronLeft />
-                </Button>
-                <span className="truncate">{vehicle.name}</span>
-              </SheetTitle>
-            </SheetHeader>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              {VEHICLE_RECORD_ACTIONS.map(({ path, labelKey, Icon }) => (
-                <button
-                  key={path}
+              <ListSection>
+                <ListRow
+                  as="button"
                   type="button"
-                  onClick={() => go(`${path}?vehicleId=${vehicle.id}`)}
-                  className="rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Card className="h-full transition-colors hover:border-primary hover:bg-accent/40">
-                    <CardContent standalone className="flex flex-col items-center gap-2 text-center">
-                      <div className="rounded-md bg-primary/10 p-3">
-                        <Icon className="size-6 text-primary" />
-                      </div>
-                      <span className="text-sm font-medium">{t(labelKey)}</span>
-                    </CardContent>
-                  </Card>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate('/vehicles/new');
+                  }}
+                  icon={<Car />}
+                  iconClassName="bg-[#007aff]"
+                  label={t('quick_add.new_vehicle')}
+                  chevron
+                />
+              </ListSection>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {vehicleId !== null && (
+        <QuickAddDialog
+          kind={kind}
+          onClose={() => setKind(null)}
+          vehicles={owned}
+          defaultVehicleId={vehicleId}
+        />
+      )}
+    </>
   );
 }

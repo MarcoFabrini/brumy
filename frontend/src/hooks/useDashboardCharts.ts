@@ -13,10 +13,11 @@ export const dashboardKeys = {
   charts: (months: number) => [...dashboardKeys.all, 'charts', months] as const,
 };
 
-export function useDashboardCharts(months = DASHBOARD_CHART_MONTHS) {
+export function useDashboardCharts(months = DASHBOARD_CHART_MONTHS, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: dashboardKeys.charts(months),
     queryFn: () => getDashboardCharts(months),
     staleTime: 60_000,
+    enabled: options.enabled ?? true,
   });
 }

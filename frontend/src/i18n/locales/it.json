@@ -13,7 +13,13 @@
     "attachments": "Allegati",
     "settings": "Impostazioni",
     "primary": "Navigazione principale",
-    "primary_mobile": "Navigazione principale mobile"
+    "primary_mobile": "Navigazione principale mobile",
+    "tabs": {
+      "home": "Home",
+      "vehicles": "Veicoli",
+      "deadlines": "Scadenze",
+      "profile": "Profilo"
+    }
   },
   "org": {
     "switch": {
@@ -112,19 +118,13 @@
     "none": "Nessuno",
     "optional": "Opzionale",
     "coming_soon": "In arrivo",
-    "loading": "Caricamento in corso"
+    "loading": "Caricamento in corso",
+    "notes": "Note"
   },
   "dashboard": {
-    "total_cost": "Spesa totale",
     "your_vehicles": "I tuoi veicoli",
-    "view_all": "Vedi tutti",
-    "vehicle_count_one": "{{count}} veicolo",
-    "vehicle_count_other": "{{count}} veicoli",
-    "upcoming_reminders": "Prossime scadenze",
-    "upcoming_reminders_empty": "Nessuna scadenza sui tuoi veicoli nei prossimi 30 giorni.",
-    "partial_totals": "Alcuni veicoli non si sono caricati: i totali sono parziali.",
-    "owned_only_hint_one": "Totali, grafici e scadenze riguardano solo i tuoi veicoli: {{count}} veicolo che vedi ma non è tuo è escluso.",
-    "owned_only_hint_other": "Totali, grafici e scadenze riguardano solo i tuoi veicoli: {{count}} veicoli che vedi ma non sono tuoi sono esclusi.",
+    "owned_only_hint_one": "{{count}} veicolo che vedi ma non è tuo è nella tab Veicoli.",
+    "owned_only_hint_other": "{{count}} veicoli che vedi ma non sono tuoi sono nella tab Veicoli.",
     "charts": {
       "title": "Andamento",
       "subtitle": "Ultimi {{months}} mesi, solo i tuoi veicoli",
@@ -158,19 +158,31 @@
         "consumption": "Servono almeno due pieni consecutivi per calcolare il consumo."
       },
       "invalid_response": "Dati dei grafici non validi: riprova più tardi."
-    }
+    },
+    "month": {
+      "title": "Speso questo mese",
+      "more": "{{amount}} in più del mese scorso",
+      "less": "{{amount}} in meno del mese scorso",
+      "same": "Come il mese scorso",
+      "other_expenses": "Altre spese"
+    },
+    "todo": "Da fare",
+    "todo_none": "Nessuna scadenza urgente",
+    "see_all_deadlines": "Vedi tutte le scadenze",
+    "add_vehicle": "Aggiungi un veicolo"
   },
   "quick_add": {
     "open": "Aggiungi",
     "choose_vehicle": "Scegli un veicolo",
-    "description": "Scegli un veicolo, poi cosa aggiungere.",
-    "new_vehicle": "Nuovo veicolo"
+    "description": "Scegli cosa registrare: il veicolo è già scelto.",
+    "new_vehicle": "Nuovo veicolo",
+    "vehicle": "Veicolo",
+    "form_description": "Compila e salva: il veicolo è già scelto, puoi cambiarlo in cima."
   },
   "maintenance": {
     "new": "Nuova manutenzione",
     "new_description": "Registra una manutenzione effettuata.",
     "edit": "Modifica manutenzione",
-    "info": "Dettagli manutenzione",
     "info_description": "Informazioni intervento.",
     "type": "Tipo intervento",
     "category": "Categoria",
@@ -185,7 +197,8 @@
     "deleted": "Manutenzione eliminata",
     "delete": {
       "title": "Eliminare manutenzione?",
-      "description": "Operazione irreversibile."
+      "description": "Operazione irreversibile.",
+      "action": "Elimina manutenzione"
     },
     "list": {
       "description": "Storia manutenzioni del veicolo."
@@ -258,7 +271,10 @@
       "test_sent": "Notifica di prova inviata ({{count}} device)",
       "generated": "Chiavi VAPID generate ({{count}} sottoscrizioni rimosse: gli utenti devono riattivare le notifiche)",
       "regenerate_confirm_title": "Rigenerare le chiavi VAPID?",
-      "regenerate_confirm_description": "Tutte le sottoscrizioni push esistenti smetteranno di funzionare e ogni utente dovrà riattivare le notifiche. Operazione irreversibile."
+      "regenerate_confirm_description": "Tutte le sottoscrizioni push esistenti smetteranno di funzionare e ogni utente dovrà riattivare le notifiche. Operazione irreversibile.",
+      "this_device": "Questo dispositivo",
+      "unavailable": "Non disponibili",
+      "server_title": "Notifiche push del server"
     },
     "profile": "Profilo",
     "profile_description": "I tuoi dati personali.",
@@ -295,14 +311,16 @@
       "role_self_demoted": "Non sarai più proprietario: diventerai {{role}} e perderai la gestione dell'organizzazione. Per tornare proprietario servirà un altro proprietario. I tuoi inviti pendenti saranno eliminati.",
       "role_admin_to_member": "{{name}} non sarà più amministratore e vedrà solo i veicoli di cui è proprietario o condivisi con questa persona. Gli inviti pendenti che ha inviato saranno eliminati; i veicoli che possiede restano suoi.",
       "role_member_to_admin": "{{name}} diventerà amministratore: potrà vedere, modificare, archiviare ed eliminare tutti i veicoli dell'organizzazione, gestire i membri e invitare altre persone.",
-      "role_updated": "Ruolo aggiornato."
-    }
+      "role_updated": "Ruolo aggiornato.",
+      "invite_description": "Riceve un'email con il link per entrare nell'organizzazione."
+    },
+    "large_text": "Testo grande",
+    "large_text_hint": "Ingrandisce i testi in tutta l'app. Su iPhone segue anche la dimensione del testo di iOS."
   },
   "reminder": {
     "new": "Nuovo promemoria",
     "new_description": "Crea una scadenza da monitorare.",
     "edit": "Modifica promemoria",
-    "info": "Dettagli promemoria",
     "type": "Tipo",
     "description": "Descrizione",
     "due_date": "Scadenza (data)",
@@ -348,7 +366,8 @@
     "deleted": "Promemoria eliminato",
     "delete": {
       "title": "Eliminare promemoria?",
-      "description": "Operazione irreversibile."
+      "description": "Operazione irreversibile.",
+      "action": "Elimina promemoria"
     },
     "list": {
       "description": "Scadenze del veicolo."
@@ -378,13 +397,23 @@
       "license": "Patente",
       "extinguisher": "Estintore",
       "custom": "Personalizzato"
-    }
+    },
+    "overview": {
+      "overdue": "Scadute",
+      "soon": "In scadenza",
+      "later": "Più avanti",
+      "km_left": "a {{due}} (mancano {{left}})",
+      "km_over": "a {{due}} (superati di {{over}})",
+      "empty_title": "Nessuna scadenza",
+      "empty_description": "I promemoria dei tuoi veicoli compaiono qui, dai più urgenti. Aggiungine uno col \"+\".",
+      "complete": "Completa"
+    },
+    "status": "Stato"
   },
   "expense": {
     "new": "Nuova spesa",
     "new_description": "Registra una spesa del veicolo.",
     "edit": "Modifica spesa",
-    "info": "Dettagli spesa",
     "occurred_at": "Data",
     "category": "Categoria",
     "description": "Descrizione",
@@ -403,7 +432,8 @@
     "deleted": "Spesa eliminata",
     "delete": {
       "title": "Eliminare spesa?",
-      "description": "Operazione irreversibile."
+      "description": "Operazione irreversibile.",
+      "action": "Elimina spesa"
     },
     "list": {
       "description": "Spese del veicolo."
@@ -438,13 +468,13 @@
       "semiannual": "Semestrale",
       "yearly": "Annuale",
       "biennial": "Biennale"
-    }
+    },
+    "recurring_until_short": "Fino al"
   },
   "refueling": {
     "new": "Nuovo rifornimento",
     "new_description": "Registra un rifornimento.",
     "edit": "Modifica rifornimento",
-    "info": "Dettagli rifornimento",
     "info_description": "Dati pieno.",
     "detail_title": "Rifornimento {{liters}} L",
     "refueled_at": "Data",
@@ -462,7 +492,8 @@
     "deleted": "Rifornimento eliminato",
     "delete": {
       "title": "Eliminare rifornimento?",
-      "description": "Operazione irreversibile. Il calcolo consumi cambierà."
+      "description": "Operazione irreversibile. Il calcolo consumi cambierà.",
+      "action": "Elimina rifornimento"
     },
     "list": {
       "description": "Storico rifornimenti del veicolo."
@@ -474,13 +505,13 @@
     "select_vehicle_first": {
       "title": "Seleziona un veicolo",
       "description": "Scegli un veicolo per registrare un rifornimento."
-    }
+    },
+    "partial": "parziale"
   },
   "vehicle": {
     "new": "Nuovo veicolo",
     "new_description": "Inserisci i dati base del veicolo.",
     "edit": "Modifica veicolo",
-    "info": "Dati veicolo",
     "info_description": "Informazioni anagrafica del veicolo.",
     "name": "Nome",
     "brand": "Marca",
@@ -555,7 +586,9 @@
       "selected_count_other": "{{count}} persone selezionate",
       "no_candidates": "Nessun altro membro dell'organizzazione con cui condividere: le persone entrano nell'organizzazione su invito (Impostazioni → Membri).",
       "submit_many_one": "Condividi con {{count}} persona",
-      "submit_many_other": "Condividi con {{count}} persone"
+      "submit_many_other": "Condividi con {{count}} persone",
+      "people_title": "Chi ha accesso",
+      "not_allowed": "Non puoi gestire la condivisione di questo veicolo."
     },
     "transfer": {
       "button": "Trasferisci proprietà",
@@ -599,7 +632,14 @@
       "title": "Grafici del veicolo",
       "subtitle": "Ultimi {{months}} mesi di questo veicolo"
     },
-    "add_record": "Aggiungi"
+    "add_record": "Aggiungi",
+    "summary": {
+      "next_deadline": "Prossima scadenza",
+      "log": "Registro",
+      "more_actions": "Altre azioni",
+      "charts": "Andamento"
+    },
+    "access": "Accesso"
   },
   "error_page": {
     "back_home": "Torna alla home",
@@ -615,14 +655,12 @@
   },
   "attachment": {
     "title": "Allegati",
-    "description": "Foto e documenti — max 10 MB (JPG, PNG, WebP, PDF).",
-    "add": "Aggiungi",
+    "add": "Aggiungi foto o documenti",
     "open": "Apri {{name}}",
     "uploaded": "Allegato caricato",
     "deleted": "Allegato eliminato",
     "empty": {
-      "title": "Nessun allegato",
-      "description": "Aggiungi foto o documenti."
+      "title": "Nessun allegato"
     },
     "delete": {
       "title": "Eliminare allegato?",

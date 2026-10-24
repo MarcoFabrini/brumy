@@ -6,7 +6,6 @@ import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
-import { Topbar } from './Topbar';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
 
 vi.mock('@/api/client', async (importOriginal) => ({
@@ -56,12 +55,14 @@ describe('navigazione', () => {
     await i18n.changeLanguage('it');
   });
 
-  it('la sidebar desktop mostra solo Dashboard e Veicoli: i record si gestiscono dal veicolo', () => {
+  it('la sidebar desktop ha le voci della tab bar (Home, Veicoli, Scadenze): i record si gestiscono dal veicolo', () => {
     renderWithProviders(<Sidebar />);
 
     const nav = within(screen.getByRole('navigation', { name: 'Navigazione principale' }));
-    expect(nav.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/', '/vehicles']);
-    for (const label of ['Manutenzioni', 'Rifornimenti', 'Spese', 'Promemoria']) {
+    const links = nav.getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/', '/vehicles', '/reminders']);
+    expect(links.map((link) => link.textContent)).toEqual(['Home', 'Veicoli', 'Scadenze']);
+    for (const label of ['Manutenzioni', 'Rifornimenti', 'Spese']) {
       expect(nav.queryByText(label)).not.toBeInTheDocument();
     }
   });
@@ -72,37 +73,43 @@ describe('navigazione', () => {
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
-  it('la barra mobile resta Home, "+" e Promemoria', () => {
+  it('la tab bar mobile è Home · Veicoli · "+" · Scadenze · Profilo, con le etichette sotto le icone', () => {
     renderWithProviders(<BottomNav />);
 
     const nav = within(screen.getByRole('navigation', { name: 'Navigazione principale mobile' }));
-    expect(nav.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/', '/reminders']);
+    const links = nav.getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/', '/vehicles', '/reminders', '/settings']);
+    expect(links.map((link) => link.textContent)).toEqual(['Home', 'Veicoli', 'Scadenze', 'Profilo']);
     expect(nav.getByRole('button', { name: 'Aggiungi' })).toBeInTheDocument();
   });
 
-  it('sidebar e topbar mostrano il nome org come testo con una sola organizzazione', () => {
-    setMemberships([officina], 1);
-    renderWithProviders(
-      <>
-        <Sidebar />
-        <Topbar />
-      </>,
+  it('la tab attiva è segnata con aria-current', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/vehicles/3']}>
+          <BottomNav />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
-    expect(screen.getAllByText('Officina Rossi')).toHaveLength(2);
+    expect(screen.getByRole('link', { name: 'Veicoli' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('la sidebar mostra il nome org come testo con una sola organizzazione', () => {
+    setMemberships([officina], 1);
+    renderWithProviders(<Sidebar />);
+
+    expect(screen.getAllByText('Officina Rossi')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /cambia organizzazione/ })).not.toBeInTheDocument();
   });
 
-  it('con più organizzazioni sidebar e topbar offrono il cambio, e la sidebar resta senza heading', () => {
+  it('con più organizzazioni la sidebar offre il cambio e resta senza heading', () => {
     setMemberships([officina, famiglia], 2);
-    renderWithProviders(
-      <>
-        <Sidebar />
-        <Topbar />
-      </>,
-    );
+    renderWithProviders(<Sidebar />);
 
-    expect(screen.getAllByRole('button', { name: 'Famiglia Neri, cambia organizzazione' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Famiglia Neri, cambia organizzazione' })).toHaveLength(1);
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 });

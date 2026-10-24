@@ -9,6 +9,7 @@ import { authFetch } from '@/api/client';
 import type { Vehicle } from '@/api/types/vehicle';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { VehicleDetailPage } from './VehicleDetailPage';
+import { VehicleSharingPage } from './VehicleSharingPage';
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
@@ -85,11 +86,25 @@ function renderPage(ownedVehicles: Vehicle[]) {
       <MemoryRouter initialEntries={['/vehicles/1']}>
         <Routes>
           <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
+          <Route path="/vehicles/:id/sharing" element={<VehicleSharingPage />} />
           <Route path="/vehicles" element={<p>Lista veicoli</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+/** Il menu "Aggiungi" della barra (desktop): non il pulsante "Aggiungi" degli allegati. */
+const addMenus = () =>
+  screen.queryAllByRole('button', { name: 'Aggiungi' }).filter((b) => b.getAttribute('aria-haspopup') === 'menu');
+const findAddMenu = async () => {
+  await waitFor(() => expect(addMenus()).toHaveLength(1));
+  return addMenus()[0]!;
+};
+
+/** Le azioni sul veicolo stanno nel menu "…" ("Altre azioni"). */
+async function openActions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Altre azioni' }));
 }
 
 describe('VehicleDetailPage', () => {
@@ -98,28 +113,68 @@ describe('VehicleDetailPage', () => {
     await i18n.changeLanguage('it');
   });
 
-  it('con più veicoli propri mostra i grafici del veicolo prima della card informazioni', async () => {
-    renderPage([vehicle(1, 'Golf'), vehicle(2, 'Panda')]);
+  it('mostra i grafici del veicolo dopo il riepilogo e i dati, anche se è l\'unico veicolo', async () => {
+    renderPage([vehicle(1, 'Golf')]);
 
-    const chartsHeading = await screen.findByRole('heading', { name: 'Grafici del veicolo' });
-    const infoTitle = screen.getByText('Dati veicolo');
-    expect(chartsHeading.compareDocumentPosition(infoTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const chartsHeading = await screen.findByRole('heading', { name: 'Andamento' });
+    const infoTitle = screen.getByText('Tipo veicolo');
+    expect(infoTitle.compareDocumentPosition(chartsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(await screen.findByRole('table', { name: 'Spese mensili' })).toBeInTheDocument();
   });
 
-  it('con un solo veicolo proprio non mostra i grafici (sono già in dashboard)', async () => {
+  it('il registro apre le liste di questo veicolo e mostra i conteggi', async () => {
     renderPage([vehicle(1, 'Golf')]);
 
-    expect(await screen.findByText('Dati veicolo')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Grafici del veicolo' })).not.toBeInTheDocument();
-    expect(mockedAuthFetch).not.toHaveBeenCalledWith('/api/vehicles/1/charts?months=12');
+    const refuelings = await screen.findByRole('link', { name: /Rifornimenti/ });
+    expect(refuelings).toHaveAttribute('href', '/refueling?vehicleId=1');
+    await waitFor(() => expect(refuelings).toHaveTextContent('1'));
+    expect(screen.getByRole('link', { name: /Manutenzioni/ })).toHaveAttribute('href', '/maintenance?vehicleId=1');
+    expect(screen.getByRole('link', { name: /Spese/ })).toHaveAttribute('href', '/expenses?vehicleId=1');
+    expect(screen.getByRole('link', { name: /Promemoria/ })).toHaveAttribute('href', '/reminders?vehicleId=1');
+  });
+
+  it('in cima mostra la prossima scadenza, che apre il promemoria', async () => {
+    mockedAuthFetch.mockImplementation(async (path: string) => {
+      if (path === '/api/vehicles') return [vehicle(1, 'Golf')];
+      if (path === '/api/vehicles/1') return vehicle(1, 'Golf');
+      if (path === '/api/vehicles/1/stats') return stats;
+      if (path === '/api/reminders?vehicleId=1') {
+        return [{ id: 9, vehicle: { id: 1, name: 'Golf', brand: 'VW', model: 'Golf' }, type: 'inspection', description: 'Revisione', dueDate: '2020-01-01', dueKm: null, notifyDaysBefore: 30, notifyKmBefore: 1000, recurrenceMonths: 24, recurrenceKm: null, completedAt: null, completedOn: null, completedKm: null }];
+      }
+      return [];
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/vehicles/1']}>
+          <Routes>
+            <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const next = await screen.findByRole('link', { name: /Prossima scadenza/ });
+    expect(next).toHaveAttribute('href', '/reminders/9');
+    expect(next).toHaveTextContent('Revisione');
+    expect(next).toHaveTextContent('Scaduto');
+  });
+
+  it('in cima la spesa del mese corrente; il costo totale sta nei dati del veicolo', async () => {
+    renderPage([vehicle(1, 'Golf')]);
+
+    const month = (await screen.findByText('Speso questo mese')).nextElementSibling as HTMLElement;
+    // I grafici di prova hanno solo ottobre 2026: negli altri mesi la spesa del mese è zero.
+    const thisMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    await waitFor(() => expect(month).toHaveTextContent(thisMonth === '2026-10' ? '10,00' : '0,00'));
+    expect(screen.getByText('Costo totale').nextElementSibling).toHaveTextContent('10,00');
   });
 
   it('"Aggiungi" apre la scelta di cosa inserire per questo veicolo', async () => {
     renderPage([vehicle(1, 'Golf'), vehicle(2, 'Panda')]);
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: 'Aggiungi' }));
+    await user.click(await findAddMenu());
 
     const links = [
       ['Nuova manutenzione', '/maintenance/new?vehicleId=1'],
@@ -138,8 +193,8 @@ describe('VehicleDetailPage', () => {
   ])('veicolo %s: nessun "Aggiungi"', async (_case, overrides) => {
     renderPage([{ ...vehicle(1, 'Golf'), ...overrides }, vehicle(2, 'Panda')]);
 
-    expect(await screen.findByText('Dati veicolo')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Aggiungi' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Tipo veicolo')).toBeInTheDocument();
+    expect(addMenus()).toHaveLength(0);
   });
 
   describe('trasferimento di proprietà', () => {
@@ -165,9 +220,15 @@ describe('VehicleDetailPage', () => {
       Element.prototype.scrollIntoView = () => undefined;
     });
 
-    it('chi può condividere vede "Trasferisci proprietà" nella card di condivisione', async () => {
+    it('la condivisione non sta nella pagina: si apre dall\'icona (sul telefono è una pagina a sé)', async () => {
       renderPage([{ ...vehicle(1, 'Golf'), permissions: { canEdit: true, canDelete: true, canShare: true } }]);
+      const user = userEvent.setup();
 
+      await screen.findByText('Tipo veicolo');
+      expect(screen.queryByRole('button', { name: 'Trasferisci proprietà' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Condivisione' }));
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Condivisione' })).toBeInTheDocument();
       expect(await screen.findByRole('button', { name: 'Trasferisci proprietà' })).toBeInTheDocument();
     });
 
@@ -182,6 +243,7 @@ describe('VehicleDetailPage', () => {
         return original ? original(path, options) : [];
       });
 
+      await user.click(await screen.findByRole('button', { name: 'Condivisione' }));
       await user.click(await screen.findByRole('button', { name: 'Trasferisci proprietà' }));
       await user.click(await screen.findByRole('combobox', { name: /Nuovo proprietario/ }));
       await user.click(await screen.findByRole('option', { name: 'Carlo Alberti' }));
@@ -196,8 +258,8 @@ describe('VehicleDetailPage', () => {
         { ...vehicle(1, 'Golf'), ownership: 'shared', permissions: { canEdit: false, canDelete: false, canShare: false } },
       ]);
 
-      expect(await screen.findByText('Dati veicolo')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Trasferisci proprietà' })).not.toBeInTheDocument();
+      expect(await screen.findByText('Tipo veicolo')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Condivisione' })).not.toBeInTheDocument();
       expect(mockedAuthFetch).not.toHaveBeenCalledWith('/api/vehicles/1/transfer-candidates');
     });
   });
@@ -206,10 +268,13 @@ describe('VehicleDetailPage', () => {
     const archiveCalls = () =>
       mockedAuthFetch.mock.calls.filter(([path]) => path === '/api/vehicles/1/archive');
 
-    it('chi può eliminare vede "Archivia" su un veicolo attivo', async () => {
+    it('chi può eliminare trova "Archivia" ed "Elimina" nel menu "…"', async () => {
       renderPage([vehicle(1, 'Golf')]);
+      const user = userEvent.setup();
 
-      expect(await screen.findByRole('button', { name: 'Archivia' })).toBeInTheDocument();
+      await openActions(user);
+      expect(await screen.findByRole('menuitem', { name: 'Archivia' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Elimina' })).toBeInTheDocument();
     });
 
     it.each([
@@ -219,15 +284,18 @@ describe('VehicleDetailPage', () => {
     ])('veicolo %s: nessun "Archivia"', async (_case, overrides) => {
       renderPage([{ ...vehicle(1, 'Golf'), ...overrides }]);
 
-      expect(await screen.findByText('Dati veicolo')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Archivia' })).not.toBeInTheDocument();
+      expect(await screen.findByText('Tipo veicolo')).toBeInTheDocument();
+      const more = screen.queryByRole('button', { name: 'Altre azioni' });
+      if (more) await userEvent.setup().click(more);
+      expect(screen.queryByRole('menuitem', { name: 'Archivia' })).not.toBeInTheDocument();
     });
 
     it('chiede conferma, poi chiama POST archive e torna alla lista', async () => {
       renderPage([vehicle(1, 'Golf')]);
       const user = userEvent.setup();
 
-      await user.click(await screen.findByRole('button', { name: 'Archivia' }));
+      await openActions(user);
+      await user.click(await screen.findByRole('menuitem', { name: 'Archivia' }));
       expect(await screen.findByText('Archiviare il veicolo?')).toBeInTheDocument();
       expect(screen.getByText(/scompare da elenchi, dashboard e notifiche/)).toBeInTheDocument();
       expect(archiveCalls()).toHaveLength(0); // niente prima della conferma
@@ -243,7 +311,8 @@ describe('VehicleDetailPage', () => {
       renderPage([vehicle(1, 'Golf')]);
       const user = userEvent.setup();
 
-      await user.click(await screen.findByRole('button', { name: 'Archivia' }));
+      await openActions(user);
+      await user.click(await screen.findByRole('menuitem', { name: 'Archivia' }));
       await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annulla' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -279,7 +348,7 @@ describe('VehicleDetailPage', () => {
     it('mentre le statistiche caricano non presenta i km iniziali come attuali', async () => {
       renderWithStats(() => new Promise(() => {}));
 
-      await screen.findByText('Dati veicolo');
+      await screen.findByText('Tipo veicolo');
       expect(currentKm()).not.toHaveTextContent('12.345');
       expect(currentKm()).not.toHaveTextContent('km');
     });

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, FileText, Paperclip, Trash2 } from 'lucide-react';
-import { Alert, Skeleton } from '@/components/ui';
-import { EmptyState } from './EmptyState';
+import { Download, FileText, Trash2 } from 'lucide-react';
+import { Alert, ListRow, Skeleton } from '@/components/ui';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
@@ -54,14 +53,13 @@ export function AttachmentList({ entityType, entityId, readOnly = false }: Attac
 
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
 
+  // Vuoto: chi può modificare ha già la riga "Aggiungi" sotto; in sola lettura lo si dice in una riga.
   if (!data || data.length === 0) {
-    return (
-      <EmptyState
-        Icon={Paperclip}
-        title={t('attachment.empty.title')}
-        description={t('attachment.empty.description')}
-      />
-    );
+    return readOnly ? (
+      <div className="overflow-hidden rounded-xl bg-card [&_.list-row-body]:border-b-0">
+        <ListRow label={<span className="text-muted-foreground">{t('attachment.empty.title')}</span>} />
+      </div>
+    ) : null;
   }
 
   return (

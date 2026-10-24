@@ -1,0 +1,37 @@
+import type { DashboardCharts } from '@/api/types/dashboardCharts';
+
+export interface MonthSpending {
+  /** Mese di riferimento, `YYYY-MM`. */
+  month: string;
+  total: number;
+  refuelings: number;
+  maintenances: number;
+  expenses: number;
+  kmDriven: number;
+  /** Totale del mese prima (null se fuori dalla finestra dei grafici). */
+  previousTotal: number | null;
+}
+
+const yearMonth = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/**
+ * La spesa del mese corrente (e il totale del mese prima, per il confronto) dalla risposta dei grafici, che ha già
+ * le somme mensili di rifornimenti, manutenzioni e spese. Un mese senza movimenti vale zero.
+ */
+export function monthSpending(charts: DashboardCharts, now: Date = new Date()): MonthSpending {
+  const month = yearMonth(now);
+  const previous = yearMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const current = charts.months.find((m) => m.month === month);
+  const before = charts.months.find((m) => m.month === previous);
+  const n = (v: string | undefined) => Number.parseFloat(v ?? '0') || 0;
+
+  return {
+    month,
+    total: n(current?.spending.total),
+    refuelings: n(current?.spending.refuelings),
+    maintenances: n(current?.spending.maintenances),
+    expenses: n(current?.spending.expenses),
+    kmDriven: current?.kmDriven ?? 0,
+    previousTotal: before ? n(before.spending.total) : null,
+  };
+}

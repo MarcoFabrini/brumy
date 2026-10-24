@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Receipt } from 'lucide-react';
-import { Badge, Card, CardContent } from '@/components/ui';
+import { ListRow } from '@/components/ui';
+import { MetaLine } from './MetaLine';
 import { useFormat } from '@/hooks/useFormat';
 import type { Expense } from '@/api/types/expense';
 
@@ -9,41 +10,31 @@ export interface ExpenseCardProps {
   expense: Expense;
 }
 
-export function ExpenseCard({ expense }: ExpenseCardProps) {
+/** Una spesa come riga di lista iOS: descrizione, poi categoria, data e ricorrenza; importo a destra. */
+export function ExpenseCard({ expense: e }: ExpenseCardProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
-  const e = expense;
+  const category = t(`expense.category_options.${e.category}`);
 
   return (
-    <Card>
-      <Link to={`/expenses/${e.id}`} className="block">
-        <CardContent standalone className="flex items-start gap-4">
-          <div className="rounded-md bg-primary/10 p-3">
-            <Receipt className="size-5 text-primary" />
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="truncate text-base font-semibold">
-                {t(`expense.category_options.${e.category}`)}
-              </h3>
-              <span className="shrink-0 text-sm font-medium">{fmt.currency(e.amount)}</span>
-            </div>
-            <p className="line-clamp-2 text-sm text-muted-foreground">{e.description}</p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{fmt.date(e.occurredAt)}</span>
-              {e.recurring && e.recurringUntil && (
-                <span>{t('expense.recurring_until_on', { date: fmt.date(e.recurringUntil) })}</span>
-              )}
-              {e.recurring && e.recurringPeriod && (
-                <Badge variant="secondary" className="ml-auto">
-                  {t(`expense.recurring_options.${e.recurringPeriod}`)}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Link>
-    </Card>
+    <ListRow
+      as={Link}
+      to={`/expenses/${e.id}`}
+      icon={<Receipt />}
+      iconClassName="bg-[#5856d6]"
+      label={e.description || category}
+      description={
+        <MetaLine
+          parts={[
+            e.description ? category : null,
+            fmt.date(e.occurredAt),
+            e.recurring && e.recurringPeriod ? t(`expense.recurring_options.${e.recurringPeriod}`) : null,
+            e.recurring && e.recurringUntil ? t('expense.recurring_until_on', { date: fmt.date(e.recurringUntil) }) : null,
+          ]}
+        />
+      }
+      value={<span className="font-medium text-foreground">{fmt.currency(e.amount)}</span>}
+      chevron
+    />
   );
 }

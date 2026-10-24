@@ -29,7 +29,7 @@ export const SelectTrigger = forwardRef<
     ref={ref}
     className={cn(
       'flex min-h-touch w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm',
-      'focus:outline-none focus:ring-2 focus:ring-ring',
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       'disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:line-clamp-1',
       className,

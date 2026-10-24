@@ -1,3 +1,5 @@
+import { useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AttachmentUploader } from './AttachmentUploader';
 import { AttachmentList } from './AttachmentList';
 import type { AttachmentEntityType } from '@/api/types/attachment';
@@ -10,19 +12,19 @@ export interface AttachmentsSectionProps {
 }
 
 /**
- * Sezione allegati riusabile: bottone upload allineato a destra + griglia
- * thumbnail. Punto unico d'integrazione per pagine veicolo/manutenzione/
- * rifornimento.
+ * Sezione allegati riusabile (veicolo, manutenzione, rifornimento): titoletto come quello delle liste, le
+ * miniature e sotto la riga "Aggiungi foto o documenti" che apre il selettore file (sul telefono anche la fotocamera).
  */
 export function AttachmentsSection({ entityType, entityId, readOnly = false }: AttachmentsSectionProps) {
+  const { t } = useTranslation();
+  const headingId = useId();
   return (
-    <div className="space-y-3 pt-2">
-      {!readOnly && (
-        <div className="flex justify-end">
-          <AttachmentUploader entityType={entityType} entityId={entityId} />
-        </div>
-      )}
+    <section aria-labelledby={headingId} className="space-y-1.5">
+      <h2 id={headingId} className="px-4 text-[0.8125rem] uppercase tracking-wide text-muted-foreground">
+        {t('attachment.title')}
+      </h2>
       <AttachmentList entityType={entityType} entityId={entityId} readOnly={readOnly} />
-    </div>
+      {!readOnly && <AttachmentUploader entityType={entityType} entityId={entityId} />}
+    </section>
   );
 }

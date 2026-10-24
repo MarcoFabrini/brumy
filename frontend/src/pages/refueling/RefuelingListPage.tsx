@@ -29,8 +29,9 @@ export function RefuelingListPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={vehicleId > 0 ? vehicleName : undefined}
+        title={vehicleId > 0 ? t('nav.refueling') : undefined}
         srTitle={t('nav.refueling')}
+        description={vehicleId > 0 ? vehicleName : undefined}
         onBack={vehicleId > 0 ? () => navigate(`/vehicles/${vehicleId}`) : undefined}
         action={
           vehicleId > 0 && canEdit && (

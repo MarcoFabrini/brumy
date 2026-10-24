@@ -7,11 +7,14 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   FormField,
+  ListRow,
+  ListSection,
   Input,
   Select,
   SelectContent,
@@ -71,6 +74,7 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
   const changeRole = useChangeMemberRole(organizationId);
 
   const [toRemove, setToRemove] = useState<OrgMember | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [roleChange, setRoleChange] = useState<{ member: OrgMember; role: MemberRole } | null>(null);
 
   const ownerCount = membersQuery.data?.filter((m) => m.role === 'owner').length ?? 0;
@@ -86,6 +90,7 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
       onSuccess: () => {
         toast({ title: t('settings.members.invited'), variant: 'success' });
         form.reset({ email: '', role: 'member' });
+        setInviteOpen(false);
       },
       onError: (e) => toast({ title: errorMessage(e), variant: 'error' }),
     });
@@ -137,38 +142,27 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2" className="flex items-center gap-2">
-          <UserPlus className="size-4" />
-          {t('settings.members.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {membersQuery.isLoading && <Spinner size="sm" />}
+    <div className="space-y-6">
+      {membersQuery.isLoading && <Spinner size="sm" />}
+      {membersQuery.error && <Alert variant="error">{errorMessage(membersQuery.error)}</Alert>}
+      {invitationsQuery.error && <Alert variant="error">{errorMessage(invitationsQuery.error)}</Alert>}
 
-        {membersQuery.error && <Alert variant="error">{errorMessage(membersQuery.error)}</Alert>}
-        {invitationsQuery.error && <Alert variant="error">{errorMessage(invitationsQuery.error)}</Alert>}
-
-        {membersQuery.data && (
-          <ul className="space-y-2">
+      {/* Membri come lista iOS: nome ed email a sinistra, ruolo (selettore compatto) e rimozione a destra. */}
+      {membersQuery.data && (
+        <ListSection title={t('settings.members.title')}>
+          <ul>
             {membersQuery.data.map((m) => (
-              <li
-                key={m.id}
-                // Sotto sm i controlli vanno sotto il nome (a 360px il Select lascerebbe al nome una manciata di px);
-                // da sm in su stessa riga come prima.
-                className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-              >
-                <div className="min-w-0 sm:flex-1">
-                  <p className="truncate font-medium">
-                    {m.user.firstName} {m.user.lastName}
-                    {m.user.id === currentUserId && (
-                      <span className="text-muted-foreground"> ({t('settings.members.you')})</span>
-                    )}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
-                </div>
-                <div className="flex items-center gap-2 sm:shrink-0">
+              <li key={m.id} className="flex min-h-touch items-center gap-3 pl-4">
+                <div className="list-row-body flex min-w-0 flex-1 items-center gap-2 border-b py-2.5 pr-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[1.0625rem]">
+                      {m.user.firstName} {m.user.lastName}
+                      {m.user.id === currentUserId && (
+                        <span className="text-muted-foreground"> ({t('settings.members.you')})</span>
+                      )}
+                    </p>
+                    <p className="truncate text-[0.9375rem] text-muted-foreground">{m.user.email}</p>
+                  </div>
                   <MemberRoleControl
                     member={m}
                     options={assignableRoles(currentRole, m.role, m.user.id === currentUserId, ownerCount)}
@@ -178,94 +172,106 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
                   {m.role !== 'owner' &&
                     m.user.id !== currentUserId &&
                     !(m.role === 'admin' && currentRole !== 'owner') && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t('settings.members.remove')}
-                      onClick={() => setToRemove(m)}
-                    >
-                      <Trash2 className="text-destructive-text" />
-                    </Button>
-                  )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('settings.members.remove')}
+                        onClick={() => setToRemove(m)}
+                      >
+                        <Trash2 className="text-destructive-text" />
+                      </Button>
+                    )}
                 </div>
               </li>
             ))}
           </ul>
-        )}
+        </ListSection>
+      )}
 
-        {invitationsQuery.data && invitationsQuery.data.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t('settings.members.pending_title')}
-            </p>
-            <ul className="space-y-2">
-              {invitationsQuery.data.map((inv) => (
-                <li
-                  key={inv.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-dashed p-3"
-                >
-                  <p className="min-w-0 truncate text-sm">{inv.email}</p>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant="secondary">{t(`settings.role.${inv.role}`)}</Badge>
-                    <Badge variant="outline" className="gap-1">
-                      <Clock className="size-3" />
-                      {t('settings.members.pending')}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t('settings.members.revoke')}
-                      disabled={revoke.isPending}
-                      onClick={() => revokeInvitation(inv.id)}
-                    >
-                      <X className="text-destructive-text" />
-                    </Button>
+      {invitationsQuery.data && invitationsQuery.data.length > 0 && (
+        <ListSection title={t('settings.members.pending_title')}>
+          <ul>
+            {invitationsQuery.data.map((inv) => (
+              <li key={inv.id} className="flex min-h-touch items-center gap-3 pl-4">
+                <div className="list-row-body flex min-w-0 flex-1 items-center gap-2 border-b py-2.5 pr-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[1.0625rem]">{inv.email}</p>
+                    <p className="flex items-center gap-1 text-[0.9375rem] text-muted-foreground">
+                      <Clock className="size-3.5" aria-hidden="true" />
+                      {t(`settings.role.${inv.role}`)} · {t('settings.members.pending')}
+                    </p>
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('settings.members.revoke')}
+                    disabled={revoke.isPending}
+                    onClick={() => revokeInvitation(inv.id)}
+                  >
+                    <X className="text-destructive-text" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </ListSection>
+      )}
 
-        <form onSubmit={form.handleSubmit(submit)} className="space-y-3 border-t pt-4">
-          <p className="text-sm font-medium">{t('settings.members.invite_title')}</p>
+      <ListSection>
+        <ListRow
+          as="button"
+          type="button"
+          onClick={() => setInviteOpen(true)}
+          icon={<UserPlus />}
+          iconClassName="bg-[#34c759]"
+          label={<span className="text-primary">{t('settings.members.invite_title')}</span>}
+        />
+      </ListSection>
 
-          <FormField label={t('settings.members.email')} error={tErr(errors.email?.message)} required>
-            {(id) => (
-              <Input
-                id={id}
-                type="email"
-                autoComplete="off"
-                autoCapitalize="none"
-                inputMode="email"
-                invalid={!!errors.email}
-                {...form.register('email')}
-              />
-            )}
-          </FormField>
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent mobileFullScreen>
+          <DialogHeader>
+            <DialogTitle>{t('settings.members.invite_title')}</DialogTitle>
+            <DialogDescription>{t('settings.members.invite_description')}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
+            <FormField label={t('settings.members.email')} error={tErr(errors.email?.message)} required>
+              {(id) => (
+                <Input
+                  id={id}
+                  type="email"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  inputMode="email"
+                  invalid={!!errors.email}
+                  {...form.register('email')}
+                />
+              )}
+            </FormField>
 
-          <FormField label={t('settings.members.role')}>
-            {(id) => (
-              <Select
-                value={form.watch('role')}
-                onValueChange={(v) => form.setValue('role', v as 'member' | 'admin')}
-              >
-                <SelectTrigger id={id}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">{t('settings.role.member')}</SelectItem>
-                  <SelectItem value="admin">{t('settings.role.admin')}</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </FormField>
+            <FormField label={t('settings.members.role')}>
+              {(id) => (
+                <Select
+                  value={form.watch('role')}
+                  onValueChange={(v) => form.setValue('role', v as 'member' | 'admin')}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">{t('settings.role.member')}</SelectItem>
+                    <SelectItem value="admin">{t('settings.role.admin')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
 
-          <Button type="submit" disabled={invite.isPending}>
-            {invite.isPending ? <Spinner size="sm" /> : t('settings.members.invite_submit')}
-          </Button>
-        </form>
-      </CardContent>
+            <Button type="submit" size="lg" fullWidth disabled={invite.isPending}>
+              {invite.isPending ? <Spinner size="sm" /> : t('settings.members.invite_submit')}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={toRemove !== null}
@@ -288,7 +294,7 @@ export function MembersCard({ organizationId, currentUserId, currentRole }: Memb
         isPending={changeRole.isPending}
         onConfirm={() => void confirmRoleChange()}
       />
-    </Card>
+    </div>
   );
 }
 
@@ -310,7 +316,8 @@ function MemberRoleControl({ member, options, disabled, onChange }: MemberRoleCo
   return (
     <Select value={member.role} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
-        className="min-w-0 flex-1 sm:w-48 sm:flex-none"
+        // "Pop-up button" iOS: solo il ruolo nel colore dell'app con le frecce, senza riquadro.
+        className="h-auto min-h-touch w-auto max-w-[9rem] shrink-0 gap-1 border-0 bg-transparent px-1 text-[0.9375rem] text-primary shadow-none"
         aria-label={t('settings.members.change_role', { name: `${member.user.firstName} ${member.user.lastName}` })}
       >
         <SelectValue />

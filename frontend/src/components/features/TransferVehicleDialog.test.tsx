@@ -106,7 +106,7 @@ describe('TransferVehicleDialog', () => {
       charts: vehicleChartsKeys.window(7, 12),
       shares: ['vehicles', 7, 'shares'] as const,
       dashboard: dashboardKeys.charts(12),
-      reminders: reminderKeys.upcoming(30, 5),
+      reminders: reminderKeys.overview(),
       remindersByVehicle: reminderKeys.byVehicle(7),
       members: ['organizations', 1, 'members'] as const,
     };

@@ -18,11 +18,13 @@ export interface NavItemProps {
   to: string;
   labelKey: string;
   Icon: LucideIcon;
+  /** Etichetta breve (la stessa della tab bar): se c'è, la sidebar usa questa. */
+  tabLabelKey?: string;
   /** Layout: sidebar (icon+label inline) vs bottom nav (icon sopra label) */
   orientation: 'vertical' | 'horizontal';
 }
 
-export function NavItem({ to, labelKey, Icon, orientation }: NavItemProps) {
+export function NavItem({ to, labelKey, tabLabelKey, Icon, orientation }: NavItemProps) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const active = pathname === to || (to !== '/' && pathname.startsWith(`${to}/`));
@@ -39,12 +41,10 @@ export function NavItem({ to, labelKey, Icon, orientation }: NavItemProps) {
         'min-h-touch transition-colors',
         isHorizontal
           ? 'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs'
-          : 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
+          : 'flex items-center gap-3 rounded-[10px] px-2 py-1.5 text-[0.9375rem]',
         // sidebar (vertical)
         !isHorizontal &&
-          (active
-            ? 'bg-primary font-semibold text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'),
+          (active ? 'bg-secondary font-semibold text-foreground' : 'text-foreground hover:bg-secondary/60'),
         // bottom nav (horizontal)
         isHorizontal &&
           (active ? 'font-semibold text-primary' : 'font-medium text-muted-foreground hover:text-accent-foreground'),
@@ -61,8 +61,8 @@ export function NavItem({ to, labelKey, Icon, orientation }: NavItemProps) {
         </span>
       ) : (
         <>
-          <Icon className="size-5" />
-          <span>{t(labelKey)}</span>
+          <Icon className="size-5 text-primary" aria-hidden="true" />
+          <span>{t(tabLabelKey ?? labelKey)}</span>
         </>
       )}
     </Link>

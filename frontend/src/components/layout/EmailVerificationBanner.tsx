@@ -18,7 +18,7 @@ export function EmailVerificationBanner() {
   if (!user || (user.emailVerified && !user.pendingEmail)) return null;
 
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-amber-100/70 px-4 py-2.5 text-sm text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
       <span>
         {user.pendingEmail
           ? t('auth.verify.pending_banner', { email: user.pendingEmail })

@@ -1,20 +1,16 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Trash2 } from 'lucide-react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-} from '@/components/ui';
+import { Alert, Badge, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { AttachmentsSection, ConfirmDialog } from '@/components/features';
+import {
+  AttachmentsSection,
+  ConfirmDialog,
+  DeleteRow,
+  EditLink,
+  InfoList,
+  InfoRow,
+} from '@/components/features';
 import { useDeleteMaintenance, useMaintenance } from '@/hooks/useMaintenances';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
@@ -54,69 +50,27 @@ export function MaintenanceDetailPage() {
         title={t(`maintenance.type_options.${data.type}`)}
         description={data.description}
         onBack={() => navigate(`/maintenance?vehicleId=${data.vehicleId}`)}
-        action={
-          canEdit ? (
-            <>
-              <Button variant="outline" size="icon" asChild aria-label={t('actions.edit')}>
-                <Link to={`/maintenance/${data.id}/edit`}>
-                  <Pencil />
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setConfirmOpen(true)}
-                aria-label={t('actions.delete')}
-              >
-                <Trash2 />
-              </Button>
-            </>
-          ) : undefined
-        }
+        action={canEdit ? <EditLink to={`/maintenance/${data.id}/edit`} /> : undefined}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('maintenance.info')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+      <InfoList>
+        <InfoRow label={t('maintenance.cost')} value={<span className="font-semibold text-foreground">{fmt.currency(data.cost)}</span>} />
+        <InfoRow label={t('maintenance.performed_at')} value={fmt.date(data.performedAt)} />
+        <InfoRow label={t('maintenance.km')} value={fmt.km(data.km)} />
+        <InfoRow
+          label={t('maintenance.category')}
+          value={
             <Badge variant={data.category === 'scheduled' ? 'success' : 'warning'}>
               {t(`maintenance.category_options.${data.category}`)}
             </Badge>
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">{t('maintenance.performed_at')}</dt>
-              <dd className="font-medium">{fmt.date(data.performedAt)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('maintenance.km')}</dt>
-              <dd className="font-medium">{fmt.km(data.km)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('maintenance.cost')}</dt>
-              <dd className="font-medium">{fmt.currency(data.cost)}</dd>
-            </div>
-            {data.workshop && (
-              <div>
-                <dt className="text-muted-foreground">{t('maintenance.workshop')}</dt>
-                <dd className="font-medium">{data.workshop}</dd>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+          }
+        />
+        {data.workshop && <InfoRow label={t('maintenance.workshop')} value={<span className="truncate">{data.workshop}</span>} />}
+      </InfoList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('attachment.title')}</CardTitle>
-          <CardDescription>{t('attachment.description')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AttachmentsSection entityType="maintenance" entityId={data.id} readOnly={!canEdit} />
-        </CardContent>
-      </Card>
+      <AttachmentsSection entityType="maintenance" entityId={data.id} readOnly={!canEdit} />
+
+      {canEdit && <DeleteRow label={t('maintenance.delete.action')} onDelete={() => setConfirmOpen(true)} />}
 
       <ConfirmDialog
         open={confirmOpen}

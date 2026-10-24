@@ -285,21 +285,29 @@ describe('MembersCard — layout mobile e rimozione', () => {
     Element.prototype.scrollIntoView = () => undefined;
   });
 
-  it('la riga impila nome e controlli sotto sm: il select è flessibile, non largo 160px fissi', async () => {
+  it('il ruolo è un selettore compatto a destra e nome ed email restano troncabili', async () => {
     const long = { ...asMember(2, 'member', 'Bartolomeo-Maria-Giuseppe') };
     long.user.email = 'bartolomeo.maria.giuseppe.con.un.indirizzo.molto.lungo@dominio-di-esempio.example';
     mockMembers([asMember(1, 'owner', 'Anna'), long]);
     renderCard('owner');
 
     const select = await screen.findByRole('combobox', { name: /Cambia il ruolo di Bartolomeo/ });
-    const row = select.closest('li');
-    // jsdom non fa layout: si verificano le classi che lo garantiscono (colonna sotto sm, riga da sm).
-    expect(row).toHaveClass('flex-col', 'sm:flex-row');
-    expect(select).toHaveClass('flex-1', 'min-w-0', 'sm:w-48', 'sm:flex-none');
-    expect(select).not.toHaveClass('w-40');
-    // Nome ed email restano troncabili dentro un contenitore che può restringersi.
+    // jsdom non fa layout: si verificano le classi che lo garantiscono.
+    expect(select).toHaveClass('w-auto', 'shrink-0');
     expect(screen.getByText(/bartolomeo\.maria/)).toHaveClass('truncate');
-    expect(screen.getByText(/Bartolomeo-Maria-Giuseppe Neri/).closest('div')).toHaveClass('min-w-0');
+    expect(screen.getByText(/Bartolomeo-Maria-Giuseppe Neri/).closest('div')).toHaveClass('min-w-0', 'flex-1');
+  });
+
+  it('"Invita un membro" apre il foglio con il modulo', async () => {
+    mockMembers([asMember(1, 'owner', 'Anna')]);
+    renderCard('owner');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Invita un membro' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Invita un membro' });
+    expect(within(dialog).getByLabelText(/Email/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Invia invito' })).toBeInTheDocument();
   });
 
   it("un admin non vede il pulsante di rimozione sugli altri admin, un owner sì", async () => {

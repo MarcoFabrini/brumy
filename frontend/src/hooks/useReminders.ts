@@ -6,7 +6,7 @@ import {
   deleteReminder,
   getReminder,
   listReminders,
-  listUpcomingReminders,
+  listReminderOverview,
   updateReminder,
 } from '@/api/endpoints/reminders';
 import type {
@@ -19,22 +19,23 @@ export const reminderKeys = {
   all: ['reminders'] as const,
   byVehicle: (vehicleId: number) => [...reminderKeys.all, 'vehicle', vehicleId] as const,
   detail: (id: number) => [...reminderKeys.all, 'detail', id] as const,
-  upcoming: (days: number, limit: number) => [...reminderKeys.all, 'upcoming', days, limit] as const,
+  overview: () => [...reminderKeys.all, 'overview'] as const,
 };
+
+/** Scadenze di tutti i veicoli propri, con urgenza: la tab "Scadenze". */
+export function useReminderOverview(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: reminderKeys.overview(),
+    queryFn: listReminderOverview,
+    enabled: options.enabled ?? true,
+  });
+}
 
 export function useReminders(vehicleId: number) {
   return useQuery({
     queryKey: reminderKeys.byVehicle(vehicleId),
     queryFn: () => listReminders(vehicleId),
     enabled: vehicleId > 0,
-  });
-}
-
-/** Scadenze a data in arrivo su tutti i veicoli dell'organizzazione (dashboard). */
-export function useUpcomingReminders(days = 30, limit = 5) {
-  return useQuery({
-    queryKey: reminderKeys.upcoming(days, limit),
-    queryFn: () => listUpcomingReminders(days, limit),
   });
 }
 
@@ -67,7 +68,7 @@ export function useUpdateReminder(id: number) {
 }
 
 /**
- * Completamento con data e km effettivi. Invalida tutti i promemoria (lista, dettaglio, upcoming):
+ * Completamento con data e km effettivi. Invalida tutti i promemoria (lista, dettaglio, panoramica):
  * il successore di un ricorrente compare tra gli attivi. Statistiche e grafici non cambiano, perché
  * i km del completamento non alimentano l'odometro del veicolo.
  */

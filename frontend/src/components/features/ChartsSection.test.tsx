@@ -33,7 +33,7 @@ const skeletons = (container: HTMLElement) => container.querySelectorAll('.h-72'
 
 function renderSection(props: Partial<Parameters<typeof ChartsSection>[0]>) {
   return render(
-    <ChartsSection headingId="t" title="Grafici" subtitle="Ultimi 12 mesi" data={undefined} isLoading={false} error={null} {...props} />,
+    <ChartsSection headingId="t" title="Grafici" data={undefined} isLoading={false} error={null} {...props} />,
   );
 }
 

@@ -337,6 +337,41 @@ final class ReminderControllerTest extends ApiTestCase
         self::assertSame(12, $upcoming[0]['notifyDaysBefore']);
     }
 
+    /**
+     * La tab "Scadenze": tutte le scadenze attive dei veicoli propri, a data e a km, con l'urgenza già calcolata e in
+     * ordine (scadute, in scadenza, poi le altre).
+     */
+    public function testOverviewListsEveryActiveReminderOfTheOwnedVehiclesWithUrgency(): void
+    {
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $panda = $this->ownedVehicle($user, $org);
+        $golf = VehicleFactory::createOne(['organization' => $org, 'initialKm' => 15_000]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $golf, 'user' => $user]);
+        RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $golf, 'km' => 19_600]);
+
+        $later = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $panda, 'dueDate' => new \DateTimeImmutable('+200 days')]);
+        $oilSoon = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $golf, 'dueDate' => null, 'dueKm' => 20_000, 'notifyKmBefore' => 500]);
+        $overdue = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $panda, 'dueDate' => new \DateTimeImmutable('-3 days')]);
+        ReminderFactory::createOne(['organization' => $org, 'vehicle' => $panda, 'dueDate' => new \DateTimeImmutable('-30 days'), 'completedAt' => new \DateTimeImmutable()]);
+        // Veicolo condiviso con lui in sola lettura e veicolo archiviato: non sono "suoi" da gestire qui.
+        $shared = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::createOne(['vehicle' => $shared, 'user' => $user]);
+        ReminderFactory::createOne(['organization' => $org, 'vehicle' => $shared, 'dueDate' => new \DateTimeImmutable('-1 day')]);
+        $archived = VehicleFactory::createOne(['organization' => $org, 'archivedAt' => new \DateTimeImmutable('-1 day')]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $archived, 'user' => $user]);
+        ReminderFactory::createOne(['organization' => $org, 'vehicle' => $archived, 'dueDate' => new \DateTimeImmutable('-1 day')]);
+
+        $this->jsonRequest('GET', '/api/reminders/overview', accessToken: $token);
+
+        self::assertResponseIsSuccessful();
+        /** @var list<array{id: int, urgency: string, currentKm: int, vehicle: array{id: int}}> $body */
+        $body = $this->jsonBody();
+        self::assertSame([$overdue->getId(), $oilSoon->getId(), $later->getId()], array_column($body, 'id'));
+        self::assertSame(['overdue', 'soon', 'ok'], array_column($body, 'urgency'));
+        self::assertSame(19_600, $body[1]['currentKm']);
+        self::assertSame($golf->getId(), $body[1]['vehicle']['id']);
+    }
+
     public function testUpcomingAggregatesAcrossTheOwnedVehicles(): void
     {
         [$user, $org, $token] = $this->createAuthenticatedUser();

@@ -6,7 +6,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/i18n';
 import { ApiError, authFetch } from '@/api/client';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { useThemeStore } from '@/stores/useThemeStore';
 import { SettingsPage } from './SettingsPage';
+
+// Nell'ambiente di test `localStorage` non esiste e il middleware persist di useThemeStore fallirebbe al primo set:
+// lo si finge prima che i moduli vengano importati.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => memory.get(k) ?? null,
+      setItem: (k: string, v: string) => void memory.set(k, v),
+      removeItem: (k: string) => void memory.delete(k),
+    },
+  });
+});
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
@@ -83,14 +98,21 @@ describe('SettingsPage — semantica', () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
   });
 
-  it('ha esattamente un h1 e le card come h2', () => {
+  it('ha esattamente un h1 e le sezioni raggruppate come h2', () => {
     renderPage();
 
     const h1 = screen.getAllByRole('heading', { level: 1 });
     expect(h1).toHaveLength(1);
-    expect(h1[0]).toHaveTextContent('Impostazioni');
+    expect(h1[0]).toHaveTextContent('Profilo');
     const h2 = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(h2).toEqual(expect.arrayContaining(['Profilo', 'Sicurezza', 'Preferenze']));
+    expect(h2).toEqual(expect.arrayContaining(['Profilo', 'Organizzazione', 'Preferenze']));
+  });
+
+  it('le righe di account aprono la modifica del profilo e il cambio password', async () => {
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cambia password' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   it('i select di lingua e tema hanno un nome accessibile', () => {
@@ -98,5 +120,40 @@ describe('SettingsPage — semantica', () => {
 
     expect(screen.getByRole('combobox', { name: 'Lingua' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Tema' })).toBeInTheDocument();
+  });
+});
+
+describe('SettingsPage — testo grande e organizzazione', () => {
+  beforeEach(async () => {
+    mockedAuthFetch.mockReset();
+    mockedAuthFetch.mockRejectedValue(new ApiError('http.404', 404));
+    await i18n.changeLanguage('it');
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
+    useThemeStore.setState({ largeText: false });
+  });
+
+  it("l'interruttore Testo grande accende la preferenza (lo zoom a pizzico è spento)", async () => {
+    renderPage();
+
+    const sw = screen.getByRole('switch', { name: 'Testo grande' });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(sw);
+    expect(useThemeStore.getState().largeText).toBe(true);
+  });
+
+  it("con più organizzazioni il cambio si fa dal Profilo (su mobile non c'è più la barra in alto)", () => {
+    useAuthStore.setState({
+      user: {
+        ...user,
+        memberships: [
+          ...user.memberships,
+          { id: 2, role: 'owner', organization: { id: 2, name: 'Famiglia', slug: 'famiglia' } },
+        ],
+      },
+    });
+    renderPage();
+
+    expect(screen.getByText('Cambia organizzazione')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cambia organizzazione/ })).toBeInTheDocument();
   });
 });

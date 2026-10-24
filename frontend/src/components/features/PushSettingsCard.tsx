@@ -1,18 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellOff, BellRing, KeyRound, RefreshCw, Send } from 'lucide-react';
+import { BellRing, KeyRound, RefreshCw, Send } from 'lucide-react';
 import {
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   FormField,
   Input,
-  Separator,
+  ListRow,
+  ListSection,
   Spinner,
+  Switch,
   Text,
 } from '@/components/ui';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -104,101 +102,91 @@ export function PushSettingsCard() {
     });
   }
 
+  const deviceNote =
+    push.status === 'unsupported'
+      ? t('settings.push.unsupported')
+      : push.status === 'sw-unavailable'
+        ? t('settings.push.sw_unavailable')
+        : push.status === 'not-configured'
+          ? t('settings.push.not_configured')
+          : push.status === 'denied'
+            ? t('settings.push.denied')
+            : push.status === 'loading'
+              ? t('actions.loading')
+              : undefined;
+  const deviceLabelId = useId();
+  const canToggle = push.status === 'subscribed' || push.status === 'unsubscribed';
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2" className="flex flex-wrap items-center gap-2">
-          <BellRing className="size-4" />
-          {t('settings.notifications')}
-          {isInstanceAdmin && settings.data && <SettingsSourceBadge source={settings.data.source} />}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* ── Questo dispositivo (tutti gli utenti) ── */}
-        {push.status === 'unsupported' && (
-          <Text variant="muted">{t('settings.push.unsupported')}</Text>
-        )}
-        {push.status === 'sw-unavailable' && (
-          <Text variant="muted">{t('settings.push.sw_unavailable')}</Text>
-        )}
-        {push.status === 'not-configured' && (
-          <Text variant="muted">{t('settings.push.not_configured')}</Text>
-        )}
-        {push.status === 'denied' && <Text variant="muted">{t('settings.push.denied')}</Text>}
-        {push.status === 'unsubscribed' && (
-          <Button onClick={() => void toggleSubscription('subscribe')}>
-            <Bell />
-            {t('settings.push.enable')}
-          </Button>
-        )}
-        {push.status === 'subscribed' && (
-          <Button variant="outline" onClick={() => void toggleSubscription('unsubscribe')}>
-            <BellOff />
-            {t('settings.push.disable')}
-          </Button>
-        )}
-        {push.status === 'loading' && <Text variant="muted">{t('actions.loading')}</Text>}
+    <div className="space-y-6">
+      {/* ── Questo dispositivo (tutti gli utenti): un interruttore come in Impostazioni › Notifiche ── */}
+      <ListSection title={t('settings.notifications')} footer={deviceNote}>
+        <ListRow
+          icon={<BellRing />}
+          iconClassName="bg-[#ff3b30]"
+          label={<span id={deviceLabelId}>{t('settings.push.this_device')}</span>}
+          value={
+            canToggle ? (
+              <Switch
+                checked={push.status === 'subscribed'}
+                onCheckedChange={(on) => void toggleSubscription(on ? 'subscribe' : 'unsubscribe')}
+                aria-labelledby={deviceLabelId}
+              />
+            ) : (
+              <span className="text-[0.9375rem]">{t('settings.push.unavailable')}</span>
+            )
+          }
+        />
+      </ListSection>
 
-        {/* ── Configurazione VAPID di istanza (solo instance admin) ── */}
-        {isInstanceAdmin && (
-          <>
-            <Separator />
-            <Text variant="muted">{t('settings.push.card_description')}</Text>
+      {/* ── Configurazione VAPID di istanza (solo instance admin) ── */}
+      {isInstanceAdmin && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 px-4 text-[0.8125rem] uppercase tracking-wide text-muted-foreground">
+            {t('settings.push.server_title')}
+            {settings.data && <SettingsSourceBadge source={settings.data.source} />}
+          </h2>
+          <Text variant="muted" className="px-4 text-[0.8125rem]">
+            {t('settings.push.card_description')}
+          </Text>
 
-            {!hasKeys ? (
-              <div className="space-y-3">
-                <Text variant="muted">{t('settings.push.no_keys')}</Text>
-                <Button type="button" disabled={generate.isPending} onClick={doGenerate}>
-                  {generate.isPending ? <Spinner size="sm" /> : <KeyRound />}
-                  {t('settings.push.generate')}
+          {!hasKeys ? (
+            <div className="space-y-3">
+              <Text variant="muted" className="px-4 text-[0.8125rem]">
+                {t('settings.push.no_keys')}
+              </Text>
+              <Button type="button" fullWidth disabled={generate.isPending} onClick={doGenerate}>
+                {generate.isPending ? <Spinner size="sm" /> : <KeyRound />}
+                {t('settings.push.generate')}
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
+              <FormField label={t('settings.push.public_key')} hint={t('settings.push.public_key_hint')}>
+                {(id) => <Input id={id} readOnly value={settings.data?.publicKey ?? ''} className="font-mono text-xs" />}
+              </FormField>
+
+              <FormField label={t('settings.push.subject')} hint={t('settings.push.subject_hint')} error={tErr(errors.subject?.message)}>
+                {(id) => <Input id={id} placeholder="mailto:admin@example.com" {...form.register('subject')} />}
+              </FormField>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="submit" disabled={save.isPending}>
+                  {save.isPending ? <Spinner size="sm" /> : t('actions.save')}
+                </Button>
+                <Button type="button" variant="outline" disabled={test.isPending} onClick={sendTest}>
+                  {test.isPending ? <Spinner size="sm" /> : <Send />}
+                  {t('settings.push.send_test')}
+                </Button>
+                <Button type="button" variant="outline" disabled={generate.isPending} onClick={() => setConfirmRegen(true)}>
+                  {generate.isPending ? <Spinner size="sm" /> : <RefreshCw />}
+                  {t('settings.push.regenerate')}
                 </Button>
               </div>
-            ) : (
-              <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
-                <FormField label={t('settings.push.public_key')} hint={t('settings.push.public_key_hint')}>
-                  {(id) => (
-                    <Input id={id} readOnly value={settings.data?.publicKey ?? ''} className="font-mono text-xs" />
-                  )}
-                </FormField>
-
-                <FormField
-                  label={t('settings.push.subject')}
-                  hint={t('settings.push.subject_hint')}
-                  error={tErr(errors.subject?.message)}
-                >
-                  {(id) => (
-                    <Input id={id} placeholder="mailto:admin@example.com" {...form.register('subject')} />
-                  )}
-                </FormField>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="submit" disabled={save.isPending}>
-                    {save.isPending ? <Spinner size="sm" /> : t('actions.save')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={test.isPending}
-                    onClick={sendTest}
-                  >
-                    {test.isPending ? <Spinner size="sm" /> : <Send />}
-                    {t('settings.push.send_test')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={generate.isPending}
-                    onClick={() => setConfirmRegen(true)}
-                  >
-                    {generate.isPending ? <Spinner size="sm" /> : <RefreshCw />}
-                    {t('settings.push.regenerate')}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
-      </CardContent>
+            </form>
+          )}
+        </section>
+      )}
 
       <ConfirmDialog
         open={confirmRegen}
@@ -209,6 +197,6 @@ export function PushSettingsCard() {
         isPending={generate.isPending}
         onConfirm={doGenerate}
       />
-    </Card>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { applyTheme } from './useThemeStore';
+import { applyTextSize, applyTheme } from './useThemeStore';
 
 function mockSystemDark(dark: boolean) {
   vi.stubGlobal(
@@ -80,5 +80,33 @@ describe('useThemeStore (persistenza)', () => {
     await store.persist.rehydrate();
 
     expect(store.getState().theme).toBe('light');
+  });
+});
+
+describe('colore delle barre di sistema e testo grande', () => {
+  afterEach(() => {
+    document.querySelector('meta[name="theme-color"]')?.remove();
+    document.documentElement.classList.remove('text-large');
+  });
+
+  it('il theme-color segue il tema risolto, così status bar e browser hanno lo sfondo dell\'app', () => {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+
+    mockSystemDark(true);
+    applyTheme('system');
+    expect(meta.content).toBe('#000000');
+
+    applyTheme('light');
+    expect(meta.content).toBe('#f2f2f7');
+  });
+
+  it('il testo grande mette e toglie la class text-large su <html>', () => {
+    applyTextSize(true);
+    expect(document.documentElement).toHaveClass('text-large');
+
+    applyTextSize(false);
+    expect(document.documentElement).not.toHaveClass('text-large');
   });
 });

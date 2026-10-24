@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Car } from 'lucide-react';
 import { CardContent, CardTitle } from './Card';
-import { StatCard } from '@/components/features/StatCard';
 
 /**
  * Regressione: da desktop le card senza CardHeader avevano padding-top 0 e
@@ -32,12 +30,6 @@ describe('CardContent', () => {
     const cls = (container.firstElementChild as HTMLElement).className;
     expect(cls).toContain('flex items-center gap-4');
     expect(cls).not.toMatch(/pt-0|md:p-6/);
-  });
-
-  it('StatCard non eredita il padding-top zero del default', () => {
-    const { container } = render(<StatCard Icon={Car} label="Veicoli" value={1} />);
-    const content = container.querySelector('.flex.flex-col') as HTMLElement;
-    expect(content.className).not.toMatch(/pt-0|md:p-6/);
   });
 });
 

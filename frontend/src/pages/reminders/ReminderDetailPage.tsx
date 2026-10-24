@@ -1,20 +1,16 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Check, Pencil, Trash2 } from 'lucide-react';
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-} from '@/components/ui';
+import { Check } from 'lucide-react';
+import { Alert, Button, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import {
   CompleteReminderDialog,
   ConfirmDialog,
+  DeleteRow,
+  EditLink,
+  InfoList,
+  InfoRow,
   ReminderBadge,
   ReminderRecurrenceText,
 } from '@/components/features';
@@ -57,90 +53,43 @@ export function ReminderDetailPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t(`reminder.type_options.${data.type}`)}
-        description={data.description}
-        onBack={() => navigate(`/reminders?vehicleId=${data.vehicleId}`)}
-        action={
-          canEdit ? (
-            <>
-              <Button variant="outline" size="icon" asChild aria-label={t('actions.edit')}>
-                <Link to={`/reminders/${data.id}/edit`}>
-                  <Pencil />
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setConfirmOpen(true)}
-                aria-label={t('actions.delete')}
-              >
-                <Trash2 />
-              </Button>
-            </>
-          ) : undefined
+        title={data.description || t(`reminder.type_options.${data.type}`)}
+        // Il tipo come sottotitolo solo se dice qualcosa in più del titolo (es. "Cambio olio" → "Tagliando").
+        description={
+          data.description && data.description !== t(`reminder.type_options.${data.type}`)
+            ? t(`reminder.type_options.${data.type}`)
+            : undefined
         }
+        onBack={() => navigate(`/reminders?vehicleId=${data.vehicleId}`)}
+        action={canEdit ? <EditLink to={`/reminders/${data.id}/edit`} /> : undefined}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {t('reminder.info')}
-            <ReminderBadge reminder={data} />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            {data.dueDate && (
-              <div>
-                <dt className="text-muted-foreground">{t('reminder.due_date')}</dt>
-                <dd className="font-medium">{fmt.date(data.dueDate)}</dd>
-              </div>
-            )}
-            {data.dueKm != null && (
-              <div>
-                <dt className="text-muted-foreground">{t('reminder.due_km')}</dt>
-                <dd className="font-medium">{fmt.km(data.dueKm)}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-muted-foreground">{t('reminder.notify_days_before')}</dt>
-              <dd className="font-medium">{data.notifyDaysBefore} {t('reminder.days')}</dd>
-            </div>
-            {data.dueKm != null && (
-              <div>
-                <dt className="text-muted-foreground">{t('reminder.notify_km_before')}</dt>
-                <dd className="font-medium">{fmt.km(data.notifyKmBefore)}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-muted-foreground">{t('reminder.recurrence')}</dt>
-              <dd className="font-medium">
-                {isRecurringReminder(data) ? <ReminderRecurrenceText reminder={data} /> : t('reminder.one_off')}
-              </dd>
-            </div>
-            {data.completedAt && (
-              <div>
-                <dt className="text-muted-foreground">{t('reminder.completed_at')}</dt>
-                {/* Data effettiva del lavoro; i completamenti precedenti hanno solo l'istante del click. */}
-                <dd className="font-medium">{fmt.date(data.completedOn ?? data.completedAt)}</dd>
-              </div>
-            )}
-            {data.completedKm != null && (
-              <div>
-                <dt className="text-muted-foreground">{t('reminder.completed_km')}</dt>
-                <dd className="font-medium">{fmt.km(data.completedKm)}</dd>
-              </div>
-            )}
-          </dl>
+      {/* L'azione principale di un promemoria aperto, grande e in cima: come "Completa" nelle app iOS. */}
+      {!isDone && canEdit && (
+        <Button size="lg" fullWidth onClick={() => setCompleteOpen(true)}>
+          <Check />
+          {t('reminder.mark_complete')}
+        </Button>
+      )}
 
-          {!isDone && canEdit && (
-            <Button variant="primary" fullWidth onClick={() => setCompleteOpen(true)}>
-              <Check />
-              {t('reminder.mark_complete')}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <InfoList>
+        <InfoRow label={t('reminder.status')} value={<ReminderBadge reminder={data} />} />
+        {data.dueDate && <InfoRow label={t('reminder.due_date')} value={fmt.date(data.dueDate)} />}
+        {data.dueKm != null && <InfoRow label={t('reminder.due_km')} value={fmt.km(data.dueKm)} />}
+        <InfoRow
+          label={t('reminder.recurrence')}
+          value={isRecurringReminder(data) ? <ReminderRecurrenceText reminder={data} /> : t('reminder.one_off')}
+        />
+        <InfoRow label={t('reminder.notify_days_before')} value={`${data.notifyDaysBefore} ${t('reminder.days')}`} />
+        {data.dueKm != null && <InfoRow label={t('reminder.notify_km_before')} value={fmt.km(data.notifyKmBefore)} />}
+        {data.completedAt && (
+          // Data effettiva del lavoro; i completamenti precedenti hanno solo l'istante del click.
+          <InfoRow label={t('reminder.completed_at')} value={fmt.date(data.completedOn ?? data.completedAt)} />
+        )}
+        {data.completedKm != null && <InfoRow label={t('reminder.completed_km')} value={fmt.km(data.completedKm)} />}
+      </InfoList>
+
+      {canEdit && <DeleteRow label={t('reminder.delete.action')} onDelete={() => setConfirmOpen(true)} />}
 
       <CompleteReminderDialog
         open={completeOpen}

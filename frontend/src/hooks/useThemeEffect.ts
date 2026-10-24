@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
-import { applyTheme, useThemeStore } from '@/stores/useThemeStore';
+import { applyTextSize, applyTheme, useThemeStore } from '@/stores/useThemeStore';
 
 /**
- * useThemeEffect — applica la class 'dark' su <html> in base al theme store.
- * Riascolta i cambi di prefers-color-scheme quando theme='system'.
+ * useThemeEffect — applica l'aspetto scelto su <html>: class 'dark' (riascoltando prefers-color-scheme quando
+ * theme='system') e class 'text-large' per il testo grande.
  */
 export function useThemeEffect() {
   const theme = useThemeStore((s) => s.theme);
+  const largeText = useThemeStore((s) => s.largeText);
 
   useEffect(() => {
     applyTheme(theme);
@@ -17,4 +18,8 @@ export function useThemeEffect() {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, [theme]);
+
+  useEffect(() => {
+    applyTextSize(largeText);
+  }, [largeText]);
 }

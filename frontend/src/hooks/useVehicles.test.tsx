@@ -88,7 +88,7 @@ describe('useVehicles / useArchivedVehicles', () => {
     qc.setQueryData(vehicleKeys.lists(), active);
     qc.setQueryData(vehicleKeys.archivedList(), archived);
     qc.setQueryData(dashboardKeys.charts(12), { some: 'charts' });
-    qc.setQueryData(reminderKeys.upcoming(30, 5), []);
+    qc.setQueryData(reminderKeys.overview(), []);
 
     const { result } = renderHook(useMutationHook, { wrapper });
     await act(async () => {
@@ -98,6 +98,6 @@ describe('useVehicles / useArchivedVehicles', () => {
     expect(qc.getQueryState(vehicleKeys.lists())?.isInvalidated).toBe(true);
     expect(qc.getQueryState(vehicleKeys.archivedList())?.isInvalidated).toBe(true);
     expect(qc.getQueryState(dashboardKeys.charts(12))?.isInvalidated).toBe(true);
-    expect(qc.getQueryState(reminderKeys.upcoming(30, 5))?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(reminderKeys.overview())?.isInvalidated).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Upload } from 'lucide-react';
-import { Button, Spinner } from '@/components/ui';
+import { Paperclip } from 'lucide-react';
+import { ListRow, Spinner } from '@/components/ui';
 import { useToast } from '@/hooks/useToast';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useUploadAttachment } from '@/hooks/useAttachments';
@@ -17,8 +17,8 @@ export interface AttachmentUploaderProps {
 }
 
 /**
- * Bottone "Aggiungi" che apre il file picker nativo (su mobile include la
- * fotocamera). Valida la size client-side prima dell'upload e mostra toast.
+ * Riga "Aggiungi foto o documenti" che apre il file picker nativo (su mobile include la fotocamera).
+ * Valida la size client-side prima dell'upload e mostra toast.
  */
 export function AttachmentUploader({ entityType, entityId }: AttachmentUploaderProps) {
   const { t } = useTranslation();
@@ -52,15 +52,18 @@ export function AttachmentUploader({ entityType, entityId }: AttachmentUploaderP
         className="hidden"
         onChange={onChange}
       />
-      <Button
-        type="button"
-        size="sm"
-        disabled={upload.isPending || entityId <= 0}
-        onClick={() => inputRef.current?.click()}
-      >
-        {upload.isPending ? <Spinner size="sm" /> : <Upload />}
-        {t('attachment.add')}
-      </Button>
+      <div className="overflow-hidden rounded-xl bg-card [&_.list-row-body]:border-b-0">
+        <ListRow
+          as="button"
+          type="button"
+          disabled={upload.isPending || entityId <= 0}
+          onClick={() => inputRef.current?.click()}
+          icon={upload.isPending ? <Spinner size="sm" /> : <Paperclip />}
+          iconClassName="bg-[#8e8e93]"
+          label={<span className="text-primary">{t('attachment.add')}</span>}
+          className="disabled:opacity-60"
+        />
+      </div>
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { Bell, Repeat } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui';
+import { Bell } from 'lucide-react';
+import { ListRow } from '@/components/ui';
+import { MetaLine } from './MetaLine';
 import { ReminderBadge } from './ReminderBadge';
 import { ReminderRecurrenceText } from './ReminderRecurrenceText';
 import { useFormat } from '@/hooks/useFormat';
@@ -10,52 +10,34 @@ import { isRecurringReminder, type Reminder } from '@/api/types/reminder';
 
 export interface ReminderCardProps {
   reminder: Reminder;
-  /** Mostra il nome del veicolo (utile in liste che aggregano più veicoli, es. dashboard). */
+  /** Mostra il nome del veicolo (liste che mescolano più veicoli, es. la Home). */
   showVehicleName?: boolean;
 }
 
-export function ReminderCard({ reminder, showVehicleName }: ReminderCardProps) {
-  const { t } = useTranslation();
+/** Un promemoria come riga di lista iOS: cosa, poi veicolo, data, km e ricorrenza; urgenza a destra. */
+export function ReminderCard({ reminder: r, showVehicleName }: ReminderCardProps) {
   const fmt = useFormat();
-  const r = reminder;
   const vehicleName = useVehicleName(r.vehicleId);
 
   return (
-    <Card>
-      <Link to={`/reminders/${r.id}`} className="block">
-        <CardContent standalone className="flex items-start gap-4">
-          <div className="rounded-md bg-primary/10 p-3">
-            <Bell className="size-5 text-primary" />
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="truncate text-base font-semibold">
-                {t(`reminder.type_options.${r.type}`)}
-              </h3>
-              <ReminderBadge reminder={r} />
-            </div>
-            {showVehicleName && vehicleName && (
-              <p className="truncate text-sm text-muted-foreground">{vehicleName}</p>
-            )}
-            <p className="line-clamp-2 text-sm text-muted-foreground">{r.description}</p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {r.dueDate && <span>{fmt.date(r.dueDate)}</span>}
-              {r.dueDate && r.dueKm != null && <span>·</span>}
-              {r.dueKm != null && <span>{fmt.km(r.dueKm)}</span>}
-              {isRecurringReminder(r) && (
-                <>
-                  <span>·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Repeat className="size-3" aria-hidden="true" />
-                    <ReminderRecurrenceText reminder={r} />
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Link>
-    </Card>
+    <ListRow
+      as={Link}
+      to={`/reminders/${r.id}`}
+      icon={<Bell />}
+      iconClassName="bg-[#ff3b30]"
+      label={r.description}
+      description={
+        <MetaLine
+          parts={[
+            showVehicleName ? vehicleName : null,
+            r.dueDate ? fmt.date(r.dueDate) : null,
+            r.dueKm != null ? fmt.km(r.dueKm) : null,
+            isRecurringReminder(r) ? <ReminderRecurrenceText reminder={r} /> : null,
+          ]}
+        />
+      }
+      value={<ReminderBadge reminder={r} />}
+      chevron
+    />
   );
 }

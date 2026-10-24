@@ -23,8 +23,8 @@ export default defineConfig({
         name: 'Brumy — Gestione veicoli',
         short_name: 'Brumy',
         description: 'Manutenzioni, rifornimenti, spese e scadenze per i tuoi veicoli',
-        theme_color: '#0f172a',          // slate-900
-        background_color: '#0f172a',
+        theme_color: '#f2f2f7',          // sfondo dell'app (iOS systemGroupedBackground)
+        background_color: '#f2f2f7',
         display: 'standalone',
         orientation: 'portrait-primary',  // mobile-first
         scope: '/',

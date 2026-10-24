@@ -57,7 +57,8 @@ describe('ExpenseDetailPage — spese ricorrenti', () => {
     renderPage(response({ recurring: true, recurringPeriod: 'monthly', recurringUntil: '2026-06-15T00:00:00+00:00' }));
 
     expect(await screen.findByText('Mensile')).toBeInTheDocument();
-    expect(screen.getByText('fino al 15 giu 2026')).toBeInTheDocument();
+    // Riga "Fino al" (dt) con la data (dd).
+    expect(screen.getByText('Fino al', { selector: 'dt' }).nextElementSibling).toHaveTextContent('15 giu 2026');
     expect(screen.getByText(/conteggiata a ogni addebito già avvenuto/)).toBeInTheDocument();
   });
 
@@ -65,7 +66,7 @@ describe('ExpenseDetailPage — spese ricorrenti', () => {
     renderPage(response({ recurring: true, recurringPeriod: 'yearly' }));
 
     expect(await screen.findByText('Annuale')).toBeInTheDocument();
-    expect(screen.queryByText(/fino al/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Fino al', { selector: 'dt' })).not.toBeInTheDocument();
     expect(screen.getByText(/conteggiata a ogni addebito già avvenuto/)).toBeInTheDocument();
   });
 
@@ -74,6 +75,6 @@ describe('ExpenseDetailPage — spese ricorrenti', () => {
 
     expect(await screen.findByText('Telepass')).toBeInTheDocument();
     expect(screen.queryByText(/conteggiata a ogni addebito/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/fino al/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Fino al', { selector: 'dt' })).not.toBeInTheDocument();
   });
 });

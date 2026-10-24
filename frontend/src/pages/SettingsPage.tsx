@@ -1,38 +1,35 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Building2,
+  ArrowLeftRight,
   Globe,
   KeyRound,
   LogOut,
   Mail,
   Moon,
-  Pencil,
   Sun,
-  User as UserIcon,
+  Type,
 } from 'lucide-react';
 import {
   Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  ListRow,
+  ListSection,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
   Spinner,
-  Text,
+  Switch,
 } from '@/components/ui';
-import { PageHeader } from '@/components/layout';
+import { EmailVerificationBanner, PageHeader } from '@/components/layout';
 import {
   ChangePasswordDialog,
   EditOrganizationDialog,
   EditProfileDialog,
   MembersCard,
+  OrganizationSwitcher,
   PushSettingsCard,
   UserAvatar,
 } from '@/components/features';
@@ -47,34 +44,16 @@ import i18n from '@/i18n';
 
 type DialogKey = 'profile' | 'password' | 'org' | null;
 
-/** Riga info: icona + etichetta + valore. */
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-4 py-1">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="text-muted-foreground">{icon}</span>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <div className="truncate font-medium">{value}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+/** Select come "pop-up button" di iOS: solo il valore in grigio con le frecce, senza riquadro. */
+const IOS_POPUP_TRIGGER = 'h-auto min-h-touch w-auto gap-1 border-0 bg-transparent px-0 text-[1.0625rem] text-muted-foreground shadow-none';
 
 export function SettingsPage() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const largeText = useThemeStore((s) => s.largeText);
+  const setLargeText = useThemeStore((s) => s.setLargeText);
   const logout = useLogout();
   const updateProfile = useUpdateProfile();
   const { toast } = useToast();
@@ -82,6 +61,7 @@ export function SettingsPage() {
 
   const languageLabelId = useId();
   const themeLabelId = useId();
+  const largeTextLabelId = useId();
 
   const [dialog, setDialog] = useState<DialogKey>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -130,111 +110,76 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('nav.settings')} />
+      <PageHeader title={t('nav.tabs.profile')} />
+      <EmailVerificationBanner />
 
-      {/* ── Profilo (info utente) ─────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle as="h2" className="flex items-center gap-2">
-            <UserIcon className="size-4" />
-            {t('settings.profile')}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
+      {/* ── Account: riga con avatar (apre la modifica del profilo), email e password ───────────── */}
+      {user && (
+        <ListSection title={t('settings.profile')}>
+          <ListRow
+            as="button"
+            type="button"
             onClick={() => setDialog('profile')}
-            aria-label={t('actions.edit')}
-          >
-            <Pencil />
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {user && (
-            <>
-              <div className="flex items-center gap-4">
+            aria-label={t('account.edit_profile')}
+            className="py-1.5"
+            label={
+              <span className="flex items-center gap-3 py-1">
                 <UserAvatar user={user} />
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold">
+                <span className="min-w-0">
+                  <span className="block truncate text-xl font-semibold">
                     {user.firstName} {user.lastName}
-                  </p>
-                  <p className="truncate text-sm text-muted-foreground">{user.email}</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <InfoRow
-                icon={<UserIcon className="size-4" />}
-                label={t('account.name')}
-                value={`${user.firstName} ${user.lastName}`}
-              />
-              <InfoRow
-                icon={<Mail className="size-4" />}
-                label={t('account.email')}
-                value={user.email}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Sicurezza ─────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle as="h2" className="flex items-center gap-2">
-            <KeyRound className="size-4" />
-            {t('settings.security')}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setDialog('password')}
-            aria-label={t('account.change_password')}
-          >
-            <Pencil />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <InfoRow
-            icon={<KeyRound className="size-4" />}
-            label={t('account.password')}
-            value="••••••••"
+                  </span>
+                  <span className="block truncate text-[0.9375rem] text-muted-foreground">{user.email}</span>
+                </span>
+              </span>
+            }
+            chevron
           />
-        </CardContent>
-      </Card>
+          <ListRow
+            as="button"
+            type="button"
+            onClick={() => setDialog('profile')}
+            icon={<Mail />}
+            iconClassName="bg-[#007aff]"
+            label={t('account.email')}
+            value={<span className="truncate">{user.email}</span>}
+            chevron
+          />
+          <ListRow
+            as="button"
+            type="button"
+            onClick={() => setDialog('password')}
+            icon={<KeyRound />}
+            iconClassName="bg-[#8e8e93]"
+            label={t('account.change_password')}
+            chevron
+          />
+        </ListSection>
+      )}
 
       {/* ── Organizzazione ────────────────────────────────────── */}
       {membership && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-            <CardTitle as="h2" className="flex items-center gap-2">
-              <Building2 className="size-4" />
-              {t('settings.organization')}
-            </CardTitle>
-            {canEditOrg && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setDialog('org')}
-                aria-label={t('actions.edit')}
-              >
-                <Pencil />
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            <InfoRow
-              icon={<Building2 className="size-4" />}
-              label={t('account.org_name')}
-              value={
-                <span className="flex items-center gap-2">
-                  {membership.organization.name}
-                  <Badge variant="secondary">{t(`settings.role.${membership.role}`)}</Badge>
-                </span>
-              }
+        <ListSection title={t('settings.organization')}>
+          <ListRow
+            {...(canEditOrg
+              ? { as: 'button' as const, type: 'button' as const, onClick: () => setDialog('org'), chevron: true }
+              : {})}
+            icon={<Building2 />}
+            iconClassName="bg-[#5856d6]"
+            label={membership.organization.name}
+            value={<Badge variant="secondary">{t(`settings.role.${membership.role}`)}</Badge>}
+          />
+          {/* Su mobile non c'è la barra in alto col nome: con più organizzazioni si cambia da qui. */}
+          {(user?.memberships.length ?? 0) > 1 && (
+            <ListRow
+              className="md:hidden"
+              icon={<ArrowLeftRight />}
+              iconClassName="bg-[#34c759]"
+              label={t('org.switch.label')}
+              value={<OrganizationSwitcher className="min-w-0 max-w-[10rem] text-primary" />}
             />
-          </CardContent>
-        </Card>
+          )}
+        </ListSection>
       )}
 
       {/* ── Membri organizzazione (owner/admin) ───────────────── */}
@@ -247,64 +192,73 @@ export function SettingsPage() {
       )}
 
       {/* ── Preferenze app ────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">{t('settings.preferences')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Globe className="size-4 text-muted-foreground" />
-              <Text id={languageLabelId}>{t('settings.language')}</Text>
-            </div>
+      <ListSection title={t('settings.preferences')}>
+        <ListRow
+          icon={<Globe />}
+          iconClassName="bg-[#007aff]"
+          label={<span id={languageLabelId}>{t('settings.language')}</span>}
+          value={
             <Select
               value={i18n.language.startsWith('en') ? 'en' : 'it'}
               onValueChange={(v) => changeLanguage(v as 'it' | 'en')}
               disabled={updateProfile.isPending}
             >
-              <SelectTrigger className="w-32" aria-labelledby={languageLabelId}>
+              <SelectTrigger className={IOS_POPUP_TRIGGER} aria-labelledby={languageLabelId}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent align="end">
                 <SelectItem value="it">Italiano</SelectItem>
                 <SelectItem value="en">English</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              {theme === 'dark' ? (
-                <Moon className="size-4 text-muted-foreground" />
-              ) : (
-                <Sun className="size-4 text-muted-foreground" />
-              )}
-              <Text id={themeLabelId}>{t('settings.theme')}</Text>
-            </div>
+          }
+        />
+        <ListRow
+          icon={theme === 'dark' ? <Moon /> : <Sun />}
+          iconClassName="bg-[#5856d6]"
+          label={<span id={themeLabelId}>{t('settings.theme')}</span>}
+          value={
             <Select value={theme} onValueChange={(v) => setTheme(v as Theme)}>
-              <SelectTrigger className="w-32" aria-labelledby={themeLabelId}>
+              <SelectTrigger className={IOS_POPUP_TRIGGER} aria-labelledby={themeLabelId}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent align="end">
                 <SelectItem value="light">{t('settings.theme_light')}</SelectItem>
                 <SelectItem value="dark">{t('settings.theme_dark')}</SelectItem>
                 <SelectItem value="system">{t('settings.theme_system')}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </CardContent>
-      </Card>
+          }
+        />
+        <ListRow
+          icon={<Type />}
+          iconClassName="bg-[#007aff]"
+          label={<span id={largeTextLabelId}>{t('settings.large_text')}</span>}
+          description={t('settings.large_text_hint')}
+          value={<Switch checked={largeText} onCheckedChange={setLargeText} aria-labelledby={largeTextLabelId} />}
+        />
+      </ListSection>
 
       {/* ── Notifiche push: sottoscrizione dispositivo (tutti) + VAPID (solo owner) ── */}
       <PushSettingsCard />
 
-      {/* ── Logout ────────────────────────────────────────────── */}
-      <Button variant="destructive" fullWidth disabled={loggingOut} onClick={() => void onLogout()}>
-        {loggingOut ? <Spinner size="sm" /> : <LogOut />}
-        {t('auth.logout')}
-      </Button>
+      {/* ── Logout: riga rossa come in iOS ───────────────────── */}
+      <ListSection>
+        <ListRow
+          as="button"
+          type="button"
+          disabled={loggingOut}
+          onClick={() => void onLogout()}
+          destructive
+          className="justify-center disabled:opacity-50"
+          label={
+            <span className="flex items-center justify-center gap-2">
+              {loggingOut ? <Spinner size="sm" /> : <LogOut className="size-5" />}
+              {t('auth.logout')}
+            </span>
+          }
+        />
+      </ListSection>
 
       {/* ── Modali ────────────────────────────────────────────── */}
       {user && (

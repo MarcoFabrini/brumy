@@ -17,6 +17,7 @@ use App\Service\AppClock;
 use App\Service\AttachmentCleaner;
 use App\Service\ReminderAlreadyCompletedException;
 use App\Service\ReminderCompletion;
+use App\Service\ReminderOverview;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,6 +27,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'Reminder')]
@@ -44,6 +46,8 @@ final class ReminderController extends AbstractController
         private readonly ReminderCompletion $completion,
         private readonly AppClock $clock,
         private readonly SerializerInterface $serializer,
+        private readonly NormalizerInterface $normalizer,
+        private readonly ReminderOverview $overview,
     ) {
     }
 
@@ -95,6 +99,25 @@ final class ReminderController extends AbstractController
         // veicolo condiviso in sola lettura) non sono affar suo.
         $reminders = $this->repo->findUpcomingForOwner($org, $user, $days, $limit);
         return $this->jsonGroups($reminders, ['reminder:list', 'vehicle:nested']);
+    }
+
+    #[OA\Get(
+        summary: 'All active reminders of the vehicles the caller owns, with their urgency',
+        description: 'Date- and km-based reminders of the caller\'s own active vehicles (not shared ones, nor, for org owner/admin, the other members\'), each with `urgency` (ok | soon | overdue, date and km together, like notifications) and the vehicle `currentKm`. Sorted: overdue, soon, ok; then nearest date, then fewest km left.',
+        responses: [new OA\Response(response: 200, description: 'Array of reminders (reminder:list + vehicle:nested) with urgency and currentKm')],
+    )]
+    #[Route('/overview', name: 'overview', methods: ['GET'])]
+    public function overview(): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $items = $this->overview->forOwner($this->orgResolver->resolve(), $user);
+
+        return $this->json(array_map(fn (array $item): array => [
+            ...(array) $this->normalizer->normalize($item['reminder'], 'json', ['groups' => ['reminder:list', 'vehicle:nested']]),
+            'urgency' => $item['urgency']->value,
+            'currentKm' => $item['currentKm'],
+        ], $items));
     }
 
     #[OA\Get(

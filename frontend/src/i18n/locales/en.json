@@ -13,7 +13,13 @@
     "attachments": "Attachments",
     "settings": "Settings",
     "primary": "Main navigation",
-    "primary_mobile": "Main mobile navigation"
+    "primary_mobile": "Main mobile navigation",
+    "tabs": {
+      "home": "Home",
+      "vehicles": "Vehicles",
+      "deadlines": "Deadlines",
+      "profile": "Profile"
+    }
   },
   "org": {
     "switch": {
@@ -112,19 +118,13 @@
     "none": "None",
     "optional": "Optional",
     "coming_soon": "Coming soon",
-    "loading": "Loading"
+    "loading": "Loading",
+    "notes": "Notes"
   },
   "dashboard": {
-    "total_cost": "Total spent",
     "your_vehicles": "Your vehicles",
-    "view_all": "View all",
-    "vehicle_count_one": "{{count}} vehicle",
-    "vehicle_count_other": "{{count}} vehicles",
-    "upcoming_reminders": "Upcoming reminders",
-    "upcoming_reminders_empty": "No due dates on your vehicles in the next 30 days.",
-    "partial_totals": "Some vehicles failed to load: totals are partial.",
-    "owned_only_hint_one": "Totals, charts and due dates only cover your own vehicles: {{count}} vehicle you can see but don't own is left out.",
-    "owned_only_hint_other": "Totals, charts and due dates only cover your own vehicles: {{count}} vehicles you can see but don't own are left out.",
+    "owned_only_hint_one": "{{count}} vehicle you can see but don't own is in the Vehicles tab.",
+    "owned_only_hint_other": "{{count}} vehicles you can see but don't own are in the Vehicles tab.",
     "charts": {
       "title": "Trends",
       "subtitle": "Last {{months}} months, your vehicles only",
@@ -158,19 +158,31 @@
         "consumption": "At least two consecutive full tanks are needed to work out consumption."
       },
       "invalid_response": "Chart data is invalid: try again later."
-    }
+    },
+    "month": {
+      "title": "Spent this month",
+      "more": "{{amount}} more than last month",
+      "less": "{{amount}} less than last month",
+      "same": "Same as last month",
+      "other_expenses": "Other expenses"
+    },
+    "todo": "To do",
+    "todo_none": "Nothing due soon",
+    "see_all_deadlines": "See all deadlines",
+    "add_vehicle": "Add a vehicle"
   },
   "quick_add": {
     "open": "Add",
     "choose_vehicle": "Choose a vehicle",
-    "description": "Choose a vehicle, then what to add.",
-    "new_vehicle": "New vehicle"
+    "description": "Choose what to log: the vehicle is already selected.",
+    "new_vehicle": "New vehicle",
+    "vehicle": "Vehicle",
+    "form_description": "Fill in and save: the vehicle is already selected, you can change it at the top."
   },
   "maintenance": {
     "new": "New maintenance",
     "new_description": "Log a maintenance task performed.",
     "edit": "Edit maintenance",
-    "info": "Maintenance details",
     "info_description": "Job information.",
     "type": "Type",
     "category": "Category",
@@ -185,7 +197,8 @@
     "deleted": "Maintenance deleted",
     "delete": {
       "title": "Delete maintenance?",
-      "description": "This is irreversible."
+      "description": "This is irreversible.",
+      "action": "Delete maintenance"
     },
     "list": {
       "description": "Maintenance history for vehicle."
@@ -258,7 +271,10 @@
       "test_sent": "Test notification sent ({{count}} device(s))",
       "generated": "VAPID keys generated ({{count}} subscriptions removed: users must re-enable notifications)",
       "regenerate_confirm_title": "Regenerate VAPID keys?",
-      "regenerate_confirm_description": "All existing push subscriptions will stop working and every user will have to re-enable notifications. This cannot be undone."
+      "regenerate_confirm_description": "All existing push subscriptions will stop working and every user will have to re-enable notifications. This cannot be undone.",
+      "this_device": "This device",
+      "unavailable": "Unavailable",
+      "server_title": "Server push notifications"
     },
     "profile": "Profile",
     "profile_description": "Your personal details.",
@@ -295,14 +311,16 @@
       "role_self_demoted": "You will no longer be an owner: you will become {{role}} and lose control of the organization. Getting the role back will need another owner. Your pending invitations will be deleted.",
       "role_admin_to_member": "{{name}} will no longer be an admin and will only see the vehicles they own or that are shared with them. The pending invitations they sent will be deleted; the vehicles they own stay theirs.",
       "role_member_to_admin": "{{name}} will become an admin: they will be able to view, edit, archive and delete every vehicle of the organization, manage members and invite more people.",
-      "role_updated": "Role updated."
-    }
+      "role_updated": "Role updated.",
+      "invite_description": "They get an email with the link to join the organization."
+    },
+    "large_text": "Large text",
+    "large_text_hint": "Makes text larger across the app. On iPhone it also follows the iOS text size."
   },
   "reminder": {
     "new": "New reminder",
     "new_description": "Create a deadline to track.",
     "edit": "Edit reminder",
-    "info": "Reminder details",
     "type": "Type",
     "description": "Description",
     "due_date": "Due (date)",
@@ -348,7 +366,8 @@
     "deleted": "Reminder deleted",
     "delete": {
       "title": "Delete reminder?",
-      "description": "This is irreversible."
+      "description": "This is irreversible.",
+      "action": "Delete reminder"
     },
     "list": {
       "description": "Vehicle deadlines."
@@ -378,13 +397,23 @@
       "license": "License",
       "extinguisher": "Extinguisher",
       "custom": "Custom"
-    }
+    },
+    "overview": {
+      "overdue": "Overdue",
+      "soon": "Due soon",
+      "later": "Later",
+      "km_left": "at {{due}} ({{left}} to go)",
+      "km_over": "at {{due}} ({{over}} over)",
+      "empty_title": "No deadlines",
+      "empty_description": "Your vehicles' reminders show up here, most urgent first. Add one with \"+\".",
+      "complete": "Complete"
+    },
+    "status": "Status"
   },
   "expense": {
     "new": "New expense",
     "new_description": "Log a vehicle expense.",
     "edit": "Edit expense",
-    "info": "Expense details",
     "occurred_at": "Date",
     "category": "Category",
     "description": "Description",
@@ -403,7 +432,8 @@
     "deleted": "Expense deleted",
     "delete": {
       "title": "Delete expense?",
-      "description": "This is irreversible."
+      "description": "This is irreversible.",
+      "action": "Delete expense"
     },
     "list": {
       "description": "Vehicle expenses."
@@ -438,13 +468,13 @@
       "semiannual": "Semiannual",
       "yearly": "Yearly",
       "biennial": "Biennial"
-    }
+    },
+    "recurring_until_short": "Until"
   },
   "refueling": {
     "new": "New refueling",
     "new_description": "Log a refueling.",
     "edit": "Edit refueling",
-    "info": "Refueling details",
     "info_description": "Fill data.",
     "detail_title": "Refueling {{liters}} L",
     "refueled_at": "Date",
@@ -462,7 +492,8 @@
     "deleted": "Refueling deleted",
     "delete": {
       "title": "Delete refueling?",
-      "description": "Irreversible. Consumption calc will change."
+      "description": "Irreversible. Consumption calc will change.",
+      "action": "Delete refueling"
     },
     "list": {
       "description": "Refueling history for vehicle."
@@ -474,13 +505,13 @@
     "select_vehicle_first": {
       "title": "Select a vehicle",
       "description": "Choose a vehicle to log a refueling."
-    }
+    },
+    "partial": "partial"
   },
   "vehicle": {
     "new": "New vehicle",
     "new_description": "Enter basic vehicle data.",
     "edit": "Edit vehicle",
-    "info": "Vehicle info",
     "info_description": "Vehicle base information.",
     "name": "Name",
     "brand": "Brand",
@@ -555,7 +586,9 @@
       "selected_count_other": "{{count}} people selected",
       "no_candidates": "No other organization member to share with: people join the organization by invitation (Settings → Members).",
       "submit_many_one": "Share with {{count}} person",
-      "submit_many_other": "Share with {{count}} people"
+      "submit_many_other": "Share with {{count}} people",
+      "people_title": "Who has access",
+      "not_allowed": "You can't manage sharing for this vehicle."
     },
     "transfer": {
       "button": "Transfer ownership",
@@ -599,7 +632,14 @@
       "title": "Vehicle charts",
       "subtitle": "Last {{months}} months of this vehicle"
     },
-    "add_record": "Add"
+    "add_record": "Add",
+    "summary": {
+      "next_deadline": "Next deadline",
+      "log": "Log",
+      "more_actions": "More actions",
+      "charts": "Trends"
+    },
+    "access": "Access"
   },
   "error_page": {
     "back_home": "Back to home",
@@ -615,14 +655,12 @@
   },
   "attachment": {
     "title": "Attachments",
-    "description": "Photos and documents — max 10 MB (JPG, PNG, WebP, PDF).",
-    "add": "Add",
+    "add": "Add photos or documents",
     "open": "Open {{name}}",
     "uploaded": "Attachment uploaded",
     "deleted": "Attachment deleted",
     "empty": {
-      "title": "No attachments",
-      "description": "Add photos or documents."
+      "title": "No attachments"
     },
     "delete": {
       "title": "Delete attachment?",

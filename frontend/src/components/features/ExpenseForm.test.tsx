@@ -33,12 +33,12 @@ describe('ExpenseForm — data di fine della ricorrenza', () => {
 
     expect(screen.queryByLabelText(/Fino al/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('checkbox', { name: /Spesa ricorrente/ }));
+    await user.click(screen.getByRole('switch', { name: /Spesa ricorrente/ }));
 
     expect(screen.getByLabelText(/Fino al/)).toBeInTheDocument();
     expect(screen.getByText(/Lascia vuoto se la spesa continua finché non la disdici/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('checkbox', { name: /Spesa ricorrente/ }));
+    await user.click(screen.getByRole('switch', { name: /Spesa ricorrente/ }));
 
     expect(screen.queryByLabelText(/Fino al/)).not.toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('ExpenseForm — data di fine della ricorrenza', () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm({ defaultValues: { ...recurringDefaults, recurringUntil: '2026-09-30' } });
 
-    await user.click(screen.getByRole('checkbox', { name: /Spesa ricorrente/ }));
+    await user.click(screen.getByRole('switch', { name: /Spesa ricorrente/ }));
     await user.click(screen.getByRole('button', { name: 'Salva' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));

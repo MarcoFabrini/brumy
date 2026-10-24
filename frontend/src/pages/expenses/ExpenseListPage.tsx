@@ -29,8 +29,9 @@ export function ExpenseListPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={vehicleId > 0 ? vehicleName : undefined}
+        title={vehicleId > 0 ? t('nav.expenses') : undefined}
         srTitle={t('nav.expenses')}
+        description={vehicleId > 0 ? vehicleName : undefined}
         onBack={vehicleId > 0 ? () => navigate(`/vehicles/${vehicleId}`) : undefined}
         action={
           vehicleId > 0 && canEdit && (

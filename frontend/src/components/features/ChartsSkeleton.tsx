@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui';
  */
 export function ChartsSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:gap-4 xl:grid-cols-2">
       {Array.from({ length: 4 }).map((_, i) => (
         <Skeleton key={i} className="h-72 w-full rounded-lg" />
       ))}

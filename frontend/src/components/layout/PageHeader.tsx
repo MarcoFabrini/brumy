@@ -1,17 +1,18 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { Button, Heading, Text } from '@/components/ui';
+import { cn } from '@/lib/utils';
 
 /**
- * PageHeader — riga in cima alla pagina: back button opzionale + titolo/descrizione
- * opzionali a sinistra, slot azione (es. "+ Nuovo") a destra.
+ * PageHeader — intestazione di pagina in stile iOS (navigation bar + large title).
  *
- * I titoli che duplicano una voce di menu sono omessi (la nav indica già dove siamo):
- * le pagine lista passano solo l'azione, che resta allineata a destra anche su mobile.
- * Ogni pagina ha esattamente un h1: quando il titolo visibile è omesso, `srTitle` rende un h1
- * `sr-only` con l'etichetta della pagina (la voce di menu), così gli screen reader hanno il loro
- * punto di riferimento. Se non c'è nulla da mostrare né da annunciare, non rende nulla.
+ * - Riga della barra: "‹ Indietro" a sinistra (se `onBack`), azioni a destra (`action`).
+ * - Titolo grande sotto (34px su mobile). Scorrendo oltre il titolo compare in alto una barra compatta
+ *   sfocata con il titolo piccolo e lo stesso "Indietro", come la UINavigationBar (solo mobile).
+ * - `srTitle`: il titolo delle radici delle tab (liste, Home). Su mobile è il titolo grande, come nelle app
+ *   iOS; da `md` è solo per screen reader, perché la sidebar dice già dove siamo.
+ * Ogni pagina ha esattamente un h1. Se non c'è nulla da mostrare, non rende nulla.
  *
  * @example
  * <PageHeader srTitle={t('nav.vehicles')} action={<Button>+ Nuovo</Button>} />
@@ -19,46 +20,109 @@ import { Button, Heading, Text } from '@/components/ui';
  */
 export interface PageHeaderProps {
   title?: string;
-  /** h1 solo per screen reader, usato quando `title` non c'è (le liste non ripetono la voce di menu). */
+  /** Titolo delle radici delle tab: grande su mobile, solo per screen reader da `md`. */
   srTitle?: string;
   description?: string;
-  /** Slot per action button(s) a destra. */
+  /** Slot per action button(s) a destra della barra. */
   action?: ReactNode;
-  /** Se presente, mostra una freccia "indietro" a sinistra del titolo. */
+  /** Se presente, mostra "‹ Indietro" nella barra. */
   onBack?: () => void;
 }
 
 export function PageHeader({ title, srTitle, description, action, onBack }: PageHeaderProps) {
-  const { t } = useTranslation();
-  const srOnlyTitle = !title && srTitle ? <Heading level={1} className="sr-only">{srTitle}</Heading> : null;
+  const heading = title ?? srTitle;
+  const titleRef = useRef<HTMLDivElement>(null);
+  const collapsed = useScrolledPast(titleRef, Boolean(heading));
 
-  if (!title && !description && !action && !onBack) return srOnlyTitle;
+  if (!heading && !description && !action && !onBack) return null;
 
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      {srOnlyTitle}
-      <div className="flex items-start gap-2">
-        {onBack && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            aria-label={t('actions.back')}
-            className="-ml-2 shrink-0"
-          >
-            <ArrowLeft />
-          </Button>
-        )}
-        {(title || description) && (
-          <div className="min-w-0 space-y-1">
-            {title && <Heading level={1}>{title}</Heading>}
-            {description && <Text variant="muted">{description}</Text>}
+    <>
+      {heading && <CompactBar title={heading} onBack={onBack} visible={collapsed} />}
+      <div className="space-y-1">
+        {(onBack || action) && (
+          <div className="flex min-h-touch items-center justify-between gap-2">
+            {onBack ? <BackButton onBack={onBack} /> : <span />}
+            {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
           </div>
         )}
+        {heading && (
+          <div ref={titleRef}>
+            <Heading
+              level={1}
+              className={cn(
+                'text-[2.125rem] font-bold leading-[1.15] tracking-tight md:text-3xl',
+                !title && 'md:sr-only',
+              )}
+            >
+              {heading}
+            </Heading>
+          </div>
+        )}
+        {description && <Text variant="muted">{description}</Text>}
       </div>
-      {action && (
-        <div className="flex shrink-0 items-center gap-2 self-end md:self-auto">{action}</div>
+    </>
+  );
+}
+
+function BackButton({ onBack, className }: { onBack: () => void; className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <Button
+      variant="ghost"
+      onClick={onBack}
+      className={cn('-ml-3 gap-0.5 px-2 text-[1.0625rem] font-normal text-primary hover:bg-transparent active:opacity-50', className)}
+    >
+      <ChevronLeft className="!size-6" strokeWidth={2.5} aria-hidden="true" />
+      {t('actions.back')}
+    </Button>
+  );
+}
+
+/** Barra compatta in alto (solo mobile) che compare quando il titolo grande è uscito dallo schermo. */
+function CompactBar({ title, onBack, visible }: { title: string; onBack?: () => void; visible: boolean }) {
+  return (
+    <div
+      // Nascosta: fuori dall'albero di accessibilità e dal focus (il "visibility: hidden" del CSS da solo non basta
+      // a chi non applica gli stili), così "Indietro" non risulta duplicato.
+      aria-hidden={!visible}
+      inert={!visible}
+      className={cn(
+        'fixed inset-x-0 top-0 z-30 border-b border-black/10 bg-card/80 pt-safe backdrop-blur-xl backdrop-saturate-150 transition-opacity duration-200 dark:border-white/10 md:hidden',
+        visible ? 'opacity-100' : 'pointer-events-none invisible opacity-0',
       )}
+    >
+      <div className="relative flex h-11 items-center px-4">
+        {onBack && <BackButton onBack={onBack} />}
+        {/* Il titolo è già l'h1 della pagina: qui è solo un richiamo visivo. */}
+        <p
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-24 truncate text-center text-[1.0625rem] font-semibold"
+        >
+          {title}
+        </p>
+      </div>
     </div>
   );
+}
+
+const COMPACT_BAR_HEIGHT = 48;
+
+/** True quando l'elemento è scorso sotto la barra compatta in cima allo schermo. */
+function useScrolledPast(ref: RefObject<HTMLElement | null>, enabled: boolean): boolean {
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el || typeof IntersectionObserver === 'undefined') return;
+    // Il margine toglie l'altezza della barra compatta (44px + status bar): il titolo "esce" quando ci passa sotto.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry) setPast(!entry.isIntersecting && entry.boundingClientRect.top < COMPACT_BAR_HEIGHT);
+      },
+      { rootMargin: `-${COMPACT_BAR_HEIGHT}px 0px 0px 0px` },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, enabled]);
+  return past;
 }

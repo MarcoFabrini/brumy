@@ -1,55 +1,34 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Wrench } from 'lucide-react';
-import { Badge, Card, CardContent } from '@/components/ui';
+import { ListRow } from '@/components/ui';
+import { MetaLine } from './MetaLine';
 import { useFormat } from '@/hooks/useFormat';
 import type { Maintenance } from '@/api/types/maintenance';
 
-/**
- * MaintenanceCard feature — riepilogo manutenzione, click apre detail.
- */
 export interface MaintenanceCardProps {
   maintenance: Maintenance;
 }
 
-export function MaintenanceCard({ maintenance }: MaintenanceCardProps) {
+/** Una manutenzione come riga di lista iOS: tipo, poi data, km e officina; costo a destra. */
+export function MaintenanceCard({ maintenance: m }: MaintenanceCardProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
-  const m = maintenance;
 
   return (
-    <Card>
-      <Link to={`/maintenance/${m.id}`} className="block">
-        <CardContent standalone className="flex items-start gap-4">
-          <div className="rounded-md bg-primary/10 p-3">
-            <Wrench className="size-5 text-primary" />
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="truncate text-base font-semibold">
-                {t(`maintenance.type_options.${m.type}`)}
-              </h3>
-              <span className="shrink-0 text-sm font-medium">{fmt.currency(m.cost)}</span>
-            </div>
-            <p className="line-clamp-2 text-sm text-muted-foreground">{m.description}</p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{fmt.date(m.performedAt)}</span>
-              <span>·</span>
-              <span>{fmt.km(m.km)}</span>
-              {m.workshop && (
-                <>
-                  <span>·</span>
-                  <span className="truncate">{m.workshop}</span>
-                </>
-              )}
-              <Badge variant={m.category === 'scheduled' ? 'success' : 'warning'} className="ml-auto">
-                {t(`maintenance.category_options.${m.category}`)}
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Link>
-    </Card>
+    <ListRow
+      as={Link}
+      to={`/maintenance/${m.id}`}
+      icon={<Wrench />}
+      iconClassName={m.category === 'scheduled' ? 'bg-[#ff9500]' : 'bg-[#ff3b30]'}
+      label={t(`maintenance.type_options.${m.type}`)}
+      description={
+        <MetaLine
+          parts={[fmt.date(m.performedAt), fmt.km(m.km), m.workshop, t(`maintenance.category_options.${m.category}`)]}
+        />
+      }
+      value={<span className="font-medium text-foreground">{fmt.currency(m.cost)}</span>}
+      chevron
+    />
   );
 }

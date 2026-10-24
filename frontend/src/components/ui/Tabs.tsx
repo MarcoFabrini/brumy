@@ -24,7 +24,8 @@ export const TabsList = forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+      // Controllo segmentato iOS: binario grigio traslucido, segmento attivo bianco (grigio chiaro in scuro) in rilievo.
+      'inline-flex h-11 items-stretch justify-center rounded-[10px] bg-[#767680]/[0.12] p-[3px] text-foreground dark:bg-[#767680]/[0.24]',
       className,
     )}
     {...props}
@@ -39,11 +40,11 @@ export const TabsTrigger = forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium',
+      'inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-[8px] px-3 text-[0.8125rem] font-medium',
       'ring-offset-background transition-all',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       'disabled:pointer-events-none disabled:opacity-50',
-      'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow',
+      'data-[state=active]:bg-card data-[state=active]:font-semibold data-[state=active]:shadow-[0_3px_8px_rgba(0,0,0,0.12),0_3px_1px_rgba(0,0,0,0.04)] dark:data-[state=active]:bg-[#636366]',
       className,
     )}
     {...props}

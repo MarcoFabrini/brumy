@@ -1,20 +1,17 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Trash2 } from 'lucide-react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-} from '@/components/ui';
+import { Alert, Badge, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
-import { AttachmentsSection, ConfirmDialog, FuelTypeBadge } from '@/components/features';
+import {
+  AttachmentsSection,
+  ConfirmDialog,
+  DeleteRow,
+  EditLink,
+  FuelTypeBadge,
+  InfoList,
+  InfoRow,
+} from '@/components/features';
 import { useDeleteRefueling, useRefueling } from '@/hooks/useRefuelings';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
@@ -57,75 +54,35 @@ export function RefuelingDetailPage() {
         })}
         description={fmt.date(data.refueledAt)}
         onBack={() => navigate(`/refueling?vehicleId=${data.vehicleId}`)}
-        action={
-          canEdit ? (
-            <>
-              <Button variant="outline" size="icon" asChild aria-label={t('actions.edit')}>
-                <Link to={`/refueling/${data.id}/edit`}>
-                  <Pencil />
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setConfirmOpen(true)}
-                aria-label={t('actions.delete')}
-              >
-                <Trash2 />
-              </Button>
-            </>
-          ) : undefined
-        }
+        action={canEdit ? <EditLink to={`/refueling/${data.id}/edit`} /> : undefined}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('refueling.info')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <FuelTypeBadge type={data.fuelType} />
-            {data.fullTank && <Badge variant="success">{t('refueling.full_tank')}</Badge>}
+      <InfoList>
+        <InfoRow label={t('refueling.total_cost')} value={<span className="font-semibold text-foreground">{fmt.currency(data.totalCost)}</span>} />
+        <InfoRow label={t('refueling.km')} value={fmt.km(data.km)} />
+        <InfoRow label={t('refueling.liters')} value={`${fmt.decimal(litersNum, 2)} L`} />
+        <InfoRow label={t('refueling.price_per_liter')} value={fmt.currency(data.pricePerLiter)} />
+        <InfoRow
+          label={t('refueling.fuel_type')}
+          value={
+            <span className="flex gap-1">
+              <FuelTypeBadge type={data.fuelType} />
+              {data.fullTank && <Badge variant="success">{t('refueling.full_tank')}</Badge>}
+            </span>
+          }
+        />
+        {data.station && <InfoRow label={t('refueling.station')} value={<span className="truncate">{data.station}</span>} />}
+        {data.notes && (
+          <div className="px-4 py-3">
+            <dt className="sr-only">{t('common.notes')}</dt>
+            <dd className="whitespace-pre-wrap text-[0.9375rem] text-muted-foreground">{data.notes}</dd>
           </div>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">{t('refueling.km')}</dt>
-              <dd className="font-medium">{fmt.km(data.km)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('refueling.liters')}</dt>
-              <dd className="font-medium">{fmt.decimal(litersNum, 2)} L</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('refueling.price_per_liter')}</dt>
-              <dd className="font-medium">{fmt.currency(data.pricePerLiter)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('refueling.total_cost')}</dt>
-              <dd className="font-medium">{fmt.currency(data.totalCost)}</dd>
-            </div>
-            {data.station && (
-              <div className="col-span-2">
-                <dt className="text-muted-foreground">{t('refueling.station')}</dt>
-                <dd className="font-medium">{data.station}</dd>
-              </div>
-            )}
-          </dl>
-          {data.notes && (
-            <div className="rounded-md bg-muted px-3 py-2 text-sm">{data.notes}</div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </InfoList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('attachment.title')}</CardTitle>
-          <CardDescription>{t('attachment.description')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AttachmentsSection entityType="refueling" entityId={data.id} readOnly={!canEdit} />
-        </CardContent>
-      </Card>
+      <AttachmentsSection entityType="refueling" entityId={data.id} readOnly={!canEdit} />
+
+      {canEdit && <DeleteRow label={t('refueling.delete.action')} onDelete={() => setConfirmOpen(true)} />}
 
       <ConfirmDialog
         open={confirmOpen}

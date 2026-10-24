@@ -22,10 +22,8 @@ export { SettingsSourceBadge, type SettingsSourceBadgeProps } from './SettingsSo
 export { PushSettingsCard } from './PushSettingsCard';
 export { MaintenanceCard, type MaintenanceCardProps } from './MaintenanceCard';
 export { MaintenanceForm, type MaintenanceFormProps } from './MaintenanceForm';
-export { StatCard, type StatCardProps } from './StatCard';
 export { VehicleCard, type VehicleCardProps } from './VehicleCard';
 export { ArchivedVehiclesSection, type ArchivedVehiclesSectionProps } from './ArchivedVehiclesSection';
-export { VehicleStatsCard, type VehicleStatsCardProps } from './VehicleStatsCard';
 export { VehiclePicker, type VehiclePickerProps } from './VehiclePicker';
 export { QuickAddSheet, type QuickAddSheetProps } from './QuickAddSheet';
 export { VehicleForm, type VehicleFormProps } from './VehicleForm';
@@ -36,18 +34,14 @@ export { ExpenseForm, type ExpenseFormProps } from './ExpenseForm';
 export { ReminderBadge, type ReminderBadgeProps } from './ReminderBadge';
 export { ReminderCard, type ReminderCardProps } from './ReminderCard';
 export { ReminderForm, type ReminderFormProps } from './ReminderForm';
+export { ReminderOverviewList, ReminderOverviewSection, type ReminderOverviewSectionProps } from './ReminderOverviewList';
+export { MonthSummaryCard } from './MonthSummaryCard';
+export { MetaLine } from './MetaLine';
+export { DeleteRow, EditLink, InfoList, InfoRow } from './RecordDetailParts';
 export { ReminderRecurrenceText, type ReminderRecurrenceTextProps } from './ReminderRecurrenceText';
-export { UpcomingRemindersCard } from './UpcomingRemindersCard';
-export { DashboardCharts } from './DashboardCharts';
 export { ChartsSection, type ChartsSectionProps } from './ChartsSection';
 // I singoli grafici (recharts) non stanno nel barrel: li carica in lazy ChartsSection via ChartsGrid.
 export { VehicleCharts, type VehicleChartsProps } from './VehicleCharts';
 export { VehicleAddRecordMenu, type VehicleAddRecordMenuProps } from './VehicleAddRecordMenu';
-export {
-  VehicleMaintenanceTab,
-  type VehicleMaintenanceTabProps,
-} from './VehicleMaintenanceTab';
-export { VehicleRefuelingTab, type VehicleRefuelingTabProps } from './VehicleRefuelingTab';
-export { VehicleExpensesTab, type VehicleExpensesTabProps } from './VehicleExpensesTab';
-export { VehicleRemindersTab, type VehicleRemindersTabProps } from './VehicleRemindersTab';
 export { VehicleUsableGate, type VehicleUsableGateProps } from './VehicleUsableGate';
+export { VehicleSummaryTiles, type VehicleSummaryTilesProps } from './VehicleSummaryTiles';

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Car, Plus } from 'lucide-react';
-import { Alert, Button, Skeleton } from '@/components/ui';
+import { Alert, Button, ListSection, Skeleton } from '@/components/ui';
 import { EmptyState } from './EmptyState';
 import { VehiclePicker } from './VehiclePicker';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -89,7 +89,7 @@ export function VehicleScopedList<T>({
 
       {items && items.length === 0 && empty}
 
-      {items && items.length > 0 && <div className="space-y-3">{items.map(renderItem)}</div>}
+      {items && items.length > 0 && <ListSection>{items.map(renderItem)}</ListSection>}
     </>
   );
 }

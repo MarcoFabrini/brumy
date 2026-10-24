@@ -1,20 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronsUpDown, Share2, Trash2, UserRoundCog } from 'lucide-react';
+import { ChevronsUpDown, Trash2, UserRoundCog } from 'lucide-react';
 import {
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  ListRow,
+  ListSection,
   Spinner,
-  Text,
 } from '@/components/ui';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TransferVehicleDialog } from './TransferVehicleDialog';
@@ -102,123 +99,112 @@ export function VehicleShareCard({ vehicleId, currentUserId, onAccessLost }: Veh
         : t('vehicle.share.selected_count', { count: selected.length });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Share2 className="size-4" />
-          {t('vehicle.share.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Text variant="muted" className="text-sm">
-          {t('vehicle.share.description')}
-        </Text>
-
-        {sharesQuery.isLoading && <Spinner size="sm" />}
-
-        {sharesQuery.data &&
-          (sharesQuery.data.length === 0 ? (
-            <Text variant="muted" className="text-sm">
-              {t('vehicle.share.empty')}
-            </Text>
-          ) : (
-            <ul className="space-y-2">
-              {sharesQuery.data.map((s) => {
-                // Lo share `admin` è il proprietario del veicolo: non revocabile.
-                const revocable = s.role !== 'admin' && s.user.id !== currentUserId;
-                return (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
-                  >
-                    <p className="min-w-0 truncate font-medium">
+    <div className="space-y-6">
+      {/* Chi vede il veicolo: lista iOS, il proprietario in testa (non revocabile), gli altri con la revoca. */}
+      <ListSection title={t('vehicle.share.people_title')} footer={t('vehicle.share.description')}>
+        {sharesQuery.isLoading && (
+          <div className="p-4">
+            <Spinner size="sm" />
+          </div>
+        )}
+        {sharesQuery.data?.length === 0 && (
+          <p className="px-4 py-3 text-[0.9375rem] text-muted-foreground">{t('vehicle.share.empty')}</p>
+        )}
+        {sharesQuery.data && sharesQuery.data.length > 0 && (
+          <ul>
+            {sharesQuery.data.map((s) => {
+              // Lo share `admin` è il proprietario del veicolo: non revocabile.
+              const revocable = s.role !== 'admin' && s.user.id !== currentUserId;
+              return (
+                <li key={s.id} className="flex min-h-touch items-center gap-3 pl-4">
+                  <div className="list-row-body flex min-w-0 flex-1 items-center gap-2 border-b py-2.5 pr-2">
+                    <p className="min-w-0 flex-1 truncate text-[1.0625rem]">
                       {fullName(s.user)}
                       {s.user.id === currentUserId && (
                         <span className="text-muted-foreground"> ({t('vehicle.share.you')})</span>
                       )}
                     </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant="secondary">{t(`vehicle.share.role.${s.role}`)}</Badge>
-                      {revocable && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t('vehicle.share.revoke')}
-                          onClick={() => setToRevoke(s)}
-                        >
-                          <Trash2 className="text-destructive-text" />
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ))}
+                    <Badge variant="secondary">{t(`vehicle.share.role.${s.role}`)}</Badge>
+                    {revocable ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('vehicle.share.revoke')}
+                        onClick={() => setToRevoke(s)}
+                      >
+                        <Trash2 className="text-destructive-text" />
+                      </Button>
+                    ) : (
+                      <span className="w-2" aria-hidden="true" />
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </ListSection>
 
-        <div className="space-y-3 border-t pt-4">
-          <p className="text-sm font-medium">{t('vehicle.share.invite_title')}</p>
+      <section className="space-y-2">
+        <h2 className="px-4 text-[0.8125rem] uppercase tracking-wide text-muted-foreground">
+          {t('vehicle.share.invite_title')}
+        </h2>
+        {candidatesQuery.isLoading && <Spinner size="sm" />}
+        {candidatesQuery.data && candidates.length === 0 && (
+          <p className="px-4 text-[0.9375rem] text-muted-foreground">{t('vehicle.share.no_candidates')}</p>
+        )}
+        {candidates.length > 0 && (
+          <div className="space-y-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-between bg-card text-foreground">
+                  <span className="truncate">{triggerLabel}</span>
+                  <ChevronsUpDown className="opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+              >
+                <DropdownMenuLabel>{t('vehicle.share.select_people')}</DropdownMenuLabel>
+                {candidates.map((c) => (
+                  <DropdownMenuCheckboxItem
+                    key={c.id}
+                    checked={selectedIds.includes(c.id)}
+                    onCheckedChange={() => toggle(c.id)}
+                    // Multi-selezione: il menu resta aperto dopo ogni scelta.
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {fullName(c)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {candidatesQuery.isLoading && <Spinner size="sm" />}
+            <Button type="button" fullWidth onClick={submit} disabled={selected.length === 0 || create.isPending}>
+              {create.isPending ? (
+                <Spinner size="sm" />
+              ) : selected.length > 1 ? (
+                t('vehicle.share.submit_many', { count: selected.length })
+              ) : (
+                t('vehicle.share.invite_submit')
+              )}
+            </Button>
+          </div>
+        )}
+      </section>
 
-          {candidatesQuery.data && candidates.length === 0 && (
-            <Text variant="muted" className="text-sm">
-              {t('vehicle.share.no_candidates')}
-            </Text>
-          )}
-
-          {candidates.length > 0 && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" className="w-full justify-between">
-                    <span className="truncate">{triggerLabel}</span>
-                    <ChevronsUpDown className="opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
-                >
-                  <DropdownMenuLabel>{t('vehicle.share.select_people')}</DropdownMenuLabel>
-                  {candidates.map((c) => (
-                    <DropdownMenuCheckboxItem
-                      key={c.id}
-                      checked={selectedIds.includes(c.id)}
-                      onCheckedChange={() => toggle(c.id)}
-                      // Multi-selezione: il menu resta aperto dopo ogni scelta.
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {fullName(c)}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button type="button" onClick={submit} disabled={selected.length === 0 || create.isPending}>
-                {create.isPending ? (
-                  <Spinner size="sm" />
-                ) : selected.length > 1 ? (
-                  t('vehicle.share.submit_many', { count: selected.length })
-                ) : (
-                  t('vehicle.share.invite_submit')
-                )}
-              </Button>
-            </>
-          )}
-        </div>
-
-        <div className="space-y-3 border-t pt-4">
-          <p className="text-sm font-medium">{t('vehicle.transfer.button')}</p>
-          <Text variant="muted" className="text-sm">
-            {t('vehicle.transfer.section_description')}
-          </Text>
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setTransferOpen(true)}>
-            <UserRoundCog />
-            {t('vehicle.transfer.button')}
-          </Button>
-        </div>
-      </CardContent>
+      <ListSection footer={t('vehicle.transfer.section_description')}>
+        <ListRow
+          as="button"
+          type="button"
+          onClick={() => setTransferOpen(true)}
+          icon={<UserRoundCog />}
+          iconClassName="bg-[#5856d6]"
+          label={t('vehicle.transfer.button')}
+          chevron
+        />
+      </ListSection>
 
       <TransferVehicleDialog
         open={transferOpen}
@@ -239,6 +225,6 @@ export function VehicleShareCard({ vehicleId, currentUserId, onAccessLost }: Veh
         confirmVariant="destructive"
         onConfirm={confirmRevoke}
       />
-    </Card>
+    </div>
   );
 }

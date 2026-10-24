@@ -37,7 +37,7 @@ export function ChartsGrid({ data, isLoading }: ChartsGridProps) {
   if (!series) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:gap-4 xl:grid-cols-2">
       <MonthlySpendingChart rows={series.spending} />
       <SpendingByCategoryChart slices={series.categories} />
       <KmDrivenChart rows={series.km} />

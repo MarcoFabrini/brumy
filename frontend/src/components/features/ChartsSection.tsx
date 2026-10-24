@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ZodError } from 'zod';
-import { Alert, Heading, Text } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import { ChartsSkeleton } from './ChartsSkeleton';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import type { DashboardCharts } from '@/api/types/dashboardCharts';
@@ -14,7 +14,6 @@ export interface ChartsSectionProps {
   /** Id dell'heading, unico nella pagina (la sezione ne è etichettata). */
   headingId: string;
   title: string;
-  subtitle: string;
   data: DashboardCharts | undefined;
   isLoading: boolean;
   error: unknown;
@@ -22,24 +21,19 @@ export interface ChartsSectionProps {
 
 /**
  * Sezione con i quattro grafici (spese mensili, spese per categoria, km percorsi, consumo),
- * condivisa da dashboard e dettaglio veicolo. Solo presentazione: i dati arrivano dal chiamante,
- * che sceglie il perimetro (veicoli propri o singolo veicolo). Intestazione, errore e segnaposto
+ * nella scheda del veicolo. Solo presentazione: i dati arrivano dal chiamante. Intestazione, errore e segnaposto
  * sono leggeri; i grafici (`ChartsGrid`) arrivano in un chunk a parte mentre i dati si caricano.
  */
-export function ChartsSection({ headingId, title, subtitle, data, isLoading, error }: ChartsSectionProps) {
+export function ChartsSection({ headingId, title, data, isLoading, error }: ChartsSectionProps) {
   const { t } = useTranslation();
   const errorMessage = useApiErrorMessage();
 
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <div>
-        <Heading level={4} as="h2" id={headingId}>
-          {title}
-        </Heading>
-        <Text variant="muted" className="text-sm">
-          {subtitle}
-        </Text>
-      </div>
+    <section aria-labelledby={headingId} className="space-y-1.5">
+      {/* Titoletto come quello delle liste (ListSection). */}
+      <h2 id={headingId} className="px-4 text-[0.8125rem] font-normal uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h2>
 
       {error ? (
         <Alert variant="error">

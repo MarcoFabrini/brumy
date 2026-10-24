@@ -37,6 +37,22 @@ export const reminderResponseSchema = z.object({
 });
 export type ReminderResponse = z.infer<typeof reminderResponseSchema>;
 
+/** Un elemento di `GET /api/reminders/overview` (tab "Scadenze"): urgenza e km attuali già calcolati dal backend. */
+export const reminderOverviewItemSchema = reminderResponseSchema.extend({
+  urgency: z.enum(['ok', 'soon', 'overdue']),
+  currentKm: z.number().int(),
+});
+
+export interface ReminderOverviewItem extends Reminder {
+  vehicleName: string;
+  urgency: 'ok' | 'soon' | 'overdue';
+  currentKm: number;
+}
+
+export function adaptReminderOverviewItem(raw: z.infer<typeof reminderOverviewItemSchema>): ReminderOverviewItem {
+  return { ...adaptReminder(raw), vehicleName: raw.vehicle.name, urgency: raw.urgency, currentKm: raw.currentKm };
+}
+
 /** Risposta di `POST /api/reminders/{id}/complete`: `next` è il successore di un ricorrente, o null. */
 export const completeReminderResponseSchema = z.object({
   completed: reminderResponseSchema,

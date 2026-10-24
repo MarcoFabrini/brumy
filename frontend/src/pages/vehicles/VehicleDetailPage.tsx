@@ -1,40 +1,47 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Archive, Pencil, Trash2 } from 'lucide-react';
+import { Archive, Bell, Fuel, MoreHorizontal, Pencil, Receipt, Trash2, Users, Wrench } from 'lucide-react';
 import {
   Alert,
-  Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  ListRow,
+  ListSection,
   Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
 import {
   AttachmentsSection,
   ConfirmDialog,
   FuelTypeBadge,
+  InfoList,
+  InfoRow,
   VehicleAddRecordMenu,
   VehicleCharts,
-  VehicleExpensesTab,
-  VehicleMaintenanceTab,
-  VehicleRefuelingTab,
-  VehicleRemindersTab,
   VehicleShareCard,
-  VehicleStatsCard,
+  VehicleSummaryTiles,
 } from '@/components/features';
+import { useReminders } from '@/hooks/useReminders';
+import { DASHBOARD_CHART_MONTHS } from '@/hooks/useDashboardCharts';
+import { monthSpending } from '@/lib/monthSpending';
+import { nextDeadline } from '@/lib/nextDeadline';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
 import {
   useArchiveVehicle,
   useDeleteVehicle,
   useUnarchiveVehicle,
   useVehicle,
+  useVehicleCharts,
   useVehicleStats,
 } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
@@ -43,8 +50,10 @@ import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
 
 /**
- * VehicleDetailPage — grafici del veicolo (se non duplicano la dashboard), info, statistiche e
- * tab di manutenzioni, rifornimenti, spese, promemoria e allegati.
+ * VehicleDetailPage — scheda del veicolo in stile iOS: in cima i numeri che servono (km, consumo, spesa del mese) e la
+ * prossima scadenza; poi il registro (rifornimenti, manutenzioni, spese, promemoria) come righe che aprono le
+ * liste, i dati del veicolo, gli allegati e i grafici. Le azioni sul veicolo
+ * stanno nel menu "…"; si aggiunge dal "+" della tab bar, già su questo veicolo.
  */
 export function VehicleDetailPage() {
   const { t } = useTranslation();
@@ -57,11 +66,16 @@ export function VehicleDetailPage() {
 
   const { data, isLoading, error } = useVehicle(vehicleId);
   const stats = useVehicleStats(vehicleId);
+  const reminders = useReminders(vehicleId);
+  // Stessa query dei grafici in fondo: da qui la spesa del mese nel riepilogo.
+  const charts = useVehicleCharts(vehicleId, DASHBOARD_CHART_MONTHS);
   const deleteMutation = useDeleteVehicle();
   const archive = useArchiveVehicle();
   const unarchive = useUnarchiveVehicle();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   const currentUser = useAuthStore((s) => s.user);
 
@@ -82,47 +96,74 @@ export function VehicleDetailPage() {
   // via condivisione): chi ha solo lo share in lettura non vede le azioni.
   const { canEdit, canDelete, canShare } = data.permissions;
 
+  const nextReminder = nextDeadline(reminders.data ?? [], stats.data?.currentKm);
+  const totals = stats.data?.totals;
+  // Il registro del veicolo: righe che aprono le liste (filtrate su questo veicolo), col conteggio a destra.
+  const log = [
+    { to: `/refueling?vehicleId=${data.id}`, label: t('nav.refueling'), count: totals?.refuelings, Icon: Fuel, iconClassName: 'bg-[#34c759]' },
+    { to: `/maintenance?vehicleId=${data.id}`, label: t('nav.maintenance'), count: totals?.maintenances, Icon: Wrench, iconClassName: 'bg-[#ff9500]' },
+    { to: `/expenses?vehicleId=${data.id}`, label: t('nav.expenses'), count: totals?.expenses, Icon: Receipt, iconClassName: 'bg-[#5856d6]' },
+    { to: `/reminders?vehicleId=${data.id}`, label: t('nav.reminders'), count: reminders.data?.length, Icon: Bell, iconClassName: 'bg-[#ff3b30]' },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={data.name}
-        description={`${data.brand} ${data.model} · ${data.year}`}
+        description={[`${data.brand} ${data.model} · ${data.year}`, data.licensePlate].filter(Boolean).join(' · ')}
         onBack={() => navigate('/vehicles')}
         action={
           canEdit || canDelete ? (
             <>
-              {/* Solo desktop: su mobile si aggiunge dal "+" della barra in basso. */}
+              {/* Solo desktop: su mobile si aggiunge dal "+" della barra in basso (già su questo veicolo). */}
               {canEdit && !archived && (
                 <VehicleAddRecordMenu vehicleId={data.id} className="hidden md:inline-flex" />
               )}
-              {canEdit && (
-                <Button variant="outline" size="icon" asChild aria-label={t('actions.edit')}>
-                  <Link to={`/vehicles/${data.id}/edit`}>
-                    <Pencil />
-                  </Link>
-                </Button>
-              )}
-              {/* Archiviare richiede lo stesso permesso dell'eliminazione (voter DELETE). */}
-              {canDelete && !archived && (
+              {canShare && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  onClick={() => setArchiveOpen(true)}
-                  aria-label={t('actions.archive')}
+                  className="text-primary"
+                  aria-label={t('vehicle.share.title')}
+                  onClick={() => (isDesktop ? setShareOpen(true) : navigate(`/vehicles/${data.id}/sharing`))}
                 >
-                  <Archive />
+                  <Users className="!size-[1.375rem]" />
                 </Button>
               )}
-              {canDelete && (
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  onClick={() => setConfirmOpen(true)}
-                  aria-label={t('actions.delete')}
-                >
-                  <Trash2 />
-                </Button>
-              )}
+              {/* Come in iOS: le azioni sul veicolo in un menu "…", l'eliminazione in rosso in fondo. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="-mr-2 text-primary" aria-label={t('vehicle.summary.more_actions')}>
+                    <MoreHorizontal className="!size-6" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && (
+                    <DropdownMenuItem asChild>
+                      <Link to={`/vehicles/${data.id}/edit`}>
+                        <Pencil />
+                        {t('actions.edit')}
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {/* Archiviare richiede lo stesso permesso dell'eliminazione (voter DELETE). */}
+                  {canDelete && !archived && (
+                    <DropdownMenuItem onSelect={() => setArchiveOpen(true)}>
+                      <Archive />
+                      {t('actions.archive')}
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive-text" onSelect={() => setConfirmOpen(true)}>
+                        <Trash2 />
+                        {t('actions.delete')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : undefined
         }
@@ -147,90 +188,76 @@ export function VehicleDetailPage() {
         </Alert>
       )}
 
-      <VehicleCharts vehicle={data} />
+      <VehicleSummaryTiles
+        stats={stats.data}
+        statsError={stats.isError}
+        monthSpent={charts.data ? monthSpending(charts.data).total : undefined}
+        monthError={charts.isError}
+        next={nextReminder}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('vehicle.info')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{t(`vehicle.type_options.${data.type}`)}</Badge>
-            <FuelTypeBadge type={data.fuelType} />
-            {data.secondaryFuelType && <FuelTypeBadge type={data.secondaryFuelType} />}
-            {archived && <Badge variant="destructive">{t('vehicle.archived')}</Badge>}
-            {data.ownership === 'shared' && <Badge variant="secondary">{t('vehicle.shared_read_only')}</Badge>}
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            {data.licensePlate && (
-              <div>
-                <dt className="text-muted-foreground">{t('vehicle.license_plate')}</dt>
-                <dd className="font-medium">{data.licensePlate}</dd>
-              </div>
-            )}
-            {data.vin && (
-              <div>
-                <dt className="text-muted-foreground">{t('vehicle.vin')}</dt>
-                <dd className="font-medium">{data.vin}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-muted-foreground">{t('vehicle.current_km')}</dt>
-              <dd className="font-medium">
-                {/* Niente fallback a initialKm: non sono i km attuali. Skeleton in attesa, trattino se la query fallisce. */}
-                {stats.data ? (
-                  fmt.km(stats.data.currentKm)
-                ) : stats.isError ? (
-                  '—'
-                ) : (
-                  <Skeleton className="h-5 w-20" />
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{t('vehicle.initial_km')}</dt>
-              <dd className="font-medium">{fmt.km(data.initialKm)}</dd>
-            </div>
-          </dl>
-          {data.notes && (
-            <div className="rounded-md bg-muted px-3 py-2 text-sm">{data.notes}</div>
-          )}
-        </CardContent>
-      </Card>
+      <ListSection aria-label={t('vehicle.summary.log')}>
+        {log.map(({ to, label, count, Icon, iconClassName }) => (
+          <ListRow
+            key={to}
+            as={Link}
+            to={to}
+            icon={<Icon />}
+            iconClassName={iconClassName}
+            label={label}
+            value={count ?? undefined}
+            chevron
+          />
+        ))}
+      </ListSection>
 
-      {stats.data && <VehicleStatsCard stats={stats.data} />}
-
-      <Tabs defaultValue="maintenance" className="w-full">
-        <TabsList className="flex w-full justify-start overflow-x-auto no-scrollbar [&>button]:shrink-0 sm:grid sm:grid-cols-5">
-          <TabsTrigger value="maintenance">{t('nav.maintenance')}</TabsTrigger>
-          <TabsTrigger value="refueling">{t('nav.refueling')}</TabsTrigger>
-          <TabsTrigger value="expenses">{t('nav.expenses')}</TabsTrigger>
-          <TabsTrigger value="reminders">{t('nav.reminders')}</TabsTrigger>
-          <TabsTrigger value="attachments">{t('nav.attachments')}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="maintenance">
-          <VehicleMaintenanceTab vehicleId={data.id} />
-        </TabsContent>
-        <TabsContent value="refueling">
-          <VehicleRefuelingTab vehicleId={data.id} />
-        </TabsContent>
-        <TabsContent value="expenses">
-          <VehicleExpensesTab vehicleId={data.id} />
-        </TabsContent>
-        <TabsContent value="reminders">
-          <VehicleRemindersTab vehicleId={data.id} />
-        </TabsContent>
-        <TabsContent value="attachments">
-          <AttachmentsSection entityType="vehicle" entityId={data.id} readOnly={!canEdit} />
-        </TabsContent>
-      </Tabs>
-
-      {canShare && currentUser && (
-        <VehicleShareCard
-          vehicleId={data.id}
-          currentUserId={currentUser.id}
-          onAccessLost={() => void navigate('/vehicles')}
+      <InfoList>
+        <InfoRow label={t('vehicle.type')} value={t(`vehicle.type_options.${data.type}`)} />
+        <InfoRow
+          label={t('vehicle.fuel_type')}
+          value={
+            <span className="flex flex-wrap justify-end gap-1">
+              <FuelTypeBadge type={data.fuelType} />
+              {data.secondaryFuelType && <FuelTypeBadge type={data.secondaryFuelType} />}
+            </span>
+          }
         />
+        {data.licensePlate && <InfoRow label={t('vehicle.license_plate')} value={data.licensePlate} />}
+        {data.vin && <InfoRow label={t('vehicle.vin')} value={<span className="truncate">{data.vin}</span>} />}
+        <InfoRow label={t('vehicle.initial_km')} value={fmt.km(data.initialKm)} />
+        {stats.data && <InfoRow label={t('vehicle.stats.km_driven')} value={fmt.km(stats.data.kmDriven)} />}
+        {stats.data && <InfoRow label={t('vehicle.stats.total_cost')} value={fmt.currency(stats.data.totals.cost)} />}
+        {stats.data && stats.data.costPerKm !== null && (
+          <InfoRow label={t('vehicle.stats.cost_per_km')} value={fmt.currency(stats.data.costPerKm)} />
+        )}
+        {data.ownership === 'shared' && <InfoRow label={t('vehicle.access')} value={t('vehicle.shared_read_only')} />}
+        {data.notes && (
+          <div className="px-4 py-3">
+            <dt className="sr-only">{t('common.notes')}</dt>
+            <dd className="whitespace-pre-wrap text-[0.9375rem] text-muted-foreground">{data.notes}</dd>
+          </div>
+        )}
+      </InfoList>
+
+      <AttachmentsSection entityType="vehicle" entityId={data.id} readOnly={!canEdit} />
+
+      <VehicleCharts vehicleId={data.id} />
+
+      {/* Condivisione: su desktop in una finestra; sul telefono è una pagina (/vehicles/:id/sharing). */}
+      {canShare && currentUser && (
+        <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+          <DialogContent className="max-w-xl bg-background">
+            <DialogHeader>
+              <DialogTitle>{t('vehicle.share.title')}</DialogTitle>
+              <DialogDescription>{data.name}</DialogDescription>
+            </DialogHeader>
+            <VehicleShareCard
+              vehicleId={data.id}
+              currentUserId={currentUser.id}
+              onAccessLost={() => void navigate('/vehicles')}
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
       <ConfirmDialog

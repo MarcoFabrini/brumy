@@ -1,25 +1,40 @@
-import { Bell, Car, Home, Settings, type LucideIcon } from 'lucide-react';
+import { Bell, Car, Home, Settings, UserRound, type LucideIcon } from 'lucide-react';
 
 /**
- * Navigation tree — single source of truth per Sidebar e BottomNav.
- * La Sidebar desktop mostra le voci `desktop` (Dashboard, Veicoli, Impostazioni): manutenzioni,
- * rifornimenti, spese e promemoria si gestiscono dentro il veicolo, con le sue tab e il suo
- * "Aggiungi". La BottomNav mobile mostra solo le voci `mobile` (Home + Promemoria), col pulsante
- * "+" centrale iniettato in mezzo.
+ * Navigation tree — single source of truth per Sidebar e tab bar (BottomNav).
+ * La Sidebar desktop mostra le voci `desktop` con le stesse etichette della tab bar (Home, Veicoli, Scadenze; il
+ * Profilo sta in fondo con l'avatar): rifornimenti, manutenzioni e spese si gestiscono dentro il veicolo, con il suo
+ * registro e il suo "Aggiungi". La tab bar mobile, come in un'app iOS, mostra le voci `mobile` con la loro etichetta breve
+ * (`tabLabelKey`): Home · Veicoli · [+] · Scadenze · Profilo, col pulsante "+" iniettato in mezzo.
  */
 export interface NavEntry {
   to: string;
   labelKey: string;
   Icon: LucideIcon;
-  /** Mostrato nella bottom nav mobile? (solo Home e Promemoria) */
+  /** Mostrato nella tab bar mobile? */
   mobile?: boolean;
+  /** Etichetta sotto l'icona nella tab bar (più corta della voce della sidebar). */
+  tabLabelKey?: string;
+  /** Icona nella tab bar, se diversa da quella della sidebar. */
+  TabIcon?: LucideIcon;
   /** Mostrato nella sidebar desktop? (default sì) */
   desktop?: boolean;
 }
 
 export const NAVIGATION: NavEntry[] = [
-  { to: '/', labelKey: 'nav.dashboard', Icon: Home, mobile: true },
-  { to: '/vehicles', labelKey: 'nav.vehicles', Icon: Car, mobile: false },
-  { to: '/reminders', labelKey: 'nav.reminders', Icon: Bell, mobile: true, desktop: false },
-  { to: '/settings', labelKey: 'nav.settings', Icon: Settings, mobile: false },
+  { to: '/', labelKey: 'nav.dashboard', Icon: Home, mobile: true, tabLabelKey: 'nav.tabs.home' },
+  { to: '/vehicles', labelKey: 'nav.vehicles', Icon: Car, mobile: true, tabLabelKey: 'nav.tabs.vehicles' },
+  { to: '/reminders', labelKey: 'nav.reminders', Icon: Bell, mobile: true, tabLabelKey: 'nav.tabs.deadlines' },
+  {
+    to: '/settings',
+    // Profilo e impostazioni stanno nella stessa pagina: "Profilo" sia nella tab bar sia nella sidebar.
+    labelKey: 'nav.tabs.profile',
+    Icon: Settings,
+    mobile: true,
+    tabLabelKey: 'nav.tabs.profile',
+    TabIcon: UserRound,
+  },
 ];
+
+/** Quante voci della tab bar stanno a sinistra del "+" (le altre a destra). */
+export const TAB_BAR_LEADING = 2;

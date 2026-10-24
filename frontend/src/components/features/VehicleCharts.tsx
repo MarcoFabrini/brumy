@@ -2,40 +2,22 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChartsSection } from './ChartsSection';
 import { DASHBOARD_CHART_MONTHS } from '@/hooks/useDashboardCharts';
-import { useVehicleCharts, useVehicles } from '@/hooks/useVehicles';
-import { shouldShowVehicleCharts } from '@/lib/vehicleCharts';
-import type { Vehicle } from '@/api/types/vehicle';
+import { useVehicleCharts } from '@/hooks/useVehicles';
 
 export interface VehicleChartsProps {
-  vehicle: Pick<Vehicle, 'id' | 'ownership' | 'archivedAt'>;
+  vehicleId: number;
 }
 
-/**
- * Grafici del solo veicolo nel suo dettaglio. Nascosti (e senza richieste) quando duplicherebbero
- * la dashboard: veicolo proprio, attivo e unico proprio (vedi `shouldShowVehicleCharts`).
- * Per un veicolo proprio attivo la scelta dipende dalla lista veicoli: finché non arriva non si
- * mostra nulla; se la lista fallisce si mostrano i grafici (l'accesso lo garantisce il backend).
- */
-export function VehicleCharts({ vehicle }: VehicleChartsProps) {
+/** I grafici del solo veicolo, in fondo alla sua scheda (la Home ha solo le spese mensili di tutti i veicoli). */
+export function VehicleCharts({ vehicleId }: VehicleChartsProps) {
   const { t } = useTranslation();
   const headingId = useId();
-  const vehicles = useVehicles();
-
-  const dependsOnList = vehicle.ownership === 'owned' && !vehicle.archivedAt;
-  const show =
-    !dependsOnList ||
-    vehicles.isError ||
-    (vehicles.data !== undefined && shouldShowVehicleCharts(vehicle, vehicles.data));
-
-  const charts = useVehicleCharts(vehicle.id, DASHBOARD_CHART_MONTHS, { enabled: show });
-
-  if (!show) return null;
+  const charts = useVehicleCharts(vehicleId, DASHBOARD_CHART_MONTHS);
 
   return (
     <ChartsSection
       headingId={headingId}
-      title={t('vehicle.charts.title')}
-      subtitle={t('vehicle.charts.subtitle', { months: DASHBOARD_CHART_MONTHS })}
+      title={t('vehicle.summary.charts')}
       data={charts.data}
       isLoading={charts.isLoading}
       error={charts.error}

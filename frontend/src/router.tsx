@@ -30,6 +30,7 @@ const VehicleListPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleList
 const VehicleNewPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleNewPage');
 const VehicleDetailPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleDetailPage');
 const VehicleEditPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleEditPage');
+const VehicleSharingPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleSharingPage');
 const MaintenanceListPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceListPage');
 const MaintenanceNewPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceNewPage');
 const MaintenanceDetailPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceDetailPage');
@@ -136,6 +137,7 @@ export const routes: RouteObject[] = [
           { path: '/vehicles/new', element: <VehicleNewPage /> },
           { path: '/vehicles/:id', element: <VehicleDetailPage /> },
           { path: '/vehicles/:id/edit', element: <VehicleEditPage /> },
+          { path: '/vehicles/:id/sharing', element: <VehicleSharingPage /> },
           { path: '/maintenance', element: <MaintenanceListPage /> },
           { path: '/maintenance/new', element: <MaintenanceNewPage /> },
           { path: '/maintenance/:id', element: <MaintenanceDetailPage /> },
