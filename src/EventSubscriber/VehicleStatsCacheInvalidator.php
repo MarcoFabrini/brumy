@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use App\Entity\Component;
 use App\Entity\Expense;
 use App\Entity\Maintenance;
 use App\Entity\Refueling;
@@ -17,7 +18,7 @@ use Doctrine\ORM\Events;
 
 /**
  * Le statistiche del veicolo sono in cache (5 minuti): ogni scrittura che le alimenta — rifornimenti,
- * manutenzioni, spese e il veicolo stesso (km iniziali, carburanti) — la invalida subito, così una
+ * manutenzioni, spese, componenti e il veicolo stesso (km iniziali, carburanti) — la invalida subito, così una
  * modifica si vede al prossimo caricamento invece che dopo la scadenza.
  *
  * Come AuditSubscriber, raccoglie per UN flush: ogni onFlush riparte da zero e onClear svuota, così
@@ -49,7 +50,7 @@ final class VehicleStatsCacheInvalidator
             foreach ($entities as $entity) {
                 $vehicleId = match (true) {
                     $entity instanceof Vehicle => $entity->getId(),
-                    $entity instanceof Refueling, $entity instanceof Maintenance, $entity instanceof Expense => $entity->getVehicle()->getId(),
+                    $entity instanceof Refueling, $entity instanceof Maintenance, $entity instanceof Expense, $entity instanceof Component => $entity->getVehicle()->getId(),
                     default => null,
                 };
                 if ($vehicleId !== null) {

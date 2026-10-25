@@ -37,7 +37,7 @@ describe('schemi con importi decimali: la virgola della tastiera italiana è acc
     }
   });
   it('spesa: importo con virgola (max 2 decimali)', () => {
-    const base = { vehicleId: 1, occurredAt: '2026-09-25', category: 'other', description: 'x', recurring: false };
+    const base = { vehicleId: 1, occurredAt: '2026-09-25', section: 'other', category: 'other', description: 'x', recurring: false };
     const ok = expenseSchema.safeParse({ ...base, amount: '120,90' });
     expect(ok.success && ok.data.amount).toBe('120.90');
     expect(expenseSchema.safeParse({ ...base, amount: '120,999' }).success).toBe(false);
@@ -50,6 +50,7 @@ describe('schemi con importi decimali: la virgola della tastiera italiana è acc
       type: 'oil_change',
       category: 'scheduled',
       description: 'Tagliando',
+      components: [],
     };
     const ok = maintenanceSchema.safeParse({ ...base, cost: '89,5' });
     expect(ok.success && ok.data.cost).toBe('89.5');
@@ -70,7 +71,7 @@ describe('limiti allineati al backend (DecimalString)', () => {
   });
 
   it('spesa: importo a zero rifiutato, manutenzione gratuita (costo 0) ammessa', () => {
-    const expense = { vehicleId: 1, occurredAt: '2026-09-25', category: 'other', description: 'x', recurring: false };
+    const expense = { vehicleId: 1, occurredAt: '2026-09-25', section: 'other', category: 'other', description: 'x', recurring: false };
     expect(expenseSchema.safeParse({ ...expense, amount: '0' }).success).toBe(false);
     expect(expenseSchema.safeParse({ ...expense, amount: '123456789' }).success).toBe(false); // 9 cifre intere
 
@@ -81,6 +82,7 @@ describe('limiti allineati al backend (DecimalString)', () => {
       type: 'oil_change',
       category: 'scheduled',
       description: 'Tagliando',
+      components: [],
     };
     expect(maintenanceSchema.safeParse({ ...maintenance, cost: '0' }).success).toBe(true);
   });
@@ -89,6 +91,7 @@ describe('limiti allineati al backend (DecimalString)', () => {
     const r = expenseSchema.safeParse({
       vehicleId: 1,
       occurredAt: '2026-09-25',
+      section: 'other',
       category: 'other',
       description: 'x',
       amount: '10',

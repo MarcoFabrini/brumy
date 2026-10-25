@@ -4,6 +4,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { ChartCard } from './ChartCard';
 import { CHART_COLORS, TOOLTIP_CONTENT_STYLE, chartColor } from './chartTheme';
 import { REST_CATEGORY, type CategorySlice } from '@/lib/dashboardCharts';
+import { SPENDING_SLICE_SECTIONS, sectionOf } from './vehicleRecordActions';
 import { useFormat } from '@/hooks/useFormat';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
@@ -12,16 +13,17 @@ export interface SpendingByCategoryChartProps {
   slices: CategorySlice[];
 }
 
-/** Rifornimenti, manutenzioni e spese per categoria hanno etichette in sezioni diverse. */
-function categoryLabel(t: TFunction, category: string): string {
-  if (category === 'fuel' || category === 'maintenance' || category === REST_CATEGORY) {
-    return t(`dashboard.charts.category.${category}`);
-  }
-  return t(`expense.category_options.${category}`, { defaultValue: category });
+/** Una fetta per sezione (nome e colore della sezione); le categorie delle altre spese col loro nome. */
+function categoryLabel(t: TFunction, slice: CategorySlice): string {
+  const section = SPENDING_SLICE_SECTIONS[slice.category];
+  if (section) return t(sectionOf(section).titleKey);
+  return slice.name ?? t(`dashboard.charts.category.${REST_CATEGORY}`);
 }
 
-/** "Altre categorie" sempre nel colore neutro (l'ultimo della palette), le altre in ordine. */
+/** Sezioni nel loro colore, "Altre categorie" nel colore neutro (l'ultimo della palette), le categorie in ordine. */
 function sliceColor(slice: CategorySlice, index: number): string {
+  const section = SPENDING_SLICE_SECTIONS[slice.category];
+  if (section) return sectionOf(section).color;
   return slice.category === REST_CATEGORY ? chartColor(CHART_COLORS.length - 1) : chartColor(index);
 }
 
@@ -34,7 +36,7 @@ export function SpendingByCategoryChart({ slices }: SpendingByCategoryChartProps
   const fmt = useFormat();
   const reducedMotion = usePrefersReducedMotion();
   const data = slices.map((slice, i) => ({
-    name: categoryLabel(t, slice.category),
+    name: categoryLabel(t, slice),
     amount: slice.amount,
     color: sliceColor(slice, i),
   }));

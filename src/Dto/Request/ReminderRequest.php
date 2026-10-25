@@ -42,6 +42,9 @@ final class ReminderRequest
         #[Assert\Positive]
         #[Assert\LessThanOrEqual(value: 9_999_999, message: 'common.km_too_large')]
         public ?int $recurrenceKm = null,
+
+        #[Assert\Length(max: 2000)]
+        public ?string $notes = null,
     ) {
     }
 

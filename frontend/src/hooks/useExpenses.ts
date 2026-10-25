@@ -6,7 +6,9 @@ import {
   listExpenses,
   updateExpense,
 } from '@/api/endpoints/expenses';
-import type { CreateExpenseDto, UpdateExpenseDto } from '@/api/types/expense';
+import type { CreateExpenseDto, ExpenseSection, UpdateExpenseDto } from '@/api/types/expense';
+import { reminderKeys } from '@/hooks/useReminders';
+import { userValueKeys } from '@/hooks/userValueKeys';
 import { invalidateVehicleStats } from '@/hooks/useVehicles';
 
 export const expenseKeys = {
@@ -15,10 +17,10 @@ export const expenseKeys = {
   detail: (id: number) => [...expenseKeys.all, 'detail', id] as const,
 };
 
-export function useExpenses(vehicleId: number) {
+export function useExpenses(vehicleId: number, section?: ExpenseSection) {
   return useQuery({
-    queryKey: expenseKeys.byVehicle(vehicleId),
-    queryFn: () => listExpenses(vehicleId),
+    queryKey: [...expenseKeys.byVehicle(vehicleId), section ?? 'all'],
+    queryFn: () => listExpenses(vehicleId, section),
     enabled: vehicleId > 0,
   });
 }
@@ -37,6 +39,9 @@ export function useCreateExpense() {
     mutationFn: (body: CreateExpenseDto) => createExpense(body),
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: expenseKeys.byVehicle(vars.vehicleId) });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
+      // Revisione, assicurazione e bollo possono aver aggiornato o creato un promemoria
+      void qc.invalidateQueries({ queryKey: reminderKeys.all });
       invalidateVehicleStats(qc, vars.vehicleId);
     },
   });
@@ -49,6 +54,7 @@ export function useUpdateExpense(id: number) {
     onSuccess: (_data, vars) => {
       // Il PUT può spostare la voce su un altro veicolo: si invalida tutto il dominio, non solo il veicolo corrente.
       void qc.invalidateQueries({ queryKey: expenseKeys.all });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
       invalidateVehicleStats(qc, vars.vehicleId);
     },
   });
@@ -60,6 +66,7 @@ export function useDeleteExpense(vehicleId: number) {
     mutationFn: (id: number) => deleteExpense(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: expenseKeys.all });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
       invalidateVehicleStats(qc, vehicleId);
     },
   });

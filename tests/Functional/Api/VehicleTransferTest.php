@@ -7,13 +7,16 @@ namespace App\Tests\Functional\Api;
 use App\Entity\Organization;
 use App\Entity\PushSubscription;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\Vehicle;
 use App\Enum\AttachmentEntityType;
+use App\Enum\ExpenseCategory;
 use App\Enum\OrgRole;
 use App\Enum\PushPlatform;
 use App\Enum\RecurringPeriod;
 use App\Enum\ReminderUrgency;
 use App\Enum\ShareRole;
+use App\Enum\UserValueKind;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\ReminderRepository;
 use App\Repository\VehicleRepository;
@@ -25,13 +28,17 @@ use App\Service\Push\PushDeliveryResult;
 use App\Service\Push\PushDispatcher;
 use App\Service\Push\PushNotifierInterface;
 use App\Service\Push\PushPayload;
+use App\Service\UserValues;
 use App\Repository\PushSubscriptionRepository;
 use App\Tests\Factory\AttachmentFactory;
+use App\Tests\Factory\ExpenseFactory;
 use App\Tests\Factory\MaintenanceFactory;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
+use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\ReminderFactory;
 use App\Tests\Factory\UserFactory;
+use App\Tests\Factory\UserValueFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
@@ -544,11 +551,17 @@ final class VehicleTransferTest extends ApiTestCase
         ]);
 
         $conn = $this->em()->getConnection();
+        // Solo il collegamento alle voci (distributore, officina, categoria) passa alla lista del nuovo proprietario:
+        // lo copre testTransferCopiesValuesToRecipientList, qui conta che nient'altro cambi.
+        $withoutValues = static fn (array $rows): array => array_map(
+            static fn (array $row): array => array_diff_key($row, ['station_id' => true, 'workshop_id' => true, 'category_id' => true]),
+            $rows,
+        );
         $snapshot = fn (): array => [
             'vehicle' => $conn->fetchAssociative('SELECT * FROM vehicles WHERE id = ?', [$this->vehicle->getId()]),
-            'maintenances' => $conn->fetchAllAssociative('SELECT * FROM maintenances ORDER BY id'),
-            'refuelings' => $conn->fetchAllAssociative('SELECT * FROM refuelings ORDER BY id'),
-            'expenses' => $conn->fetchAllAssociative('SELECT * FROM expenses ORDER BY id'),
+            'maintenances' => $withoutValues($conn->fetchAllAssociative('SELECT * FROM maintenances ORDER BY id')),
+            'refuelings' => $withoutValues($conn->fetchAllAssociative('SELECT * FROM refuelings ORDER BY id')),
+            'expenses' => $withoutValues($conn->fetchAllAssociative('SELECT * FROM expenses ORDER BY id')),
             'reminders' => $conn->fetchAllAssociative('SELECT id, vehicle_id, due_date, completed_at FROM reminders ORDER BY id'),
             'attachments' => $conn->fetchAllAssociative('SELECT * FROM attachments ORDER BY id'),
             'vehicleCount' => $conn->fetchOne('SELECT COUNT(*) FROM vehicles WHERE organization_id = ?', [$this->org->getId()]),
@@ -835,6 +848,86 @@ final class VehicleTransferTest extends ApiTestCase
         self::assertContains('Member notification push failed', $messages);
         // un canale che cade non ferma gli altri: entrambi i destinatari hanno provato entrambi i canali
         self::assertCount(2, array_filter($messages, static fn (string $m): bool => $m === 'Member notification email failed'));
+    }
+
+    // ---------------- le voci delle liste seguono il veicolo ----------------
+
+    public function testTransferCopiesValuesToRecipientList(): void
+    {
+        $eni = UserValueFactory::createOne(['user' => $this->alice, 'organization' => $this->org, 'kind' => UserValueKind::STATION, 'name' => 'Eni']);
+        $camper = static::getContainer()->get(UserValues::class)->findOrCreate($this->alice, $this->org, UserValueKind::EXPENSE_CATEGORY, 'Revisione camper');
+        $refueling = RefuelingFactory::createOne(['organization' => $this->org, 'vehicle' => $this->vehicle, 'station' => $eni]);
+        // La prima spesa che passa a Bob ha una categoria fatta a mano: la sua lista parte comunque dalle categorie di partenza
+        $expense = ExpenseFactory::createOne(['organization' => $this->org, 'vehicle' => $this->vehicle, 'category' => $camper]);
+        $toll = ExpenseFactory::createOne(['organization' => $this->org, 'vehicle' => $this->vehicle, 'category' => ExpenseCategory::TOLL]);
+        $eniId = $eni->getId();
+
+        $this->transfer($this->alice, ['userId' => $this->bob->getId()]);
+        self::assertResponseStatusCodeSame(204);
+
+        $bobToken = $this->tokenFor($this->bob, $this->org);
+        $this->jsonRequest('GET', '/api/refuelings/'.$refueling->getId(), accessToken: $bobToken);
+        self::assertResponseIsSuccessful();
+        $station = $this->jsonBody()['station'];
+        self::assertSame('Eni', $station['name']);
+        self::assertNotSame($eniId, $station['id']);
+        $this->assertInListOf($this->bob, $station['id'], UserValueKind::STATION);
+
+        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), accessToken: $bobToken);
+        self::assertResponseIsSuccessful();
+        $category = $this->jsonBody()['category'];
+        self::assertSame('Revisione camper', $category['name']);
+        $this->assertInListOf($this->bob, $category['id'], UserValueKind::EXPENSE_CATEGORY);
+
+        $this->jsonRequest('GET', '/api/expenses/'.$toll->getId(), accessToken: $bobToken);
+        self::assertResponseIsSuccessful();
+        $tollValue = $this->assertInListOf($this->bob, $this->jsonBody()['category']['id'], UserValueKind::EXPENSE_CATEGORY);
+        self::assertSame(ExpenseCategory::TOLL->value, $tollValue->getStarterKey());
+
+        $bobCategories = $this->em()->getRepository(UserValue::class)->findBy(['user' => $this->bob, 'organization' => $this->org, 'kind' => UserValueKind::EXPENSE_CATEGORY]);
+        self::assertCount(\count(ExpenseCategory::starters()) + 1, $bobCategories, 'categorie di partenza + "Revisione camper"');
+        self::assertCount(\count(ExpenseCategory::starters()), array_filter($bobCategories, static fn (UserValue $v): bool => $v->getStarterKey() !== null));
+
+        // La lista di Alice non perde niente
+        $aliceEni = $this->em()->find(UserValue::class, $eniId);
+        self::assertNotNull($aliceEni);
+        self::assertSame('Eni', $aliceEni->getName());
+        self::assertSame($this->uid($this->alice), $aliceEni->getUser()->getId());
+    }
+
+    public function testTransferMapsStarterByKey(): void
+    {
+        $this->bob->setLocale('en');
+        $this->em()->flush();
+        $expense = ExpenseFactory::createOne(['organization' => $this->org, 'vehicle' => $this->vehicle, 'category' => ExpenseCategory::TOLL]);
+        self::assertSame('Pedaggio', $expense->getCategory()?->getName());
+
+        $this->transfer($this->alice, ['userId' => $this->bob->getId()]);
+        self::assertResponseStatusCodeSame(204);
+
+        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), accessToken: $this->tokenFor($this->bob, $this->org));
+        self::assertResponseIsSuccessful();
+        $category = $this->jsonBody()['category'];
+        self::assertSame('Toll', $category['name']);
+        $value = $this->assertInListOf($this->bob, $category['id'], UserValueKind::EXPENSE_CATEGORY);
+        self::assertSame(ExpenseCategory::TOLL->value, $value->getStarterKey());
+        self::assertNull(
+            $this->em()->getRepository(UserValue::class)->findOneBy(['user' => $this->bob, 'organization' => $this->org, 'nameKey' => 'pedaggio']),
+            'Nessun "Pedaggio" duplicato nella lista di Bob',
+        );
+    }
+
+    private function assertInListOf(User $owner, mixed $valueId, UserValueKind $kind): UserValue
+    {
+        self::assertIsInt($valueId);
+        $this->em()->clear();
+        $value = $this->em()->find(UserValue::class, $valueId);
+        self::assertNotNull($value);
+        self::assertSame($this->uid($owner), $value->getUser()->getId());
+        self::assertSame($this->org->getId(), $value->getOrganization()->getId());
+        self::assertSame($kind, $value->getKind());
+
+        return $value;
     }
 
     public function testTheNewOwnerCanTransferTheVehicleBack(): void

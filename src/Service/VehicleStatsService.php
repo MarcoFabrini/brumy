@@ -48,10 +48,12 @@ final class VehicleStatsService
     /**
      * Statistiche complete per un veicolo. `totals.cost` e `costPerKm` contano ogni addebito già avvenuto
      * delle spese ricorrenti, mentre `totals.expenses` è il numero di RECORD spesa (non di addebiti).
+     * `totals.sections` conta i record per sezione: scheduled, unscheduled, inspection (lavori), tax, insurance,
+     * expense (spese) e component (componenti non eliminati), con le chiavi delle sezioni del frontend.
      *
      * @return array{
      *     consumption: array<string, float|null>,   // per fuel type → km/l
-     *     totals: array{cost: string, refuelings: int, maintenances: int, expenses: int},
+     *     totals: array{cost: string, refuelings: int, maintenances: int, expenses: int, sections: array<string, int>},
      *     currentKm: int,
      *     kmDriven: int,
      *     costPerKm: float|null,
@@ -71,7 +73,7 @@ final class VehicleStatsService
     /**
      * @return array{
      *     consumption: array<string, float|null>,
-     *     totals: array{cost: string, refuelings: int, maintenances: int, expenses: int},
+     *     totals: array{cost: string, refuelings: int, maintenances: int, expenses: int, sections: array<string, int>},
      *     currentKm: int,
      *     kmDriven: int,
      *     costPerKm: float|null,
@@ -92,6 +94,7 @@ final class VehicleStatsService
                 'refuelings' => $this->countByTable($vehicleId, 'refuelings'),
                 'maintenances' => $this->countByTable($vehicleId, 'maintenances'),
                 'expenses' => $this->countByTable($vehicleId, 'expenses'),
+                'sections' => $this->countBySection($vehicleId),
             ],
             'currentKm' => $currentKm,
             'kmDriven' => $kmDriven,
@@ -200,6 +203,27 @@ final class VehicleStatsService
     private static function cents(string $decimal): int
     {
         return (int) round((float) $decimal * 100);
+    }
+
+    /** @return array<string, int> sezione → numero di record, zero compresi */
+    private function countBySection(int $vehicleId): array
+    {
+        /** @var list<array{section: string, n: int|string}> $rows */
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT category AS section, COUNT(*) AS n FROM maintenances WHERE vehicle_id = :vid GROUP BY category
+             UNION ALL
+             SELECT CASE section WHEN 'other' THEN 'expense' ELSE section END, COUNT(*) FROM expenses WHERE vehicle_id = :vid GROUP BY section
+             UNION ALL
+             SELECT 'component', COUNT(*) FROM components WHERE vehicle_id = :vid AND deleted_at IS NULL",
+            ['vid' => $vehicleId],
+        );
+
+        $counts = array_fill_keys(['scheduled', 'unscheduled', 'inspection', 'tax', 'insurance', 'expense', 'component'], 0);
+        foreach ($rows as $row) {
+            $counts[$row['section']] = (int) $row['n'];
+        }
+
+        return $counts;
     }
 
     private function countByTable(int $vehicleId, string $table): int

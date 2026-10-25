@@ -11,6 +11,7 @@ import {
   FuelTypeBadge,
   InfoList,
   InfoRow,
+  NotesRow,
 } from '@/components/features';
 import { useDeleteRefueling, useRefueling } from '@/hooks/useRefuelings';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
@@ -52,13 +53,14 @@ export function RefuelingDetailPage() {
         title={t('refueling.detail_title', {
           liters: fmt.decimal(litersNum, 2),
         })}
-        description={fmt.date(data.refueledAt)}
+        description={data.description ?? fmt.date(data.refueledAt)}
         onBack={() => navigate(`/refueling?vehicleId=${data.vehicleId}`)}
         action={canEdit ? <EditLink to={`/refueling/${data.id}/edit`} /> : undefined}
       />
 
       <InfoList>
         <InfoRow label={t('refueling.total_cost')} value={<span className="font-semibold text-foreground">{fmt.currency(data.totalCost)}</span>} />
+        <InfoRow label={t('refueling.refueled_at')} value={fmt.date(data.refueledAt)} />
         <InfoRow label={t('refueling.km')} value={fmt.km(data.km)} />
         <InfoRow label={t('refueling.liters')} value={`${fmt.decimal(litersNum, 2)} L`} />
         <InfoRow label={t('refueling.price_per_liter')} value={fmt.currency(data.pricePerLiter)} />
@@ -72,12 +74,7 @@ export function RefuelingDetailPage() {
           }
         />
         {data.station && <InfoRow label={t('refueling.station')} value={<span className="truncate">{data.station}</span>} />}
-        {data.notes && (
-          <div className="px-4 py-3">
-            <dt className="sr-only">{t('common.notes')}</dt>
-            <dd className="whitespace-pre-wrap text-[0.9375rem] text-muted-foreground">{data.notes}</dd>
-          </div>
-        )}
+        <NotesRow label={t('common.notes')} notes={data.notes} />
       </InfoList>
 
       <AttachmentsSection entityType="refueling" entityId={data.id} readOnly={!canEdit} />

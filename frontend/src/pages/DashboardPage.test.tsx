@@ -49,7 +49,11 @@ const LAST_MONTH = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
 
 const spending = (fuel: string, maintenance: string, total: string) => ({
   refuelings: fuel,
-  maintenances: maintenance,
+  scheduled: maintenance,
+  unscheduled: '0.00',
+  inspection: '0.00',
+  taxes: '0.00',
+  insurance: '0.00',
   expenses: '0.00',
   total,
 });
@@ -131,7 +135,7 @@ describe('DashboardPage', () => {
     const month = await screen.findByRole('region', { name: 'Speso questo mese' });
     expect(within(month).getByText(/60,00/)).toBeInTheDocument();
     expect(within(month).getByText(/40,00.*in meno del mese scorso/)).toBeInTheDocument();
-    expect(within(month).getByText('Carburante').nextSibling).toHaveTextContent('40,00');
+    expect(within(month).getByText('Rifornimenti').nextSibling).toHaveTextContent('40,00');
     expect(within(month).getByText('Km percorsi').nextSibling).toHaveTextContent('450 km');
     expect((await screen.findAllByText('Spese mensili')).length).toBeGreaterThan(0);
   });

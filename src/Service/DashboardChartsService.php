@@ -32,7 +32,8 @@ use Doctrine\DBAL\Connection;
  *
  * Le spese ricorrenti entrano a ogni addebito già avvenuto che cade nella finestra ({@see RecurringSchedule}):
  * quelle singole restano in SQL (`recurring = 0`), le ricorrenti si leggono con UNA query in più per
- * tutti i veicoli e si espandono in PHP per mese e per categoria. Il risultato dipende dal giorno
+ * tutti i veicoli e si espandono in PHP per mese, sezione e voce di categoria. Le serie sono per sezione di
+ * costo ({@see self::SOURCES}); i componenti non contano (il loro prezzo è già nel costo del lavoro che li monta). Il risultato dipende dal giorno
  * corrente (oggi come limite degli addebiti), ma i grafici non sono in cache, quindi nessun ritardo.
  * Le tre viste di spesa (serie mensile, totale, categorie) derivano dagli stessi importi e
  * tornano sempre alla pari.
@@ -43,14 +44,16 @@ use Doctrine\DBAL\Connection;
  * @phpstan-import-type FillInterval from FuelConsumption
  * @phpstan-import-type RefuelingRow from FuelConsumption
  *
- * @phpstan-type MonthSpending array{refuelings: string, maintenances: string, expenses: string, total: string}
+ * @phpstan-type CategorySlice array{category: string, name: string|null, amount: string}
+ * @phpstan-type CategoryCents array{name: string|null, cents: int}
+ * @phpstan-type MonthSpending array{refuelings: string, scheduled: string, unscheduled: string, inspection: string, taxes: string, insurance: string, expenses: string, total: string}
  * @phpstan-type MonthPoint array{month: string, spending: MonthSpending, kmDriven: int, consumption: array<string, float|null>}
  * @phpstan-type DashboardCharts array{
  *     from: string,
  *     to: string,
  *     fuelTypes: list<string>,
  *     months: list<MonthPoint>,
- *     spendingByCategory: list<array{category: string, amount: string}>,
+ *     spendingByCategory: list<CategorySlice>,
  *     totals: array{spending: string, kmDriven: int},
  * }
  */
@@ -59,9 +62,26 @@ final class DashboardChartsService
     public const DEFAULT_MONTHS = 12;
     public const MAX_MONTHS = 24;
 
-    /** Chiavi di `spendingByCategory` per rifornimenti e manutenzioni (le spese usano ExpenseCategory). */
-    private const CATEGORY_FUEL = 'fuel';
-    private const CATEGORY_MAINTENANCE = 'maintenance';
+    /**
+     * Sezioni di costo, nell'ordine delle serie mensili: rifornimenti, lavori ordinari, imprevisti, revisione
+     * (manutenzioni per `category`), tasse, assicurazione e altre spese (spese per `section`).
+     */
+    private const SOURCES = ['refuelings', 'scheduled', 'unscheduled', 'inspection', 'taxes', 'insurance', 'expenses'];
+
+    /**
+     * Chiave di `spendingByCategory` di ogni sezione. Le altre spese non hanno una fetta sola ma una per categoria,
+     * `expense:<id della voce>`: per id, così due voci con lo stesso nome non si fondono e un nome scelto
+     * dall'utente non collide con `fuel`.
+     */
+    private const SOURCE_SLICES = [
+        'refuelings' => 'fuel',
+        'scheduled' => 'scheduled',
+        'unscheduled' => 'unscheduled',
+        'inspection' => 'inspection',
+        'taxes' => 'tax',
+        'insurance' => 'insurance',
+    ];
+    private const CATEGORY_EXPENSE_PREFIX = 'expense:';
 
     /** Marcatore delle letture d'odometro precedenti alla finestra (base dei km cumulati). */
     private const BEFORE_WINDOW = 'before';
@@ -145,11 +165,16 @@ final class DashboardChartsService
         if ($ids !== []) {
             // Addebiti delle spese ricorrenti nella finestra, sommati a quelli delle spese singole.
             $recurring = $this->recurringExpenseCents($ids, $firstMonth, $currentMonth->modify('+1 month'), $this->clock->today());
-            foreach ($recurring['months'] as $key => $cents) {
-                $spending[$key]['expenses'] = ($spending[$key]['expenses'] ?? 0) + $cents;
+            foreach ($recurring['months'] as $key => $bySource) {
+                foreach ($bySource as $source => $cents) {
+                    $spending[$key][$source] = ($spending[$key][$source] ?? 0) + $cents;
+                }
             }
-            foreach ($recurring['categories'] as $category => $cents) {
-                $expenseCategories[$category] = ($expenseCategories[$category] ?? 0) + $cents;
+            foreach ($recurring['categories'] as $category => $slice) {
+                $expenseCategories[$category] = [
+                    'name' => $slice['name'],
+                    'cents' => ($expenseCategories[$category]['cents'] ?? 0) + $slice['cents'],
+                ];
             }
         }
         $kmDriven = $ids === [] ? [] : $this->monthlyKmDriven($vehicles, $monthKeys, $from, $until);
@@ -158,18 +183,15 @@ final class DashboardChartsService
         $points = [];
         $totalCents = 0;
         $totalKm = 0;
-        $sourceCents = ['refuelings' => 0, 'maintenances' => 0, 'expenses' => 0];
+        $sourceCents = array_fill_keys(self::SOURCES, 0);
         foreach ($monthKeys as $key) {
-            $cents = $spending[$key] ?? [];
-            $refuelings = $cents['refuelings'] ?? 0;
-            $maintenances = $cents['maintenances'] ?? 0;
-            $expenses = $cents['expenses'] ?? 0;
-            $monthTotal = $refuelings + $maintenances + $expenses;
+            $monthCents = [];
+            foreach (self::SOURCES as $source) {
+                $monthCents[$source] = $spending[$key][$source] ?? 0;
+                $sourceCents[$source] += $monthCents[$source];
+            }
+            $monthTotal = array_sum($monthCents);
             $km = $kmDriven[$key] ?? 0;
-
-            $sourceCents['refuelings'] += $refuelings;
-            $sourceCents['maintenances'] += $maintenances;
-            $sourceCents['expenses'] += $expenses;
             $totalCents += $monthTotal;
             $totalKm += $km;
 
@@ -180,15 +202,15 @@ final class DashboardChartsService
 
             $points[] = [
                 'month' => $key,
-                'spending' => [
-                    'refuelings' => self::money($refuelings),
-                    'maintenances' => self::money($maintenances),
-                    'expenses' => self::money($expenses),
-                    'total' => self::money($monthTotal),
-                ],
+                'spending' => self::monthSpending($monthCents, $monthTotal),
                 'kmDriven' => $km,
                 'consumption' => $monthConsumption,
             ];
+        }
+
+        $slices = [];
+        foreach (self::SOURCE_SLICES as $source => $slice) {
+            $slices[$slice] = ['name' => null, 'cents' => $sourceCents[$source]];
         }
 
         return [
@@ -196,10 +218,7 @@ final class DashboardChartsService
             'to' => $currentMonth->format('Y-m'),
             'fuelTypes' => $fuelTypes,
             'months' => $points,
-            'spendingByCategory' => self::byCategory([
-                self::CATEGORY_FUEL => $sourceCents['refuelings'],
-                self::CATEGORY_MAINTENANCE => $sourceCents['maintenances'],
-            ] + $expenseCategories),
+            'spendingByCategory' => self::byCategory($slices + $expenseCategories),
             'totals' => ['spending' => self::money($totalCents), 'kmDriven' => $totalKm],
         ];
     }
@@ -210,80 +229,86 @@ final class DashboardChartsService
      * Spese della finestra per mese e per sorgente, in centesimi.
      *
      * @param list<int> $ids
-     * @return array<string, array<'refuelings'|'maintenances'|'expenses', int>> mese (Y-m) → sorgente → centesimi
+     * @return array<string, array<string, int>> mese (Y-m) → sezione ({@see self::SOURCES}) → centesimi
      */
     private function monthlySpendingCents(array $ids, string $from, string $until): array
     {
-        /** @var list<array{source: 'refuelings'|'maintenances'|'expenses', ym: string, amount: string|null}> $rows */
+        /** @var list<array{source: string, ym: string, amount: string|null}> $rows */
         $rows = $this->db->fetchAllAssociative(
             "SELECT 'refuelings' AS source, DATE_FORMAT(refueled_at, '%Y-%m') AS ym, SUM(total_cost) AS amount
              FROM refuelings
              WHERE vehicle_id IN (:ids) AND refueled_at >= :from AND refueled_at < :until
              GROUP BY ym
              UNION ALL
-             SELECT 'maintenances', DATE_FORMAT(performed_at, '%Y-%m') AS ym, SUM(cost)
+             SELECT category, DATE_FORMAT(performed_at, '%Y-%m') AS ym, SUM(cost)
              FROM maintenances
              WHERE vehicle_id IN (:ids) AND performed_at >= :from AND performed_at < :until AND cost IS NOT NULL
-             GROUP BY ym
+             GROUP BY category, ym
              UNION ALL
-             SELECT 'expenses', DATE_FORMAT(occurred_at, '%Y-%m') AS ym, SUM(amount)
+             SELECT CASE section WHEN 'tax' THEN 'taxes' WHEN 'insurance' THEN 'insurance' ELSE 'expenses' END,
+                    DATE_FORMAT(occurred_at, '%Y-%m') AS ym, SUM(amount)
              FROM expenses
              WHERE vehicle_id IN (:ids) AND occurred_at >= :from AND occurred_at < :until AND recurring = 0
-             GROUP BY ym",
+             GROUP BY section, ym",
             ['ids' => $ids, 'from' => $from, 'until' => $until],
             ['ids' => ArrayParameterType::INTEGER],
         );
 
         $result = [];
         foreach ($rows as $row) {
-            $result[$row['ym']][$row['source']] = self::cents($row['amount']);
+            $result[$row['ym']][$row['source']] = ($result[$row['ym']][$row['source']] ?? 0) + self::cents($row['amount']);
         }
 
         return $result;
     }
 
     /**
-     * Spese della finestra per categoria (valori di ExpenseCategory), in centesimi.
+     * Altre spese singole della finestra per voce di categoria, in centesimi, col nome attuale della voce
+     * (tasse e assicurazione hanno una fetta per sezione).
      *
      * @param list<int> $ids
-     * @return array<string, int>
+     * @return array<string, CategoryCents> `expense:<id voce>` → nome e centesimi
      */
     private function expenseCategoryCents(array $ids, string $from, string $until): array
     {
-        /** @var list<array{category: string, amount: string|null}> $rows */
+        /** @var list<array{category_id: string|int, name: string, amount: string|null}> $rows */
         $rows = $this->db->fetchAllAssociative(
-            'SELECT category, SUM(amount) AS amount
-             FROM expenses
-             WHERE vehicle_id IN (:ids) AND occurred_at >= :from AND occurred_at < :until AND recurring = 0
-             GROUP BY category',
+            "SELECT e.category_id, c.name, SUM(e.amount) AS amount
+             FROM expenses e
+             INNER JOIN user_values c ON c.id = e.category_id
+             WHERE e.vehicle_id IN (:ids) AND e.occurred_at >= :from AND e.occurred_at < :until AND e.recurring = 0
+               AND e.section = 'other'
+             GROUP BY e.category_id, c.name",
             ['ids' => $ids, 'from' => $from, 'until' => $until],
             ['ids' => ArrayParameterType::INTEGER],
         );
 
         $result = [];
         foreach ($rows as $row) {
-            $result[$row['category']] = self::cents($row['amount']);
+            $result[self::CATEGORY_EXPENSE_PREFIX.$row['category_id']] = ['name' => $row['name'], 'cents' => self::cents($row['amount'])];
         }
 
         return $result;
     }
 
     /**
-     * Addebiti delle spese ricorrenti che cadono nella finestra, in centesimi per mese e per categoria.
+     * Addebiti delle spese ricorrenti che cadono nella finestra, in centesimi per mese e sezione, e per categoria
+     * (solo le altre spese, come {@see self::expenseCategoryCents()}).
      * Una sola query per tutti i veicoli: si leggono le ricorrenti già iniziate prima della fine della
      * finestra e non finite prima del suo inizio; poi ogni spesa si espande con {@see RecurringSchedule}.
      *
      * @param list<int> $ids
-     * @return array{months: array<string, int>, categories: array<string, int>}
+     * @return array{months: array<string, array<string, int>>, categories: array<string, CategoryCents>}
      */
     private function recurringExpenseCents(array $ids, \DateTimeImmutable $from, \DateTimeImmutable $until, \DateTimeImmutable $today): array
     {
-        /** @var list<array{amount: string, category: string, occurred_at: string, recurring_period: string|null, recurring_until: string|null}> $rows */
+        /** @var list<array{amount: string, section: string, category_id: string|int|null, name: string|null, occurred_at: string, recurring_period: string|null, recurring_until: string|null}> $rows */
         $rows = $this->db->fetchAllAssociative(
-            'SELECT amount, category, occurred_at, recurring_period, recurring_until
-             FROM expenses
-             WHERE vehicle_id IN (:ids) AND recurring = 1
-               AND occurred_at < :until AND (recurring_until IS NULL OR recurring_until >= :from)',
+            'SELECT e.amount, e.section, e.category_id, c.name, e.occurred_at, e.recurring_period, e.recurring_until
+             FROM expenses e
+             LEFT JOIN user_values c ON c.id = e.category_id
+             WHERE e.vehicle_id IN (:ids) AND e.recurring = 1
+               AND e.occurred_at < :until AND (e.recurring_until IS NULL OR e.recurring_until >= :from)',
             ['ids' => $ids, 'from' => $from->format('Y-m-d'), 'until' => $until->format('Y-m-d')],
             ['ids' => ArrayParameterType::INTEGER],
         );
@@ -306,10 +331,18 @@ final class DashboardChartsService
                 );
 
             $amount = self::cents($row['amount']);
+            $source = match ($row['section']) {
+                'tax' => 'taxes',
+                'insurance' => 'insurance',
+                default => 'expenses',
+            };
+            $category = $source === 'expenses' && $row['category_id'] !== null ? self::CATEGORY_EXPENSE_PREFIX.$row['category_id'] : null;
             foreach ($charges as $charge) {
                 $key = $charge->format('Y-m');
-                $months[$key] = ($months[$key] ?? 0) + $amount;
-                $categories[$row['category']] = ($categories[$row['category']] ?? 0) + $amount;
+                $months[$key][$source] = ($months[$key][$source] ?? 0) + $amount;
+                if ($category !== null) {
+                    $categories[$category] = ['name' => (string) $row['name'], 'cents' => ($categories[$category]['cents'] ?? 0) + $amount];
+                }
             }
         }
 
@@ -441,20 +474,41 @@ final class DashboardChartsService
     /**
      * Voci a zero omesse, ordinate per importo decrescente e a parità per chiave.
      *
-     * @param array<string, int> $cents
-     * @return list<array{category: string, amount: string}>
+     * @param array<string, CategoryCents> $slices
+     * @return list<CategorySlice>
      */
-    private static function byCategory(array $cents): array
+    private static function byCategory(array $slices): array
     {
-        $cents = array_filter($cents, static fn (int $amount): bool => $amount !== 0);
-        uksort($cents, static fn (string $a, string $b): int => [$cents[$b], $a] <=> [$cents[$a], $b]);
+        $slices = array_filter($slices, static fn (array $slice): bool => $slice['cents'] !== 0);
+        uksort($slices, static fn (string $a, string $b): int => [$slices[$b]['cents'], $a] <=> [$slices[$a]['cents'], $b]);
 
         $result = [];
-        foreach ($cents as $category => $amount) {
-            $result[] = ['category' => $category, 'amount' => self::money($amount)];
+        foreach ($slices as $category => $slice) {
+            $result[] = ['category' => $category, 'name' => $slice['name'], 'amount' => self::money($slice['cents'])];
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, int> $cents sezione → centesimi
+     *
+     * @return MonthSpending
+     */
+    private static function monthSpending(array $cents, int $total): array
+    {
+        $money = static fn (string $source): string => self::money($cents[$source] ?? 0);
+
+        return [
+            'refuelings' => $money('refuelings'),
+            'scheduled' => $money('scheduled'),
+            'unscheduled' => $money('unscheduled'),
+            'inspection' => $money('inspection'),
+            'taxes' => $money('taxes'),
+            'insurance' => $money('insurance'),
+            'expenses' => $money('expenses'),
+            'total' => self::money($total),
+        ];
     }
 
     private static function cents(?string $decimal): int

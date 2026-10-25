@@ -30,12 +30,12 @@ const charts: DashboardChartsData = {
   months: [
     {
       month: '2026-10',
-      spending: { refuelings: '84.58', maintenances: '0.00', expenses: '0.00', total: '84.58' },
+      spending: { refuelings: '84.58', scheduled: '0.00', unscheduled: '0.00', inspection: '0.00', taxes: '0.00', insurance: '0.00', expenses: '0.00', total: '84.58' },
       kmDriven: 900,
       consumption: { diesel: 19.5 },
     },
   ],
-  spendingByCategory: [{ category: 'fuel', amount: '84.58' }],
+  spendingByCategory: [{ category: 'fuel', name: null, amount: '84.58' }],
   totals: { spending: '84.58', kmDriven: 900 },
 };
 

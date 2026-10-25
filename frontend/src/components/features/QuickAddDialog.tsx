@@ -18,16 +18,21 @@ import { RefuelingForm } from './RefuelingForm';
 import { MaintenanceForm } from './MaintenanceForm';
 import { ExpenseForm } from './ExpenseForm';
 import { ReminderForm } from './ReminderForm';
+import { ComponentForm } from './ComponentForm';
 import { VehicleUsableGate } from './VehicleUsableGate';
 import { VEHICLE_RECORD_ACTIONS, type VehicleRecordKind } from './vehicleRecordActions';
 import { useCreateRefueling, useRefuelings } from '@/hooks/useRefuelings';
 import { useCreateMaintenance } from '@/hooks/useMaintenances';
 import { useCreateExpense } from '@/hooks/useExpenses';
 import { useCreateReminder } from '@/hooks/useReminders';
+import { useCreateComponent } from '@/hooks/useComponents';
+import { useComponentFollowUp } from '@/hooks/useComponentFollowUp';
 import { useVehicleStats } from '@/hooks/useVehicles';
 import { useToast } from '@/hooks/useToast';
 import { useQuickAddStore } from '@/stores/useQuickAddStore';
 import type { Vehicle } from '@/api/types/vehicle';
+import type { ExpenseSection } from '@/api/types/expense';
+import type { MaintenanceCategory } from '@/api/types/maintenance';
 
 type QuickAddVehicle = Pick<Vehicle, 'id' | 'name' | 'fuelType'>;
 
@@ -116,8 +121,13 @@ function QuickAddBody({
       {/* `key`: cambiando veicolo il modulo riparte con i valori predefiniti di quel veicolo (km, carburante…). */}
       <VehicleUsableGate key={vehicle.id} vehicleId={vehicle.id}>
         {kind === 'refueling' && <QuickRefueling vehicle={vehicle} onCancel={onDone} onSaved={done} />}
-        {kind === 'maintenance' && <QuickMaintenance vehicleId={vehicle.id} onCancel={onDone} onSaved={done} />}
-        {kind === 'expense' && <QuickExpense vehicleId={vehicle.id} onCancel={onDone} onSaved={done} />}
+        {(kind === 'scheduled' || kind === 'unscheduled' || kind === 'inspection') && (
+          <QuickMaintenance vehicleId={vehicle.id} category={kind} onCancel={onDone} onSaved={done} />
+        )}
+        {(kind === 'tax' || kind === 'insurance' || kind === 'expense') && (
+          <QuickExpense vehicleId={vehicle.id} section={kind === 'expense' ? 'other' : kind} onCancel={onDone} onSaved={done} />
+        )}
+        {kind === 'component' && <QuickComponent vehicleId={vehicle.id} onCancel={onDone} onSaved={done} />}
         {kind === 'reminder' && <QuickReminder vehicleId={vehicle.id} onCancel={onDone} onSaved={done} />}
       </VehicleUsableGate>
     </div>
@@ -157,22 +167,53 @@ function QuickRefueling({ vehicle, onCancel, onSaved }: QuickFormProps & { vehic
   );
 }
 
-function QuickMaintenance({ vehicleId, onCancel, onSaved }: QuickFormProps & { vehicleId: number }) {
+function QuickMaintenance({
+  vehicleId,
+  category,
+  onCancel,
+  onSaved,
+}: QuickFormProps & { vehicleId: number; category: MaintenanceCategory }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const stats = useVehicleStats(vehicleId);
   const mutation = useCreateMaintenance();
+  const followUp = useComponentFollowUp();
   return (
     <MaintenanceForm
       vehicleId={vehicleId}
+      category={category}
       defaultKm={stats.data?.currentKm}
+      isPending={mutation.isPending}
+      error={mutation.error}
+      onCancel={onCancel}
+      onSubmit={(data, { newComponents }) =>
+        mutation.mutate(data, {
+          onSuccess: (created) => {
+            toast({ title: t('maintenance.created'), variant: 'success' });
+            onSaved();
+            // Componenti nuovi: si apre la loro scheda da completare; altrimenti si resta dove si era
+            followUp(created, newComponents, null);
+          },
+        })
+      }
+    />
+  );
+}
+
+function QuickComponent({ vehicleId, onCancel, onSaved }: QuickFormProps & { vehicleId: number }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const mutation = useCreateComponent();
+  return (
+    <ComponentForm
+      vehicleId={vehicleId}
       isPending={mutation.isPending}
       error={mutation.error}
       onCancel={onCancel}
       onSubmit={(data) =>
         mutation.mutate(data, {
           onSuccess: () => {
-            toast({ title: t('maintenance.created'), variant: 'success' });
+            toast({ title: t('component.created'), variant: 'success' });
             onSaved();
           },
         })
@@ -181,13 +222,19 @@ function QuickMaintenance({ vehicleId, onCancel, onSaved }: QuickFormProps & { v
   );
 }
 
-function QuickExpense({ vehicleId, onCancel, onSaved }: QuickFormProps & { vehicleId: number }) {
+function QuickExpense({
+  vehicleId,
+  section,
+  onCancel,
+  onSaved,
+}: QuickFormProps & { vehicleId: number; section: ExpenseSection }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const mutation = useCreateExpense();
   return (
     <ExpenseForm
       vehicleId={vehicleId}
+      section={section}
       isPending={mutation.isPending}
       error={mutation.error}
       onCancel={onCancel}

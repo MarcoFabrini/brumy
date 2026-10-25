@@ -21,10 +21,11 @@ export function RefuelingCard({ refueling: r }: RefuelingCardProps) {
       to={`/refueling/${r.id}`}
       icon={<Fuel />}
       iconClassName="bg-[#34c759]"
-      label={fmt.date(r.refueledAt)}
+      label={r.description ?? fmt.date(r.refueledAt)}
       description={
         <MetaLine
           parts={[
+            r.description ? fmt.date(r.refueledAt) : null,
             fmt.km(r.km),
             `${fmt.decimal(Number.parseFloat(r.liters), 2)} L`,
             `${fmt.currency(r.pricePerLiter)}/L`,

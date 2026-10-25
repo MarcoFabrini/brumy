@@ -33,6 +33,9 @@ final class RefuelingRequest
         #[Assert\Length(max: 200)]
         public ?string $station = null,
 
+        #[Assert\Length(max: 500)]
+        public ?string $description = null,
+
         #[Assert\Length(max: 2000)]
         public ?string $notes = null,
     ) {

@@ -77,6 +77,7 @@ final class ReminderCompletion
             ->setVehicle($done->getVehicle())
             ->setType($done->getType())
             ->setDescription($done->getDescription())
+            ->setNotes($done->getNotes())
             ->setNotifyDaysBefore($done->getNotifyDaysBefore())
             ->setNotifyKmBefore($done->getNotifyKmBefore())
             ->setRecurrenceMonths($months)

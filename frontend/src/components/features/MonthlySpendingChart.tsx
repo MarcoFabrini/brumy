@@ -9,9 +9,9 @@ import {
   TOOLTIP_CONTENT_STYLE,
   TOOLTIP_CURSOR,
   TOOLTIP_LABEL_STYLE,
-  chartColor,
 } from './chartTheme';
-import { hasSpending, type MonthlySpendingRow } from '@/lib/dashboardCharts';
+import { SPENDING_SERIES as SERIES, hasSpending, type MonthlySpendingRow } from '@/lib/dashboardCharts';
+import { SPENDING_SERIES_SECTIONS, sectionOf } from './vehicleRecordActions';
 import { useFormat } from '@/hooks/useFormat';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
@@ -19,13 +19,15 @@ export interface MonthlySpendingChartProps {
   rows: MonthlySpendingRow[];
 }
 
-const SERIES = ['refuelings', 'maintenances', 'expenses'] as const;
+const section = (key: (typeof SERIES)[number]) => sectionOf(SPENDING_SERIES_SECTIONS[key]);
 
-/** Spese mensili impilate per sorgente: rifornimenti, manutenzioni, altre spese. */
+/** Spese mensili impilate per sezione di costo, con il nome e il colore della sezione. */
 export function MonthlySpendingChart({ rows }: MonthlySpendingChartProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
   const reducedMotion = usePrefersReducedMotion();
+  // Solo le sezioni con una spesa nella finestra: sette voci di legenda vuote non dicono nulla
+  const series = SERIES.filter((key) => rows.some((row) => row[key] !== 0));
 
   return (
     <ChartCard
@@ -35,12 +37,12 @@ export function MonthlySpendingChart({ rows }: MonthlySpendingChartProps) {
       table={{
         columns: [
           t('dashboard.charts.table.month'),
-          ...SERIES.map((key) => t(`dashboard.charts.series.${key}`)),
+          ...series.map((key) => t(section(key).titleKey)),
           t('dashboard.charts.table.total'),
         ],
         rows: rows.map((row) => [
           row.label,
-          ...SERIES.map((key) => fmt.currency(row[key])),
+          ...series.map((key) => fmt.currency(row[key])),
           fmt.currency(row.total),
         ]),
       }}
@@ -57,13 +59,13 @@ export function MonthlySpendingChart({ rows }: MonthlySpendingChartProps) {
             formatter={(value) => fmt.currency(Number(value))}
           />
           <Legend wrapperStyle={LEGEND_STYLE} iconSize={10} />
-          {SERIES.map((key, i) => (
+          {series.map((key) => (
             <Bar
               key={key}
               dataKey={key}
-              name={t(`dashboard.charts.series.${key}`)}
+              name={t(section(key).titleKey)}
               stackId="spending"
-              fill={chartColor(i)}
+              fill={section(key).color}
               maxBarSize={32}
               isAnimationActive={!reducedMotion}
             />

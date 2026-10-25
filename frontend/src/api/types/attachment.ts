@@ -4,6 +4,7 @@ export const ATTACHMENT_ENTITY_TYPES = [
   'expense',
   'refueling',
   'reminder',
+  'component',
 ] as const;
 export type AttachmentEntityType = (typeof ATTACHMENT_ENTITY_TYPES)[number];
 

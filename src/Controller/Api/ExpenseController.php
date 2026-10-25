@@ -6,11 +6,18 @@ namespace App\Controller\Api;
 
 use App\Dto\Request\ExpenseRequest;
 use App\Entity\Expense;
+use App\Entity\User;
+use App\Entity\UserValue;
+use App\Entity\Vehicle;
+use App\Enum\ExpenseSection;
+use App\Enum\UserValueKind;
 use App\Repository\ExpenseRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
+use App\Service\RecordReminders;
+use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,6 +43,8 @@ final class ExpenseController extends AbstractController
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
         private readonly SerializerInterface $serializer,
+        private readonly UserValues $values,
+        private readonly RecordReminders $recordReminders,
     ) {
     }
 
@@ -43,11 +52,12 @@ final class ExpenseController extends AbstractController
         summary: 'List expenses for a vehicle (paginated)',
         parameters: [
             new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'section', in: 'query', description: 'tax, insurance or other; omitted = all', schema: new OA\Schema(type: 'string', enum: ['tax', 'insurance', 'other'])),
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20, maximum: 100)),
         ],
         responses: [
-            new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Expense::class, groups: ['expense:list', 'vehicle:nested'])))),
+            new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Expense::class, groups: ['expense:list', 'vehicle:nested', 'user_value:nested'])))),
         ],
     )]
     #[Route('', name: 'list', methods: ['GET'])]
@@ -66,28 +76,30 @@ final class ExpenseController extends AbstractController
         $page = min(100_000, max(1, (int) $request->query->get('page', 1)));
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
 
-        return $this->jsonGroups($this->repo->findByVehiclePaginated($vehicle, $page, $limit), ['expense:list', 'vehicle:nested']);
+        $section = ExpenseSection::tryFrom((string) $request->query->get('section', ''));
+
+        return $this->jsonGroups($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $section), ['expense:list', 'vehicle:nested', 'user_value:nested']);
     }
 
     #[OA\Get(
         summary: 'Expense detail',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Expense', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested'])))],
+        responses: [new OA\Response(response: 200, description: 'Expense', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested', 'user_value:nested'])))],
     )]
     #[Route('/{id}', name: 'get', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function get(int $id): JsonResponse
     {
         $e = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $e);
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested']);
+        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested']);
     }
 
     #[OA\Post(
         summary: 'Create expense entry',
-        description: 'Recurring expense uses recurringPeriod (weekly/monthly/quarterly/semiannual/yearly/biennial). occurredAt is the date of the FIRST charge; recurringUntil (Y-m-d, optional, inclusive, >= occurredAt) is the last possible charge date, null = still running. Every charge already due (date <= today and <= recurringUntil) is counted in total cost, cost per km and charts.',
+        description: 'section is tax, insurance or other (default). category is a name, required except for insurance: for other it is looked up (ignoring case and spaces) in the expense categories of the vehicle owner, for tax in their tax types, or added there; a legacy slug (toll, road_tax, ...) maps to the matching starter entry. insurer (insurance only, optional) is a name in the owner\'s insurers. Responses carry category and insurer as {id, name} or null. Recurring expense uses recurringPeriod (weekly/monthly/quarterly/semiannual/yearly/biennial). occurredAt is the date of the FIRST charge; recurringUntil (Y-m-d, optional, inclusive, >= occurredAt) is the last possible charge date, null = still running. Every charge already due (date <= today and <= recurringUntil) is counted in total cost, cost per km and charts.',
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: ExpenseRequest::class))),
         responses: [
-            new OA\Response(response: 201, description: 'Created', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested']))),
+            new OA\Response(response: 201, description: 'Created', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested', 'user_value:nested']))),
             new OA\Response(response: 422, description: 'validation_failed (e.g. validation.amount_format)'),
         ],
     )]
@@ -104,7 +116,7 @@ final class ExpenseController extends AbstractController
             ->setOrganization($vehicle->getOrganization())
             ->setVehicle($vehicle)
             ->setOccurredAt(new \DateTimeImmutable($payload->occurredAt))
-            ->setCategory($payload->category)
+            ->classify(...$this->classification($vehicle, $payload))
             ->setDescription($payload->description)
             ->setAmount($payload->amount)
             ->setRecurring($payload->recurring)
@@ -114,14 +126,17 @@ final class ExpenseController extends AbstractController
 
         $this->em->persist($e);
         $this->em->flush();
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested'], 201);
+        if ($payload->nextDueDate !== null && $payload->nextDueDate !== '') {
+            $this->recordReminders->forExpense($e, new \DateTimeImmutable($payload->nextDueDate));
+        }
+        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested'], 201);
     }
 
     #[OA\Put(
         summary: 'Update expense',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: ExpenseRequest::class))),
-        responses: [new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested'])))],
+        responses: [new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Expense::class, groups: ['expense:read', 'vehicle:nested', 'user_value:nested'])))],
     )]
     #[Route('/{id}', name: 'update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] ExpenseRequest $payload): JsonResponse
@@ -131,7 +146,7 @@ final class ExpenseController extends AbstractController
 
         $e
             ->setOccurredAt(new \DateTimeImmutable($payload->occurredAt))
-            ->setCategory($payload->category)
+            ->classify(...$this->classification($e->getVehicle(), $payload, $e))
             ->setDescription($payload->description)
             ->setAmount($payload->amount)
             ->setRecurring($payload->recurring)
@@ -140,7 +155,7 @@ final class ExpenseController extends AbstractController
             ->setNotes($payload->notes);
 
         $this->em->flush();
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested']);
+        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested']);
     }
 
     #[OA\Delete(
@@ -165,6 +180,28 @@ final class ExpenseController extends AbstractController
         }
 
         return new \DateTimeImmutable($payload->recurringUntil);
+    }
+
+    /**
+     * Sezione e voci della spesa, dalle liste del proprietario del veicolo: categoria per le altre spese, tipo di
+     * tassa per le tasse, compagnia (facoltativa) per l'assicurazione. $current: la spesa in modifica, perché un
+     * nome rimasto uguale tenga la sua voce anche se eliminata. Il DTO garantisce il testo dove è obbligatorio.
+     *
+     * @return array{ExpenseSection, ?UserValue, ?UserValue}
+     */
+    private function classification(Vehicle $vehicle, ExpenseRequest $payload, ?Expense $current = null): array
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        if ($payload->section === ExpenseSection::INSURANCE) {
+            return [$payload->section, null, $this->values->resolve($vehicle, $user, UserValueKind::INSURER, $payload->insurer, $current?->getInsurer())];
+        }
+        $kind = $payload->section === ExpenseSection::TAX ? UserValueKind::TAX_TYPE : UserValueKind::EXPENSE_CATEGORY;
+        $category = $this->values->resolve($vehicle, $user, $kind, $payload->category, $current?->getCategory())
+            ?? throw new \LogicException('Categoria vuota: doveva fermarla la validazione del payload.');
+
+        return [$payload->section, $category, null];
     }
 
     private function mustFind(int $id): Expense

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Archive, Bell, Fuel, MoreHorizontal, Pencil, Receipt, Trash2, Users, Wrench } from 'lucide-react';
+import { Archive, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -26,11 +26,13 @@ import {
   FuelTypeBadge,
   InfoList,
   InfoRow,
+  NotesRow,
   VehicleAddRecordMenu,
   VehicleCharts,
   VehicleShareCard,
   VehicleSummaryTiles,
 } from '@/components/features';
+import { VEHICLE_RECORD_ACTIONS, withVehicle, type VehicleRecordKind } from '@/components/features/vehicleRecordActions';
 import { useReminders } from '@/hooks/useReminders';
 import { DASHBOARD_CHART_MONTHS } from '@/hooks/useDashboardCharts';
 import { monthSpending } from '@/lib/monthSpending';
@@ -98,13 +100,20 @@ export function VehicleDetailPage() {
 
   const nextReminder = nextDeadline(reminders.data ?? [], stats.data?.currentKm);
   const totals = stats.data?.totals;
-  // Il registro del veicolo: righe che aprono le liste (filtrate su questo veicolo), col conteggio a destra.
-  const log = [
-    { to: `/refueling?vehicleId=${data.id}`, label: t('nav.refueling'), count: totals?.refuelings, Icon: Fuel, iconClassName: 'bg-[#34c759]' },
-    { to: `/maintenance?vehicleId=${data.id}`, label: t('nav.maintenance'), count: totals?.maintenances, Icon: Wrench, iconClassName: 'bg-[#ff9500]' },
-    { to: `/expenses?vehicleId=${data.id}`, label: t('nav.expenses'), count: totals?.expenses, Icon: Receipt, iconClassName: 'bg-[#5856d6]' },
-    { to: `/reminders?vehicleId=${data.id}`, label: t('nav.reminders'), count: reminders.data?.length, Icon: Bell, iconClassName: 'bg-[#ff3b30]' },
-  ];
+  // Il registro del veicolo: una riga per sezione, che apre la sua lista filtrata su questo veicolo, col numero
+  // di record a destra (dalle statistiche; i promemoria dalla loro lista).
+  const counts: Partial<Record<VehicleRecordKind, number | undefined>> = {
+    ...totals?.sections,
+    refueling: totals?.refuelings,
+    reminder: reminders.data?.length,
+  };
+  const log = VEHICLE_RECORD_ACTIONS.map((section) => ({
+    to: withVehicle(section.listPath, data.id),
+    label: t(section.titleKey),
+    count: counts[section.kind],
+    Icon: section.Icon,
+    iconClassName: section.iconClassName,
+  }));
 
   return (
     <div className="space-y-6">
@@ -225,18 +234,14 @@ export function VehicleDetailPage() {
         {data.licensePlate && <InfoRow label={t('vehicle.license_plate')} value={data.licensePlate} />}
         {data.vin && <InfoRow label={t('vehicle.vin')} value={<span className="truncate">{data.vin}</span>} />}
         <InfoRow label={t('vehicle.initial_km')} value={fmt.km(data.initialKm)} />
+        {data.purchasePrice && <InfoRow label={t('vehicle.purchase_price')} value={fmt.currency(data.purchasePrice)} />}
         {stats.data && <InfoRow label={t('vehicle.stats.km_driven')} value={fmt.km(stats.data.kmDriven)} />}
         {stats.data && <InfoRow label={t('vehicle.stats.total_cost')} value={fmt.currency(stats.data.totals.cost)} />}
         {stats.data && stats.data.costPerKm !== null && (
           <InfoRow label={t('vehicle.stats.cost_per_km')} value={fmt.currency(stats.data.costPerKm)} />
         )}
         {data.ownership === 'shared' && <InfoRow label={t('vehicle.access')} value={t('vehicle.shared_read_only')} />}
-        {data.notes && (
-          <div className="px-4 py-3">
-            <dt className="sr-only">{t('common.notes')}</dt>
-            <dd className="whitespace-pre-wrap text-[0.9375rem] text-muted-foreground">{data.notes}</dd>
-          </div>
-        )}
+        <NotesRow label={t('common.notes')} notes={data.notes} />
       </InfoList>
 
       <AttachmentsSection entityType="vehicle" entityId={data.id} readOnly={!canEdit} />

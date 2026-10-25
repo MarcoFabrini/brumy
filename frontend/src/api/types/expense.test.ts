@@ -5,7 +5,7 @@ const raw = (over: Partial<ExpenseResponse>): ExpenseResponse => ({
   id: 1,
   vehicle: { id: 7, name: 'Golf', brand: 'VW', model: 'Golf' },
   occurredAt: '2026-01-15T00:00:00+00:00',
-  category: 'insurance',
+  category: { id: 4, name: 'Pedaggio' },
   description: 'Polizza',
   amount: '650.00',
   recurring: true,
@@ -21,5 +21,11 @@ describe('adaptExpense — recurringUntil', () => {
   it('null o assente → null (spesa in corso)', () => {
     expect(adaptExpense(raw({ recurringUntil: null })).recurringUntil).toBeNull();
     expect(adaptExpense(raw({})).recurringUntil).toBeNull();
+  });
+});
+
+describe('adaptExpense — category', () => {
+  it('riduce la categoria {id, name} al nome', () => {
+    expect(adaptExpense(raw({})).category).toBe('Pedaggio');
   });
 });

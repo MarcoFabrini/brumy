@@ -52,6 +52,10 @@ class Reminder implements VehicleScoped
     #[Groups(['reminder:read', 'reminder:list', 'reminder:write'])]
     private string $description;
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['reminder:read', 'reminder:write'])]
+    private ?string $notes = null;
+
     #[ORM\Column(name: 'due_date', type: 'date_immutable', nullable: true)]
     #[Groups(['reminder:read', 'reminder:list', 'reminder:write'])]
     private ?\DateTimeImmutable $dueDate = null;
@@ -123,6 +127,8 @@ class Reminder implements VehicleScoped
     public function setType(ReminderType $t): self { $this->type = $t; return $this; }
     public function getDescription(): string { return $this->description; }
     public function setDescription(string $d): self { $this->description = $d; return $this; }
+    public function getNotes(): ?string { return $this->notes; }
+    public function setNotes(?string $n): self { $this->notes = $n; return $this; }
     public function getDueDate(): ?\DateTimeImmutable { return $this->dueDate; }
     public function setDueDate(?\DateTimeImmutable $d): self
     {

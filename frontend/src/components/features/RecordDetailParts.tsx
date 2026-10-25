@@ -61,3 +61,14 @@ export function InfoRow({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
+/** Le note di una scheda in fondo all'InfoList: testo libero su più righe, l'etichetta solo per gli screen reader. */
+export function NotesRow({ label, notes }: { label: string; notes: string | null | undefined }) {
+  if (!notes) return null;
+  return (
+    <div className="px-4 py-3">
+      <dt className="sr-only">{label}</dt>
+      <dd className="whitespace-pre-wrap text-[0.9375rem] text-muted-foreground">{notes}</dd>
+    </div>
+  );
+}

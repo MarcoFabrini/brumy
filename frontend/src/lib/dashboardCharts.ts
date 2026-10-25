@@ -7,14 +7,15 @@ import type { DashboardCharts } from '@/api/types/dashboardCharts';
 
 type MonthFormatter = (yyyyMm: string) => string;
 
-export interface MonthlySpendingRow {
+/** Serie mensili di spesa, una per sezione di costo, nell'ordine dell'API. */
+export const SPENDING_SERIES = ['refuelings', 'scheduled', 'unscheduled', 'inspection', 'taxes', 'insurance', 'expenses'] as const;
+export type SpendingSeries = (typeof SPENDING_SERIES)[number];
+
+export type MonthlySpendingRow = {
   month: string;
   label: string;
-  refuelings: number;
-  maintenances: number;
-  expenses: number;
   total: number;
-}
+} & Record<SpendingSeries, number>;
 
 export interface KmDrivenRow {
   month: string;
@@ -30,8 +31,10 @@ export interface ConsumptionRow {
 }
 
 export interface CategorySlice {
-  /** `fuel`, `maintenance`, una categoria di spesa o {@link REST_CATEGORY}. */
+  /** Una sezione (`fuel`, `scheduled`, `tax`…), una categoria delle altre spese o {@link REST_CATEGORY}. */
   category: string;
+  /** Nome della categoria di spesa; null per le sezioni e {@link REST_CATEGORY}. */
+  name: string | null;
   amount: number;
 }
 
@@ -44,7 +47,11 @@ export function toMonthlySpendingRows(charts: DashboardCharts, formatLabel: Mont
     month,
     label: formatLabel(month),
     refuelings: Number(spending.refuelings),
-    maintenances: Number(spending.maintenances),
+    scheduled: Number(spending.scheduled),
+    unscheduled: Number(spending.unscheduled),
+    inspection: Number(spending.inspection),
+    taxes: Number(spending.taxes),
+    insurance: Number(spending.insurance),
     expenses: Number(spending.expenses),
     total: Number(spending.total),
   }));
@@ -73,12 +80,12 @@ export function groupCategories(
   maxSlices = MAX_CATEGORY_SLICES,
 ): CategorySlice[] {
   const slices = items
-    .map(({ category, amount }) => ({ category, amount: Number(amount) }))
+    .map(({ category, name, amount }) => ({ category, name, amount: Number(amount) }))
     .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
   if (slices.length <= maxSlices) return slices;
 
   const rest = slices.slice(maxSlices).reduce((sum, slice) => sum + slice.amount, 0);
-  return [...slices.slice(0, maxSlices), { category: REST_CATEGORY, amount: Math.round(rest * 100) / 100 }];
+  return [...slices.slice(0, maxSlices), { category: REST_CATEGORY, name: null, amount: Math.round(rest * 100) / 100 }];
 }
 
 // ----- serie vuote: la card mostra un messaggio invece di un grafico piatto -----

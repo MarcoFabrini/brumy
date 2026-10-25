@@ -115,6 +115,15 @@ describe('SettingsPage — semantica', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
+  it('la riga dei valori ricorrenti porta a /settings/values', () => {
+    renderPage();
+
+    expect(screen.getByRole('link', { name: /Elenchi personali/ })).toHaveAttribute(
+      'href',
+      '/settings/values',
+    );
+  });
+
   it('i select di lingua e tema hanno un nome accessibile', () => {
     renderPage();
 

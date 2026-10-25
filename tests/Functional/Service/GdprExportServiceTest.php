@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Tests\Functional\Service;
 
 use App\Entity\AuditLog;
+use App\Entity\Organization;
 use App\Entity\OrganizationInvitation;
 use App\Entity\PushSubscription;
 use App\Enum\AttachmentEntityType;
 use App\Enum\AuditAction;
 use App\Enum\RecurringPeriod;
+use App\Enum\UserValueKind;
 use App\Service\Gdpr\GdprExportService;
 use App\Tests\Factory\AttachmentFactory;
 use App\Tests\Factory\ExpenseFactory;
@@ -19,6 +21,7 @@ use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\ReminderFactory;
 use App\Tests\Factory\UserFactory;
+use App\Tests\Factory\UserValueFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -81,7 +84,8 @@ final class GdprExportServiceTest extends KernelTestCase
         OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $org, 'role' => OrgRole::OWNER]);
         $vehicle = VehicleFactory::createOne(['organization' => $org, 'name' => 'La Panda']);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $user]);
-        MaintenanceFactory::createOne(['vehicle' => $vehicle]);
+        $workshop = UserValueFactory::createOne(['user' => $user, 'organization' => $org, 'kind' => UserValueKind::WORKSHOP, 'name' => 'Officina Rossi']);
+        MaintenanceFactory::createOne(['vehicle' => $vehicle, 'workshop' => $workshop]);
 
         $exporter = static::getContainer()->get(GdprExportService::class);
         $data = $exporter->export($user);
@@ -90,6 +94,8 @@ final class GdprExportServiceTest extends KernelTestCase
         $exportedVehicle = $data['vehicles_owned'][0];
         self::assertSame('La Panda', $exportedVehicle['name']);
         self::assertCount(1, $exportedVehicle['maintenance']);
+        self::assertSame('Officina Rossi', $exportedVehicle['maintenance'][0]['workshop']);
+        self::assertNull($exportedVehicle['maintenance'][0]['shop']);
     }
 
     public function testExportIncludesAttachmentsOfMaintenanceAndReminders(): void
@@ -166,7 +172,8 @@ final class GdprExportServiceTest extends KernelTestCase
         OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
         $mine = VehicleFactory::createOne(['organization' => $org, 'name' => 'Mia']);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $mine, 'user' => $member]);
-        RefuelingFactory::createOne(['vehicle' => $mine, 'organization' => $org]);
+        $station = UserValueFactory::createOne(['user' => $member, 'organization' => $org, 'name' => 'Eni Via Roma']);
+        RefuelingFactory::createOne(['vehicle' => $mine, 'organization' => $org, 'station' => $station]);
 
         $data = static::getContainer()->get(GdprExportService::class)->export($member);
 
@@ -174,6 +181,7 @@ final class GdprExportServiceTest extends KernelTestCase
         self::assertSame('Mia', $data['vehicles_owned'][0]['name']);
         self::assertSame('Famiglia', $data['vehicles_owned'][0]['organization']['name']);
         self::assertCount(1, $data['vehicles_owned'][0]['refueling']);
+        self::assertSame('Eni Via Roma', $data['vehicles_owned'][0]['refueling'][0]['station']);
     }
 
     public function testOrgOwnerDoesNotExportOtherMembersCars(): void
@@ -206,7 +214,8 @@ final class GdprExportServiceTest extends KernelTestCase
         $theirs = VehicleFactory::createOne(['organization' => $org, 'name' => 'Auto condivisa', 'licensePlate' => 'ZZ999ZZ']);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $theirs, 'user' => $other]);
         VehicleShareFactory::createOne(['vehicle' => $theirs, 'user' => $user]);
-        RefuelingFactory::createOne(['vehicle' => $theirs, 'organization' => $org, 'station' => 'distributore-privato']);
+        $station = UserValueFactory::createOne(['user' => $other, 'organization' => $org, 'name' => 'distributore-privato']);
+        RefuelingFactory::createOne(['vehicle' => $theirs, 'organization' => $org, 'station' => $station]);
 
         $data = static::getContainer()->get(GdprExportService::class)->export($user);
 
@@ -271,6 +280,7 @@ final class GdprExportServiceTest extends KernelTestCase
         self::assertSame('yearly', $expense['recurring_period']);
         self::assertSame('2030-03-31', $expense['recurring_until']);
         self::assertSame('bollo annuale', $expense['notes']);
+        self::assertSame('Altro', $expense['category']);
     }
 
     public function testExportIncludesAuditLogRowsAndInvitationsSent(): void
@@ -351,6 +361,31 @@ final class GdprExportServiceTest extends KernelTestCase
         self::assertEqualsCanonicalizing([5, 6], array_keys($grouped));
         self::assertCount(2, $grouped[5]);
         self::assertCount(1, $grouped[6]);
+    }
+
+    public function testExportListsTheUsersOwnValuesAcrossOrganizations(): void
+    {
+        $user = UserFactory::createOne();
+        $other = UserFactory::createOne();
+        $home = OrganizationFactory::createOne(['name' => 'Casa']);
+        $work = OrganizationFactory::createOne(['name' => 'Lavoro']);
+        UserValueFactory::createOne(['user' => $user, 'organization' => $home, 'kind' => UserValueKind::WORKSHOP, 'name' => 'Officina Rossi']);
+        UserValueFactory::createOne(['user' => $user, 'organization' => $home, 'kind' => UserValueKind::STATION, 'name' => 'Eni Via Roma']);
+        UserValueFactory::createOne(['user' => $user, 'organization' => $work, 'kind' => UserValueKind::EXPENSE_CATEGORY, 'name' => 'Telepass']);
+        UserValueFactory::createOne(['user' => $other, 'organization' => $home, 'kind' => UserValueKind::STATION, 'name' => 'Di un altro']);
+        $deleted = UserValueFactory::createOne(['user' => $user, 'organization' => $home, 'kind' => UserValueKind::STATION, 'name' => 'Vecchio']);
+        $deleted->softDelete();
+        static::getContainer()->get(EntityManagerInterface::class)->flush();
+
+        $data = static::getContainer()->get(GdprExportService::class)->export($user);
+
+        $org = static fn (Organization $o): array => ['id' => $o->getId(), 'slug' => $o->getSlug(), 'name' => $o->getName()];
+        self::assertSame([
+            ['kind' => 'station', 'name' => 'Eni Via Roma', 'organization' => $org($home), 'deleted_at' => null],
+            ['kind' => 'station', 'name' => 'Vecchio', 'organization' => $org($home), 'deleted_at' => $deleted->getDeletedAt()?->format(\DATE_ATOM)],
+            ['kind' => 'workshop', 'name' => 'Officina Rossi', 'organization' => $org($home), 'deleted_at' => null],
+            ['kind' => 'expense_category', 'name' => 'Telepass', 'organization' => $org($work), 'deleted_at' => null],
+        ], $data['values']);
     }
 
     public function testExportHasMetadataBlock(): void

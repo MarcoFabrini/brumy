@@ -1,20 +1,3 @@
-export const EXPENSE_CATEGORIES = [
-  'insurance',
-  'road_tax',
-  'tax',
-  'parking',
-  'toll',
-  'fine',
-  'accessory',
-  'financing',
-  'subscription',
-  'garage',
-  'car_wash',
-  'theft_damage',
-  'other',
-] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
-
 export const RECURRING_PERIODS = [
   'weekly',
   'monthly',
@@ -25,11 +8,18 @@ export const RECURRING_PERIODS = [
 ] as const;
 export type RecurringPeriod = (typeof RECURRING_PERIODS)[number];
 
+/** Sezione di una spesa: tasse (tipo di tassa), assicurazione (compagnia), altre spese (categoria). */
+export const EXPENSE_SECTIONS = ['tax', 'insurance', 'other'] as const;
+export type ExpenseSection = (typeof EXPENSE_SECTIONS)[number];
+
 export interface ExpenseResponse {
   id: number;
   vehicle: { id: number; name: string; brand: string; model: string };
   occurredAt: string;          // ISO datetime
-  category: ExpenseCategory;
+  section: ExpenseSection;
+  /** Categoria (altre spese) o tipo di tassa (tasse); null per l'assicurazione. */
+  category: { id: number; name: string } | null;
+  insurer: { id: number; name: string } | null;
   description: string;
   amount: string;              // decimal string
   recurring: boolean;
@@ -42,7 +32,11 @@ export interface Expense {
   id: number;
   vehicleId: number;
   occurredAt: string;          // YYYY-MM-DD
-  category: ExpenseCategory;
+  section: ExpenseSection;
+  /** Nome della categoria o del tipo di tassa (voce privata dell'utente); '' per l'assicurazione. */
+  category: string;
+  /** Nome della compagnia (solo assicurazione). */
+  insurer: string | null;
   description: string;
   amount: string;
   recurring: boolean;
@@ -54,7 +48,12 @@ export interface Expense {
 export interface CreateExpenseDto {
   vehicleId: number;
   occurredAt: string;
-  category: ExpenseCategory;
+  section: ExpenseSection;
+  /** Nome della categoria o del tipo di tassa; ignorato per l'assicurazione. */
+  category: string;
+  insurer?: string | null;
+  /** Solo in creazione di assicurazione e bollo: aggiorna o crea il promemoria con questa scadenza. */
+  nextDueDate?: string | null;
   description: string;
   amount: string;
   recurring: boolean;
@@ -70,7 +69,9 @@ export function adaptExpense(raw: ExpenseResponse): Expense {
     id: raw.id,
     vehicleId: raw.vehicle.id,
     occurredAt: raw.occurredAt.slice(0, 10),
-    category: raw.category,
+    section: raw.section,
+    category: raw.category?.name ?? '',
+    insurer: raw.insurer?.name ?? null,
     description: raw.description,
     amount: raw.amount,
     recurring: raw.recurring,

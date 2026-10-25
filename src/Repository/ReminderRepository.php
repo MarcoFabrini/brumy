@@ -8,6 +8,7 @@ use App\Entity\Organization;
 use App\Entity\Reminder;
 use App\Entity\User;
 use App\Entity\Vehicle;
+use App\Enum\ReminderType;
 use App\Enum\ReminderUrgency;
 use App\Enum\ShareRole;
 use App\Service\AppClock;
@@ -47,6 +48,29 @@ class ReminderRepository extends ServiceEntityRepository
         }
 
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Promemoria aperto (non completato) del veicolo di quel tipo, il più vicino alla scadenza. Per il tipo
+     * `custom` conta anche la descrizione, a meno di maiuscole e spazi: due promemoria personalizzati diversi
+     * non sono lo stesso avviso.
+     */
+    public function findOpenOfType(Vehicle $vehicle, ReminderType $type, string $description): ?Reminder
+    {
+        $qb = $this->createQueryBuilder('r')
+            ->where('r.vehicle = :vehicle AND r.type = :type AND r.completedAt IS NULL')
+            ->setParameter('vehicle', $vehicle)
+            ->setParameter('type', $type)
+            ->orderBy('r.dueDate', 'ASC')
+            ->addOrderBy('r.id', 'ASC')
+            ->setMaxResults(1);
+        if ($type === ReminderType::CUSTOM) {
+            $qb->andWhere('LOWER(TRIM(r.description)) = :description')
+                ->setParameter('description', mb_strtolower(trim($description)));
+        }
+
+        /** @var Reminder|null */
+        return $qb->getQuery()->getOneOrNullResult();
     }
 
     /**

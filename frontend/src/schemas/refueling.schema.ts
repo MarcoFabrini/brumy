@@ -11,6 +11,7 @@ export const refuelingSchema = z.object({
   fuelType: z.enum(FUEL_TYPES, { message: 'refueling.fuel_type.required' }),
   fullTank: z.boolean(),
   station: z.string().max(200).nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 

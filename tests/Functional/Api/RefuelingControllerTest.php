@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace App\Tests\Functional\Api;
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use App\Entity\UserValue;
 use App\Enum\FuelType;
+use App\Enum\OrgRole;
+use App\Enum\UserValueKind;
+use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\RefuelingFactory;
+use App\Tests\Factory\UserFactory;
 use App\Tests\Factory\VehicleFactory;
+use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 
 final class RefuelingControllerTest extends ApiTestCase
@@ -129,5 +135,55 @@ final class RefuelingControllerTest extends ApiTestCase
         ], accessToken: $tokenA);
 
         self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testCreateStoresStationAsOwnerValue(): void
+    {
+        // L'admin dell'org salva sul veicolo di un membro: la voce va nella lista del proprietario
+        [, $org, $token] = $this->createAuthenticatedUser(OrgRole::OWNER);
+        $owner = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $owner]);
+
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), ' Q8  Via Roma '), accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        $station = $this->jsonBody()['station'];
+        self::assertSame('Q8 Via Roma', $station['name']);
+
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), 'q8 via roma'), accessToken: $token);
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame($station['id'], $this->jsonBody()['station']['id']);
+
+        $value = static::getContainer()->get('doctrine')->getRepository(UserValue::class)->find($station['id']);
+        self::assertNotNull($value);
+        self::assertSame($owner->getId(), $value->getUser()->getId());
+        self::assertSame(UserValueKind::STATION, $value->getKind());
+    }
+
+    public function testBlankStationIsNull(): void
+    {
+        [, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), '  '), accessToken: $token);
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertNull($this->jsonBody()['station']);
+        self::assertSame([], static::getContainer()->get('doctrine')->getRepository(UserValue::class)->findAll());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refuelingBody(?int $vehicleId, ?string $station): array
+    {
+        return [
+            'vehicleId' => $vehicleId,
+            'refueledAt' => '2026-05-01', 'km' => 100,
+            'liters' => '20.000', 'pricePerLiter' => '1.5000',
+            'fuelType' => 'diesel', 'fullTank' => true,
+            'station' => $station,
+        ];
     }
 }

@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout';
 import { MaintenanceForm, VehicleUsableGate } from '@/components/features';
 import { useMaintenance, useUpdateMaintenance } from '@/hooks/useMaintenances';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
+import { useComponentFollowUp } from '@/hooks/useComponentFollowUp';
 import { useToast } from '@/hooks/useToast';
 
 export function MaintenanceEditPage() {
@@ -17,6 +18,7 @@ export function MaintenanceEditPage() {
 
   const { data, isLoading, error } = useMaintenance(maintenanceId);
   const updateMutation = useUpdateMaintenance(maintenanceId);
+  const followUp = useComponentFollowUp();
 
   if (isLoading) {
     return (
@@ -33,22 +35,23 @@ export function MaintenanceEditPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('maintenance.edit')}
-        description={t(`maintenance.type_options.${data.type}`)}
+        description={data.category === 'inspection' ? t('sections.inspection.title') : t(`maintenance.type_options.${data.type}`)}
         onBack={() => navigate(`/maintenance/${maintenanceId}`)}
       />
 
       <VehicleUsableGate vehicleId={data.vehicleId}>
         <MaintenanceForm
           vehicleId={data.vehicleId}
+          category={data.category}
           defaultValues={data}
           isPending={updateMutation.isPending}
           error={updateMutation.error}
           onCancel={() => navigate(`/maintenance/${maintenanceId}`)}
-          onSubmit={(form) =>
+          onSubmit={(form, { newComponents }) =>
             updateMutation.mutate(form, {
-              onSuccess: () => {
+              onSuccess: (saved) => {
                 toast({ title: t('maintenance.updated'), variant: 'success' });
-                navigate(`/maintenance/${maintenanceId}`, { replace: true });
+                followUp(saved, newComponents, `/maintenance/${maintenanceId}`);
               },
             })
           }

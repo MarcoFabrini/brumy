@@ -160,6 +160,7 @@ final class VehicleController extends AbstractController
             ->setLicensePlate($payload->licensePlate)
             ->setVin($payload->vin)
             ->setInitialKm($payload->initialKm)
+            ->setPurchasePrice($payload->purchasePrice === '' ? null : $payload->purchasePrice)
             ->setNotes($payload->notes);
 
         // Valida vincoli a livello entity (es. bi-fuel duplicato)
@@ -221,6 +222,7 @@ final class VehicleController extends AbstractController
             ->setLicensePlate($payload->licensePlate)
             ->setVin($payload->vin)
             ->setInitialKm($payload->initialKm)
+            ->setPurchasePrice($payload->purchasePrice === '' ? null : $payload->purchasePrice)
             ->setNotes($payload->notes);
 
         $errors = $this->validator->validate($vehicle);
@@ -272,6 +274,7 @@ final class VehicleController extends AbstractController
                         new OA\Property(property: 'refuelings', type: 'integer'),
                         new OA\Property(property: 'maintenances', type: 'integer'),
                         new OA\Property(property: 'expenses', type: 'integer'),
+                        new OA\Property(property: 'sections', type: 'object', description: 'Records per section: scheduled, unscheduled, inspection, tax, insurance, expense, component (not deleted)', additionalProperties: new OA\AdditionalProperties(type: 'integer')),
                     ]),
                     new OA\Property(property: 'currentKm', type: 'integer'),
                     new OA\Property(property: 'kmDriven', type: 'integer'),

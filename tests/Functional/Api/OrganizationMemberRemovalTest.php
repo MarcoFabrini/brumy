@@ -6,19 +6,24 @@ namespace App\Tests\Functional\Api;
 
 use App\Entity\OrganizationInvitation;
 use App\Entity\OrganizationMember;
+use App\Entity\Refueling;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\Vehicle;
 use App\Entity\VehicleShare;
 use App\Enum\OrgRole;
 use App\Enum\ShareRole;
+use App\Enum\UserValueKind;
 use App\Message\SendReminderNotificationMessage;
 use App\MessageHandler\SendReminderNotificationHandler;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\VehicleRepository;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
+use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\ReminderFactory;
 use App\Tests\Factory\UserFactory;
+use App\Tests\Factory\UserValueFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
@@ -199,6 +204,44 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
             }
         }
         self::assertSame(['new-owner@test.it'], array_values(array_unique($to)));
+    }
+
+    public function testRemovedMemberUnusedValuesAreDeleted(): void
+    {
+        [$owner, $org] = $this->createAuthenticatedUser();
+        $member = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+        $otherOrg = OrganizationFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $otherOrg, 'role' => OrgRole::MEMBER]);
+        $car = $this->ownedVehicle($member, $org);
+        // Veicolo senza proprietario: nessuno lo eredita, la voce che usa resta
+        $orphan = VehicleFactory::createOne(['organization' => $org]);
+        $value = static fn (string $name, ?\App\Entity\Organization $in = null): UserValue => UserValueFactory::createOne(
+            ['user' => $member, 'organization' => $in ?? $org, 'kind' => UserValueKind::STATION, 'name' => $name],
+        );
+        $eni = $value('Eni');
+        $value('Q8 mai usato');
+        $shell = $value('Shell');
+        $elsewhere = $value('Tamoil', $otherOrg);
+        $onCar = RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $car, 'station' => $eni]);
+        RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $orphan, 'station' => $shell]);
+
+        $this->removeMember($owner, $org, $member);
+
+        self::assertResponseStatusCodeSame(204);
+        $this->em()->clear();
+        $names = fn (User $user, \App\Entity\Organization $in): array => array_map(
+            static fn (UserValue $v): string => $v->getName(),
+            $this->em()->getRepository(UserValue::class)->findBy(['user' => $user, 'organization' => $in], ['name' => 'ASC']),
+        );
+        self::assertSame(['Shell'], $names($member, $org), 'Restano solo le voci ancora usate');
+        self::assertSame(['Tamoil'], $names($member, $otherOrg), 'Le altre organizzazioni non si toccano');
+        self::assertNotNull($this->em()->find(UserValue::class, $elsewhere->getId()));
+        // Il rifornimento sull'auto ereditata punta all'"Eni" della lista di chi l'ha ricevuta
+        $station = $this->em()->find(Refueling::class, $onCar->getId())?->getStation();
+        self::assertNotNull($station);
+        self::assertSame('Eni', $station->getName());
+        self::assertSame($owner->getId(), $station->getUser()->getId());
     }
 
     public function testRemovingAMemberWhoOwnsNothingStillWorks(): void

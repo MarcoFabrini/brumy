@@ -17,7 +17,8 @@ export const MAINTENANCE_TYPES = [
 ] as const;
 export type MaintenanceType = (typeof MAINTENANCE_TYPES)[number];
 
-export const MAINTENANCE_CATEGORIES = ['scheduled', 'unscheduled'] as const;
+/** Sezione di un lavoro: ordinario, imprevisto, revisione (che va sempre con il tipo `inspection`). */
+export const MAINTENANCE_CATEGORIES = ['scheduled', 'unscheduled', 'inspection'] as const;
 export type MaintenanceCategory = (typeof MAINTENANCE_CATEGORIES)[number];
 
 /**
@@ -33,7 +34,10 @@ export interface MaintenanceResponse {
   category: MaintenanceCategory;
   description: string;
   cost?: string | null;
-  workshop?: string | null;
+  notes?: string | null;
+  workshop?: { id: number; name: string } | null;
+  shop?: { id: number; name: string } | null;
+  components?: { id: number; name: string; deleted?: boolean }[];
 }
 
 /** Normalized client-side shape — vehicle nested → vehicleId flat, date ISO sliced. */
@@ -46,7 +50,11 @@ export interface Maintenance {
   category: MaintenanceCategory;
   description: string;
   cost: string | null;
+  notes: string | null;
   workshop: string | null;
+  shop: string | null;
+  /** Componenti usati; `deleted`: eliminato dopo, si mostra ma non si apre. */
+  components: { id: number; name: string; deleted?: boolean }[];
 }
 
 export interface CreateMaintenanceDto {
@@ -57,7 +65,13 @@ export interface CreateMaintenanceDto {
   category: MaintenanceCategory;
   description: string;
   cost?: string | null;
+  notes?: string | null;
   workshop?: string | null;
+  shop?: string | null;
+  /** Nomi dei componenti del veicolo usati nel lavoro: quelli nuovi si creano. */
+  components?: string[];
+  /** Solo in creazione della revisione: aggiorna o crea il promemoria con questa scadenza. */
+  nextDueDate?: string | null;
 }
 
 export type UpdateMaintenanceDto = CreateMaintenanceDto;
@@ -73,6 +87,9 @@ export function adaptMaintenance(raw: MaintenanceResponse): Maintenance {
     category: raw.category,
     description: raw.description,
     cost: raw.cost ?? null,
-    workshop: raw.workshop ?? null,
+    notes: raw.notes ?? null,
+    workshop: raw.workshop?.name ?? null,
+    shop: raw.shop?.name ?? null,
+    components: raw.components ?? [],
   };
 }

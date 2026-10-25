@@ -7,6 +7,7 @@ namespace App\Service\Gdpr;
 use App\Entity\Attachment;
 use App\Entity\AuditLog;
 use App\Entity\Concern\VehicleScoped;
+use App\Entity\Component;
 use App\Entity\Expense;
 use App\Entity\Maintenance;
 use App\Entity\Organization;
@@ -15,18 +16,21 @@ use App\Entity\PushSubscription;
 use App\Entity\Refueling;
 use App\Entity\Reminder;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\Vehicle;
 use App\Entity\VehicleShare;
 use App\Enum\AttachmentEntityType;
 use App\Enum\ShareRole;
 use App\Repository\AttachmentRepository;
 use App\Repository\AuditLogRepository;
+use App\Repository\ComponentRepository;
 use App\Repository\ExpenseRepository;
 use App\Repository\MaintenanceRepository;
 use App\Repository\OrganizationInvitationRepository;
 use App\Repository\PushSubscriptionRepository;
 use App\Repository\RefuelingRepository;
 use App\Repository\ReminderRepository;
+use App\Repository\UserValueRepository;
 use App\Repository\VehicleRepository;
 use App\Repository\VehicleShareRepository;
 
@@ -44,6 +48,7 @@ use App\Repository\VehicleShareRepository;
  * - vehicle_shares_received: riferimento minimo ai veicoli solo condivisi con lui (nessun record)
  * - audit_log: le righe di audit generate dall'utente (azione, entità, timestamp, IP, user agent)
  * - invitations_sent: gli inviti a organizzazioni che ha mandato
+ * - values: le sue liste private (distributori, officine, categorie di spesa) in ogni organizzazione
  *
  * Esclude:
  * - password hash (sensibile, no portabilità)
@@ -65,6 +70,8 @@ final class GdprExportService
         private readonly PushSubscriptionRepository $pushRepo,
         private readonly AuditLogRepository $auditRepo,
         private readonly OrganizationInvitationRepository $invitationRepo,
+        private readonly UserValueRepository $valueRepo,
+        private readonly ComponentRepository $componentRepo,
     ) {
     }
 
@@ -87,6 +94,7 @@ final class GdprExportService
             'vehicles_owned' => $this->serializeOwnedVehicles($user),
             'audit_log' => $this->serializeAuditLog($user),
             'invitations_sent' => $this->serializeInvitationsSent($user),
+            'values' => $this->serializeValues($user),
         ];
     }
 
@@ -210,6 +218,7 @@ final class GdprExportService
         $refueling = $this->groupByVehicle($this->refuelingRepo->findBy(['vehicle' => $vehicles], ['id' => 'ASC']));
         $expenses = $this->groupByVehicle($this->expenseRepo->findBy(['vehicle' => $vehicles], ['id' => 'ASC']));
         $reminders = $this->groupByVehicle($this->reminderRepo->findBy(['vehicle' => $vehicles], ['id' => 'ASC']));
+        $components = $this->groupByVehicle($this->componentRepo->findBy(['vehicle' => $vehicles], ['id' => 'ASC']));
 
         $attachments = [
             AttachmentEntityType::VEHICLE->value => $this->attachmentRepo->findGroupedByEntityIds(
@@ -221,6 +230,7 @@ final class GdprExportService
             AttachmentEntityType::REFUELING->value => $this->attachmentsOf(AttachmentEntityType::REFUELING, $refueling, $orgs),
             AttachmentEntityType::EXPENSE->value => $this->attachmentsOf(AttachmentEntityType::EXPENSE, $expenses, $orgs),
             AttachmentEntityType::REMINDER->value => $this->attachmentsOf(AttachmentEntityType::REMINDER, $reminders, $orgs),
+            AttachmentEntityType::COMPONENT->value => $this->attachmentsOf(AttachmentEntityType::COMPONENT, $components, $orgs),
         ];
 
         $out = [];
@@ -231,6 +241,7 @@ final class GdprExportService
                 'refueling' => array_map(fn (Refueling $x) => $this->serializeRefueling($x, $attachments), $refueling[$id] ?? []),
                 'expenses' => array_map(fn (Expense $x) => $this->serializeExpense($x, $attachments), $expenses[$id] ?? []),
                 'reminders' => array_map(fn (Reminder $x) => $this->serializeReminder($x, $attachments), $reminders[$id] ?? []),
+                'components' => array_map(fn (Component $x) => $this->serializeComponent($x, $attachments), $components[$id] ?? []),
                 'attachments' => $this->serializeAttachments($attachments[AttachmentEntityType::VEHICLE->value][$id] ?? []),
             ];
         }
@@ -255,7 +266,7 @@ final class GdprExportService
     }
 
     /**
-     * @param array<int, list<Maintenance|Refueling|Expense|Reminder>> $recordsByVehicle
+     * @param array<int, list<Maintenance|Refueling|Expense|Reminder|Component>> $recordsByVehicle
      * @param list<Organization>                                        $orgs
      *
      * @return array<int, list<Attachment>>
@@ -306,21 +317,42 @@ final class GdprExportService
     }
 
     /**
+     * Le voci delle liste private dell'utente, con l'organizzazione identificata come nei veicoli.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function serializeValues(User $user): array
+    {
+        return array_map(fn (UserValue $v) => [
+            'kind' => $v->getKind()->value,
+            'name' => $v->getName(),
+            'organization' => $this->serializeOrganization($v->getOrganization()),
+            'deleted_at' => $v->getDeletedAt()?->format(\DATE_ATOM),
+        ], $this->valueRepo->findAllOfUser($user));
+    }
+
+    /**
+     * @return array{id: int|null, slug: string, name: string}
+     */
+    private function serializeOrganization(Organization $org): array
+    {
+        return [
+            'id' => $org->getId(),
+            'slug' => $org->getSlug(),
+            'name' => $org->getName(),
+        ];
+    }
+
+    /**
      * Dati del veicolo e della sua organizzazione; i record annidati li aggiunge serializeOwnedVehicles().
      *
      * @return array<string, mixed>
      */
     private function serializeVehicle(Vehicle $v): array
     {
-        $org = $v->getOrganization();
-
         return [
             'id' => $v->getId(),
-            'organization' => [
-                'id' => $org->getId(),
-                'slug' => $org->getSlug(),
-                'name' => $org->getName(),
-            ],
+            'organization' => $this->serializeOrganization($v->getOrganization()),
             'name' => $v->getName(),
             'type' => $v->getType()->value,
             'brand' => $v->getBrand(),
@@ -331,6 +363,7 @@ final class GdprExportService
             'fuel_type' => $v->getFuelType()->value,
             'secondary_fuel_type' => $v->getSecondaryFuelType()?->value,
             'initial_km' => $v->getInitialKm(),
+            'purchase_price' => $v->getPurchasePrice(),
             'notes' => $v->getNotes(),
             'archived_at' => $v->getArchivedAt()?->format(\DATE_ATOM),
             'created_at' => $v->getCreatedAt()->format(\DATE_ATOM),
@@ -361,8 +394,11 @@ final class GdprExportService
             'performed_at' => $m->getPerformedAt()->format('Y-m-d'),
             'km' => $m->getKm(),
             'cost' => $m->getCost(),
-            'workshop' => $m->getWorkshop(),
+            'workshop' => $m->getWorkshop()?->getName(),
+            'shop' => $m->getShop()?->getName(),
+            'components' => array_map(static fn (Component $c): string => $c->getName(), $m->getComponents()),
             'description' => $m->getDescription(),
+            'notes' => $m->getNotes(),
             'attachments' => $this->serializeAttachments($attachments[AttachmentEntityType::MAINTENANCE->value][(int) $m->getId()] ?? []),
         ];
     }
@@ -383,9 +419,31 @@ final class GdprExportService
             'total_cost' => $r->getTotalCost(),
             'fuel_type' => $r->getFuelType()->value,
             'full_tank' => $r->isFullTank(),
-            'station' => $r->getStation(),
+            'station' => $r->getStation()?->getName(),
+            'description' => $r->getDescription(),
             'notes' => $r->getNotes(),
             'attachments' => $this->serializeAttachments($attachments[AttachmentEntityType::REFUELING->value][(int) $r->getId()] ?? []),
+        ];
+    }
+
+    /**
+     * @param array<string, array<int, list<Attachment>>> $attachments tipo => entityId => allegati
+     *
+     * @return array<string, mixed>
+     */
+    private function serializeComponent(Component $c, array $attachments): array
+    {
+        return [
+            'id' => $c->getId(),
+            'name' => $c->getName(),
+            'code' => $c->getCode(),
+            'serial_number' => $c->getSerialNumber(),
+            'shop' => $c->getShop()?->getName(),
+            'purchased_at' => $c->getPurchasedAt()?->format('Y-m-d'),
+            'price' => $c->getPrice(),
+            'notes' => $c->getNotes(),
+            'deleted_at' => $c->getDeletedAt()?->format(\DATE_ATOM),
+            'attachments' => $this->serializeAttachments($attachments[AttachmentEntityType::COMPONENT->value][(int) $c->getId()] ?? []),
         ];
     }
 
@@ -398,7 +456,9 @@ final class GdprExportService
     {
         return [
             'id' => $e->getId(),
-            'category' => $e->getCategory()->value,
+            'section' => $e->getSection()->value,
+            'category' => $e->getCategory()?->getName(),
+            'insurer' => $e->getInsurer()?->getName(),
             'occurred_at' => $e->getOccurredAt()->format('Y-m-d'),
             'amount' => $e->getAmount(),
             'description' => $e->getDescription(),
@@ -421,6 +481,7 @@ final class GdprExportService
             'id' => $r->getId(),
             'type' => $r->getType()->value,
             'description' => $r->getDescription(),
+            'notes' => $r->getNotes(),
             'due_date' => $r->getDueDate()?->format('Y-m-d'),
             'due_km' => $r->getDueKm(),
             'notify_days_before' => $r->getNotifyDaysBefore(),

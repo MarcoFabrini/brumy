@@ -17,14 +17,23 @@ export const dashboardChartsSchema = z.object({
   months: z.array(
     z.object({
       month: yearMonth,
-      spending: z.object({ refuelings: money, maintenances: money, expenses: money, total: money }),
+      spending: z.object({
+        refuelings: money,
+        scheduled: money,
+        unscheduled: money,
+        inspection: money,
+        taxes: money,
+        insurance: money,
+        expenses: money,
+        total: money,
+      }),
       kmDriven: z.number().int(),
       /** Carburante → km/l, null se nel mese non si chiude nessun intervallo tra pieni. */
       consumption: z.record(z.string(), z.number().nullable()),
     }),
   ),
-  /** `fuel`, `maintenance` o una categoria di spesa; importo decrescente, zeri omessi. */
-  spendingByCategory: z.array(z.object({ category: z.string(), amount: money })),
+  /** `fuel`, `maintenance` o `expense:<id>` (con `name` = nome della categoria, null per le prime due); importo decrescente, zeri omessi. */
+  spendingByCategory: z.array(z.object({ category: z.string(), name: z.string().nullable(), amount: money })),
   totals: z.object({ spending: money, kmDriven: z.number().int() }),
 });
 

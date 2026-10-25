@@ -10,6 +10,7 @@ export const reminderSchema = z
     vehicleId: z.number({ message: 'reminder.vehicle.required' }).int().positive(),
     type: z.enum(REMINDER_TYPES, { message: 'reminder.type.required' }),
     description: z.string().min(1, 'reminder.description.required').max(500),
+    notes: z.string().max(2000).nullable().optional(),
     dueDate: z.string().regex(isoDate, 'common.invalid_date').nullable().optional(),
     dueKm: z.number().int().nonnegative().max(9_999_999, 'common.km_too_large').nullable().optional(),
     notifyDaysBefore: z.number({ message: 'reminder.notify_days.required' }).int().min(0).max(365),

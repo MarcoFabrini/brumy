@@ -25,6 +25,8 @@ export const reminderResponseSchema = z.object({
   vehicle: z.object({ id: z.number().int(), name: z.string(), brand: z.string(), model: z.string() }),
   type: z.enum(REMINDER_TYPES),
   description: z.string(),
+  // Assente nella lista (solo nel dettaglio e nel completamento)
+  notes: z.string().nullable().optional(),
   dueDate: z.string().nullable(),
   dueKm: z.number().int().nullable(),
   notifyDaysBefore: z.number().int(),
@@ -64,6 +66,7 @@ export interface Reminder {
   vehicleId: number;
   type: ReminderType;
   description: string;
+  notes: string | null;
   dueDate: string | null;       // YYYY-MM-DD
   dueKm: number | null;
   notifyDaysBefore: number;
@@ -84,6 +87,7 @@ export interface CreateReminderDto {
   vehicleId: number;
   type: ReminderType;
   description: string;
+  notes?: string | null;
   dueDate?: string | null;
   dueKm?: number | null;
   notifyDaysBefore: number;
@@ -115,6 +119,7 @@ export function adaptReminder(raw: ReminderResponse): Reminder {
     vehicleId: raw.vehicle.id,
     type: raw.type,
     description: raw.description,
+    notes: raw.notes ?? null,
     dueDate: raw.dueDate ? raw.dueDate.slice(0, 10) : null,
     dueKm: raw.dueKm,
     notifyDaysBefore: raw.notifyDaysBefore,

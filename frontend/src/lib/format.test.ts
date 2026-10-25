@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  addMonthsIso,
   formatKm,
   formatCurrency,
   formatDate,
@@ -203,5 +204,14 @@ describe('profileLocale', () => {
     expect(profileLocale('en-US')).toBe('en');
     expect(profileLocale('it')).toBe('it');
     expect(profileLocale('fr')).toBe('it');
+  });
+});
+
+describe('addMonthsIso', () => {
+  it('aggiunge i mesi e riduce il giorno all\'ultimo del mese di arrivo', () => {
+    expect(addMonthsIso('2026-05-31', 24)).toBe('2028-05-31');
+    expect(addMonthsIso('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsIso('2027-12-15', 12)).toBe('2028-12-15');
+    expect(addMonthsIso('', 12)).toBe('');
   });
 });

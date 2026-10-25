@@ -63,6 +63,7 @@ describe('ReminderForm — ricorrenza e anticipo a km', () => {
       notifyKmBefore: 500,
       recurrenceMonths: 24,
       recurrenceKm: 10_000,
+      notes: null,
     });
   });
 

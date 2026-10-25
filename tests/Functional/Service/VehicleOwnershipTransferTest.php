@@ -16,6 +16,7 @@ use App\MessageHandler\SendReminderNotificationHandler;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\ReminderRepository;
 use App\Repository\VehicleShareRepository;
+use App\Service\UserValues;
 use App\Service\VehicleOwnership;
 use App\Service\VehicleOwnershipTransfer;
 use App\Service\VehicleTransferException;
@@ -59,7 +60,7 @@ final class VehicleOwnershipTransferTest extends KernelTestCase
             $shareRepo,
             $container->get(OrganizationMemberRepository::class),
             $container->get(ReminderRepository::class),
-            new VehicleOwnership($this->em, $shareRepo),
+            new VehicleOwnership($this->em, $shareRepo, $container->get(UserValues::class)),
         );
 
         $this->vehicle = VehicleFactory::createOne();

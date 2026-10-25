@@ -1,28 +1,32 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Receipt } from 'lucide-react';
 import { ListRow } from '@/components/ui';
 import { MetaLine } from './MetaLine';
 import { useFormat } from '@/hooks/useFormat';
 import type { Expense } from '@/api/types/expense';
+import { expenseKind, sectionOf } from './vehicleRecordActions';
 
 export interface ExpenseCardProps {
   expense: Expense;
 }
 
-/** Una spesa come riga di lista iOS: descrizione, poi categoria, data e ricorrenza; importo a destra. */
+/**
+ * Una spesa come riga di lista iOS: descrizione, poi categoria (tipo di tassa, compagnia), data e ricorrenza;
+ * importo a destra. Icona della sezione.
+ */
 export function ExpenseCard({ expense: e }: ExpenseCardProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
-  const category = t(`expense.category_options.${e.category}`);
+  const category = e.section === 'insurance' ? e.insurer : e.category;
+  const { Icon, iconClassName, titleKey } = sectionOf(expenseKind(e.section));
 
   return (
     <ListRow
       as={Link}
       to={`/expenses/${e.id}`}
-      icon={<Receipt />}
-      iconClassName="bg-[#5856d6]"
-      label={e.description || category}
+      icon={<Icon />}
+      iconClassName={iconClassName}
+      label={e.description || category || t(titleKey)}
       description={
         <MetaLine
           parts={[

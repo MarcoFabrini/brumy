@@ -11,6 +11,7 @@ import {
   EditLink,
   InfoList,
   InfoRow,
+  NotesRow,
   ReminderBadge,
   ReminderRecurrenceText,
 } from '@/components/features';
@@ -87,6 +88,7 @@ export function ReminderDetailPage() {
           <InfoRow label={t('reminder.completed_at')} value={fmt.date(data.completedOn ?? data.completedAt)} />
         )}
         {data.completedKm != null && <InfoRow label={t('reminder.completed_km')} value={fmt.km(data.completedKm)} />}
+        <NotesRow label={t('common.notes')} notes={data.notes} />
       </InfoList>
 
       {canEdit && <DeleteRow label={t('reminder.delete.action')} onDelete={() => setConfirmOpen(true)} />}

@@ -116,7 +116,6 @@
   },
   "common": {
     "none": "None",
-    "optional": "Optional",
     "coming_soon": "Coming soon",
     "loading": "Loading",
     "notes": "Notes"
@@ -141,6 +140,7 @@
       "category": {
         "fuel": "Fuel",
         "maintenance": "Maintenance",
+        "insurance": "Insurance",
         "rest": "Other categories"
       },
       "table": {
@@ -179,6 +179,53 @@
     "vehicle": "Vehicle",
     "form_description": "Fill in and save: the vehicle is already selected, you can change it at the top."
   },
+  "sections": {
+    "refueling": {
+      "title": "Refuelings",
+      "new": "New refueling",
+      "empty": "No refuelings"
+    },
+    "scheduled": {
+      "title": "Scheduled work",
+      "new": "New scheduled work",
+      "empty": "No scheduled work"
+    },
+    "unscheduled": {
+      "title": "Unscheduled work",
+      "new": "New unscheduled work",
+      "empty": "No unscheduled work"
+    },
+    "inspection": {
+      "title": "Inspection",
+      "new": "New inspection",
+      "empty": "No inspections"
+    },
+    "tax": {
+      "title": "Taxes",
+      "new": "New tax",
+      "empty": "No taxes"
+    },
+    "insurance": {
+      "title": "Insurance",
+      "new": "New insurance",
+      "empty": "No insurance"
+    },
+    "expense": {
+      "title": "Other expenses",
+      "new": "New expense",
+      "empty": "No expenses"
+    },
+    "component": {
+      "title": "Components",
+      "new": "New component",
+      "empty": "No components"
+    },
+    "reminder": {
+      "title": "Reminders",
+      "new": "New reminder",
+      "empty": "No reminders"
+    }
+  },
   "maintenance": {
     "new": "New maintenance",
     "new_description": "Log a maintenance task performed.",
@@ -186,11 +233,14 @@
     "info_description": "Job information.",
     "type": "Type",
     "category": "Category",
+    "section": "Section",
     "performed_at": "Date",
     "km": "Mileage",
     "description": "Description",
     "cost": "Cost",
     "workshop": "Workshop",
+    "shop": "Shop",
+    "components": "Components",
     "select_vehicle": "Select vehicle",
     "created": "Maintenance logged",
     "updated": "Maintenance updated",
@@ -231,7 +281,41 @@
     "category_options": {
       "scheduled": "Scheduled",
       "unscheduled": "Unscheduled"
-    }
+    },
+    "notes": "Notes"
+  },
+  "values": {
+    "title": "Personal lists",
+    "description": "Stations, workshops, shops, categories, tax types and insurers suggested while you type.",
+    "kind": {
+      "station": "Stations",
+      "workshop": "Workshops",
+      "shop": "Shops",
+      "expense_category": "Expense categories",
+      "tax_type": "Tax types",
+      "insurer": "Insurers"
+    },
+    "usage_one": "used {{count}} time",
+    "usage_other": "used {{count}} times",
+    "empty": "Still empty: it fills up when you save",
+    "add": {
+      "station": "New station",
+      "workshop": "New workshop",
+      "shop": "New shop",
+      "expense_category": "New category",
+      "tax_type": "New tax type",
+      "insurer": "New insurer"
+    },
+    "edit_title": "Edit entry",
+    "name": "Name",
+    "name_required": "Enter a name",
+    "merge": "Merge into…",
+    "merge_placeholder": "Choose an entry",
+    "merge_action": "Merge",
+    "merge_confirm_title": "Merge the entries?",
+    "merge_confirm": "The records of “{{from}}” move to “{{into}}” and “{{from}}” goes away.",
+    "delete_confirm_title": "Delete the entry?",
+    "delete_confirm": "“{{name}}” disappears from the list and the suggestions. Records already saved keep this name."
   },
   "settings": {
     "description": "Account, preferences and notifications.",
@@ -263,9 +347,7 @@
       "generate": "Generate VAPID keys",
       "regenerate": "Regenerate keys",
       "public_key": "VAPID public key",
-      "public_key_hint": "Sent to the browser to subscribe (not secret).",
       "subject": "VAPID subject",
-      "subject_hint": "mailto: or URL of the responsible party (required by the standard).",
       "send_test": "Send test notification",
       "saved": "Push configuration saved",
       "test_sent": "Test notification sent ({{count}} device(s))",
@@ -325,11 +407,8 @@
     "description": "Description",
     "due_date": "Due (date)",
     "due_km": "Due (km)",
-    "due_hint": "At least date or km",
     "notify_days_before": "Notify days before",
-    "notify_hint": "How many days before to be notified",
     "notify_km_before": "Notify km before",
-    "notify_km_hint": "How many km before the due km to be notified",
     "recurrence": "Recurrence",
     "recurrence_hint": "The next due point is computed from the actual completion date and km.",
     "recurrence_every": "Repeat every",
@@ -340,7 +419,6 @@
       "years": "Years"
     },
     "recurrence_km": "Repeat every (km)",
-    "recurrence_km_hint": "E.g. 10000 for oil or service. Empty = one-off.",
     "every_months_one": "every month",
     "every_months_other": "every {{count}} months",
     "every_years_one": "every year",
@@ -408,7 +486,10 @@
       "empty_description": "Your vehicles' reminders show up here, most urgent first. Add one with \"+\".",
       "complete": "Complete"
     },
-    "status": "Status"
+    "status": "Status",
+    "notes": "Notes",
+    "remind_next": "Remind me of the next due date",
+    "next_due_date": "Next due date"
   },
   "expense": {
     "new": "New expense",
@@ -416,13 +497,13 @@
     "edit": "Edit expense",
     "occurred_at": "Date",
     "category": "Category",
+    "tax_type": "Tax type",
+    "insurer": "Insurer",
     "description": "Description",
     "amount": "Amount",
     "recurring": "Recurring expense",
     "recurring_period": "Frequency",
-    "recurring_first_charge_hint": "The date above is the date of the first charge.",
-    "recurring_until": "Until (optional)",
-    "recurring_until_hint": "Leave empty if the expense keeps repeating until you cancel it.",
+    "recurring_until": "Until",
     "recurring_until_on": "until {{date}}",
     "recurring_counted_note": "This expense is counted at every charge already due, not just once. Editing it changes all of its charges.",
     "notes": "Notes",
@@ -446,21 +527,6 @@
       "title": "Select a vehicle",
       "description": "Choose a vehicle to log an expense."
     },
-    "category_options": {
-      "insurance": "Insurance",
-      "road_tax": "Road tax",
-      "tax": "Tax",
-      "parking": "Parking",
-      "toll": "Toll",
-      "fine": "Fine",
-      "accessory": "Accessory",
-      "financing": "Financing",
-      "subscription": "Subscription",
-      "garage": "Garage",
-      "car_wash": "Car wash",
-      "theft_damage": "Theft/Damage",
-      "other": "Other"
-    },
     "recurring_options": {
       "weekly": "Weekly",
       "monthly": "Monthly",
@@ -470,6 +536,37 @@
       "biennial": "Biennial"
     },
     "recurring_until_short": "Until"
+  },
+  "component": {
+    "name": "Name",
+    "code": "Model or code",
+    "serial_number": "Serial number",
+    "shop": "Shop",
+    "purchased_at": "Purchase date",
+    "price": "Price",
+    "notes": "Notes",
+    "selected": "Selected components",
+    "remove": "Remove {{name}}",
+    "add": "Add component",
+    "created": "Component saved",
+    "updated": "Component updated",
+    "deleted": "Component deleted",
+    "edit": "Edit component",
+    "complete_title": "Complete the component",
+    "complete_description": "“{{name}}” is new: add model, shop or notes, or leave it as it is.",
+    "empty_description": "Add the parts you buy to find model and shop again when you need them.",
+    "used_in": "Used in work",
+    "never_used": "Not used in any work yet",
+    "delete": {
+      "action": "Delete component",
+      "title": "Delete the component?",
+      "description": "It will no longer be suggested; the work it was used in keeps showing it."
+    },
+    "select_vehicle_first": {
+      "title": "Select a vehicle",
+      "description": "Pick a vehicle to add a component."
+    },
+    "deleted_name": "{{name}} (deleted)"
   },
   "refueling": {
     "new": "New refueling",
@@ -506,7 +603,8 @@
       "title": "Select a vehicle",
       "description": "Choose a vehicle to log a refueling."
     },
-    "partial": "partial"
+    "partial": "partial",
+    "description": "Description"
   },
   "vehicle": {
     "new": "New vehicle",
@@ -522,7 +620,6 @@
     "type": "Vehicle type",
     "fuel_type": "Fuel",
     "secondary_fuel_type": "Secondary fuel",
-    "secondary_fuel_hint": "Only for bi-fuel vehicles (LPG, CNG, hybrid)",
     "initial_km": "Initial km",
     "current_km": "Current km",
     "notes": "Notes",
@@ -639,7 +736,8 @@
       "more_actions": "More actions",
       "charts": "Trends"
     },
-    "access": "Access"
+    "access": "Access",
+    "purchase_price": "Purchase price"
   },
   "error_page": {
     "back_home": "Back to home",
@@ -730,12 +828,20 @@
       "not_found": "Refueling not found",
       "fuel_type_not_supported": "This vehicle doesn't use the selected fuel"
     },
+    "user_value": {
+      "name_taken": "An entry with this name already exists",
+      "merge_invalid": "Choose another entry of the same kind",
+      "not_found": "Entry not found"
+    },
     "expense": {
       "vehicle": {
         "required": "Vehicle required"
       },
       "category": {
-        "required": "Select category"
+        "required": "Enter a category"
+      },
+      "tax_type": {
+        "required": "Type the tax type"
       },
       "description": {
         "required": "Enter a description"
@@ -751,6 +857,13 @@
       "recurring_period_unexpected": "Frequency only applies to recurring expenses",
       "recurring_until_before_start": "The end date cannot be before the first charge",
       "recurring_until_unexpected": "The end date only applies to recurring expenses"
+    },
+    "component": {
+      "name": {
+        "required": "Type the component name"
+      },
+      "name_taken": "This vehicle already has a component with this name",
+      "not_found": "Component not found"
     },
     "maintenance": {
       "vehicle": {

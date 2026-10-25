@@ -1,12 +1,12 @@
 import type { DashboardCharts } from '@/api/types/dashboardCharts';
+import type { SpendingSeries } from '@/lib/dashboardCharts';
 
 export interface MonthSpending {
   /** Mese di riferimento, `YYYY-MM`. */
   month: string;
   total: number;
-  refuelings: number;
-  maintenances: number;
-  expenses: number;
+  /** Spesa del mese per sezione di costo. */
+  bySeries: Record<SpendingSeries, number>;
   kmDriven: number;
   /** Totale del mese prima (null se fuori dalla finestra dei grafici). */
   previousTotal: number | null;
@@ -16,7 +16,7 @@ const yearMonth = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pa
 
 /**
  * La spesa del mese corrente (e il totale del mese prima, per il confronto) dalla risposta dei grafici, che ha già
- * le somme mensili di rifornimenti, manutenzioni e spese. Un mese senza movimenti vale zero.
+ * le somme mensili per sezione di costo. Un mese senza movimenti vale zero.
  */
 export function monthSpending(charts: DashboardCharts, now: Date = new Date()): MonthSpending {
   const month = yearMonth(now);
@@ -28,9 +28,15 @@ export function monthSpending(charts: DashboardCharts, now: Date = new Date()): 
   return {
     month,
     total: n(current?.spending.total),
-    refuelings: n(current?.spending.refuelings),
-    maintenances: n(current?.spending.maintenances),
-    expenses: n(current?.spending.expenses),
+    bySeries: {
+      refuelings: n(current?.spending.refuelings),
+      scheduled: n(current?.spending.scheduled),
+      unscheduled: n(current?.spending.unscheduled),
+      inspection: n(current?.spending.inspection),
+      taxes: n(current?.spending.taxes),
+      insurance: n(current?.spending.insurance),
+      expenses: n(current?.spending.expenses),
+    },
     kmDriven: current?.kmDriven ?? 0,
     previousTotal: before ? n(before.spending.total) : null,
   };

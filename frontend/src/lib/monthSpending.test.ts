@@ -4,7 +4,7 @@ import { monthSpending } from './monthSpending';
 
 const month = (m: string, total: string, km = 0) => ({
   month: m,
-  spending: { refuelings: total, maintenances: '0.00', expenses: '0.00', total },
+  spending: { refuelings: total, scheduled: '0.00', unscheduled: '0.00', inspection: '0.00', taxes: '0.00', insurance: '0.00', expenses: '0.00', total },
   kmDriven: km,
   consumption: {},
 });
@@ -22,7 +22,7 @@ describe('monthSpending', () => {
 
   it('prende il mese corrente e il totale del mese prima', () => {
     const res = monthSpending(charts([month('2026-09', '120.50'), month('2026-10', '61.25', 610)]), now);
-    expect(res).toMatchObject({ month: '2026-10', total: 61.25, refuelings: 61.25, kmDriven: 610, previousTotal: 120.5 });
+    expect(res).toMatchObject({ month: '2026-10', total: 61.25, bySeries: expect.objectContaining({ refuelings: 61.25, scheduled: 0 }), kmDriven: 610, previousTotal: 120.5 });
   });
 
   it('un mese senza movimenti vale zero', () => {

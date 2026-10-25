@@ -76,10 +76,16 @@ class Refueling implements VehicleScoped
     #[Groups(['refueling:read', 'refueling:list', 'refueling:write'])]
     private bool $fullTank = true;
 
-    #[ORM\Column(length: 200, nullable: true)]
-    #[Assert\Length(max: 200)]
-    #[Groups(['refueling:read', 'refueling:write'])]
-    private ?string $station = null;
+    /** Voce della lista distributori del proprietario del veicolo. RESTRICT: una voce in uso non sparisce di nascosto. */
+    #[ORM\ManyToOne(targetEntity: UserValue::class)]
+    #[ORM\JoinColumn(name: 'station_id', nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['refueling:read'])]
+    private ?UserValue $station = null;
+
+    /** Descrizione facoltativa (es. il viaggio per cui si è fatto il pieno): il titolo della scheda. */
+    #[ORM\Column(length: 500, nullable: true)]
+    #[Groups(['refueling:read', 'refueling:list', 'refueling:write'])]
+    private ?string $description = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['refueling:read', 'refueling:write'])]
@@ -112,8 +118,10 @@ class Refueling implements VehicleScoped
     public function setFuelType(FuelType $t): self { $this->fuelType = $t; return $this; }
     public function isFullTank(): bool { return $this->fullTank; }
     public function setFullTank(bool $f): self { $this->fullTank = $f; return $this; }
-    public function getStation(): ?string { return $this->station; }
-    public function setStation(?string $s): self { $this->station = $s; return $this; }
+    public function getStation(): ?UserValue { return $this->station; }
+    public function setStation(?UserValue $s): self { $this->station = $s; return $this; }
+    public function getDescription(): ?string { return $this->description; }
+    public function setDescription(?string $d): self { $this->description = $d; return $this; }
     public function getNotes(): ?string { return $this->notes; }
     public function setNotes(?string $n): self { $this->notes = $n; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }

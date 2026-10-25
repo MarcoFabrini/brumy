@@ -1,9 +1,11 @@
 import { useId, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Building2,
   ArrowLeftRight,
   Globe,
+  ListChecks,
   KeyRound,
   LogOut,
   Mail,
@@ -236,6 +238,18 @@ export function SettingsPage() {
           label={<span id={largeTextLabelId}>{t('settings.large_text')}</span>}
           description={t('settings.large_text_hint')}
           value={<Switch checked={largeText} onCheckedChange={setLargeText} aria-labelledby={largeTextLabelId} />}
+        />
+      </ListSection>
+
+      {/* ── Elenchi personali: distributori, officine, categorie ── */}
+      <ListSection>
+        <ListRow
+          as={Link}
+          to="/settings/values"
+          icon={<ListChecks />}
+          iconClassName="bg-[#ff9500]"
+          label={t('values.title')}
+          chevron
         />
       </ListSection>
 

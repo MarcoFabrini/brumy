@@ -6,13 +6,16 @@ namespace App\Controller\Api;
 
 use App\Dto\Request\RefuelingRequest;
 use App\Entity\Refueling;
+use App\Entity\User;
 use App\Entity\Vehicle;
 use App\Enum\FuelType;
+use App\Enum\UserValueKind;
 use App\Repository\RefuelingRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
+use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -38,6 +41,7 @@ final class RefuelingController extends AbstractController
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
         private readonly SerializerInterface $serializer,
+        private readonly UserValues $values,
     ) {
     }
 
@@ -75,21 +79,21 @@ final class RefuelingController extends AbstractController
     #[OA\Get(
         summary: 'Refueling detail',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Refueling', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested'])))],
+        responses: [new OA\Response(response: 200, description: 'Refueling', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested', 'user_value:nested'])))],
     )]
     #[Route('/{id}', name: 'get', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function get(int $id): JsonResponse
     {
         $r = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $r);
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested']);
+        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested']);
     }
 
     #[OA\Post(
         summary: 'Create refueling (total_cost computed by DB)',
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: RefuelingRequest::class))),
         responses: [
-            new OA\Response(response: 201, description: 'Created with computed totalCost', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested']))),
+            new OA\Response(response: 201, description: 'Created with computed totalCost', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested', 'user_value:nested']))),
             new OA\Response(response: 422, description: 'validation_failed'),
         ],
     )]
@@ -101,6 +105,8 @@ final class RefuelingController extends AbstractController
             throw $this->createNotFoundException('vehicle.not_found');
         }
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $vehicle);
+        /** @var User $user */
+        $user = $this->getUser();
 
         if (($error = $this->unsupportedFuelType($vehicle, $payload->fuelType)) !== null) {
             return $error;
@@ -115,7 +121,8 @@ final class RefuelingController extends AbstractController
             ->setPricePerLiter($payload->pricePerLiter)
             ->setFuelType($payload->fuelType)
             ->setFullTank($payload->fullTank)
-            ->setStation($payload->station)
+            ->setStation($this->values->resolve($vehicle, $user, UserValueKind::STATION, $payload->station))
+            ->setDescription(self::blankToNull($payload->description))
             ->setNotes($payload->notes);
 
         $this->em->persist($r);
@@ -124,22 +131,25 @@ final class RefuelingController extends AbstractController
         // Refresh per popolare total_cost calcolato dal DB
         $this->em->refresh($r);
 
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested'], 201);
+        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested'], 201);
     }
 
     #[OA\Put(
         summary: 'Update refueling',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: RefuelingRequest::class))),
-        responses: [new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested'])))],
+        responses: [new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Refueling::class, groups: ['refueling:read', 'vehicle:nested', 'user_value:nested'])))],
     )]
     #[Route('/{id}', name: 'update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] RefuelingRequest $payload): JsonResponse
     {
         $r = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $r);
+        $vehicle = $r->getVehicle();
+        /** @var User $user */
+        $user = $this->getUser();
 
-        if (($error = $this->unsupportedFuelType($r->getVehicle(), $payload->fuelType)) !== null) {
+        if (($error = $this->unsupportedFuelType($vehicle, $payload->fuelType)) !== null) {
             return $error;
         }
 
@@ -150,13 +160,14 @@ final class RefuelingController extends AbstractController
             ->setPricePerLiter($payload->pricePerLiter)
             ->setFuelType($payload->fuelType)
             ->setFullTank($payload->fullTank)
-            ->setStation($payload->station)
+            ->setStation($this->values->resolve($vehicle, $user, UserValueKind::STATION, $payload->station, $r->getStation()))
+            ->setDescription(self::blankToNull($payload->description))
             ->setNotes($payload->notes);
 
         $this->em->flush();
         $this->em->refresh($r);
 
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested']);
+        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested']);
     }
 
     #[OA\Delete(
@@ -198,5 +209,10 @@ final class RefuelingController extends AbstractController
     private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
     {
         return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
+    }
+
+    private static function blankToNull(?string $text): ?string
+    {
+        return $text === null || trim($text) === '' ? null : trim($text);
     }
 }

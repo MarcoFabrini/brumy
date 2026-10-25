@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional\Service;
 
+use App\Enum\ExpenseCategory;
 use App\Service\VehicleStatsService;
 use App\Tests\Factory\ExpenseFactory;
 use App\Tests\Factory\RefuelingFactory;
@@ -29,13 +30,14 @@ final class VehicleStatsCacheTest extends KernelTestCase
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $vehicle = VehicleFactory::createOne(['initialKm' => 0]);
         $id = (int) $vehicle->getId();
+        $categoryId = (int) ExpenseFactory::new()->starterCategory($vehicle, ExpenseCategory::OTHER)->getId();
 
         self::assertSame(0, $stats->compute($vehicle)['totals']['expenses']);
 
         // Scrittura FUORI da Doctrine (nessun evento): la cache non può saperlo → dato ancora in cache.
         $em->getConnection()->executeStatement(
-            "INSERT INTO expenses (organization_id, vehicle_id, category, occurred_at, amount, description, recurring, created_at) "
-            ."SELECT organization_id, id, 'other', CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
+            "INSERT INTO expenses (organization_id, vehicle_id, category_id, occurred_at, amount, description, recurring, created_at) "
+            ."SELECT organization_id, id, $categoryId, CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
         );
         self::assertSame(0, $stats->compute($vehicle)['totals']['expenses'], 'servito dalla cache');
 

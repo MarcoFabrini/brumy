@@ -10,6 +10,7 @@ use App\Enum\RecurringPeriod;
 use App\Tests\Factory\MaintenanceFactory;
 use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\VehicleFactory;
+use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 use App\Tests\Support\ChartFixtures;
 
@@ -309,6 +310,34 @@ final class VehicleStatsTest extends ApiTestCase
         self::assertSame(1, $body['totals']['refuelings']);
         self::assertSame(1, $body['totals']['maintenances']);
         self::assertEqualsWithDelta(192.50, (float) $body['totals']['cost'], 0.01);
+    }
+
+    public function testStatsCountRecordsPerSection(): void
+    {
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $user]);
+        foreach ([['oil_change', 'scheduled'], ['oil_change', 'scheduled'], ['brakes', 'unscheduled'], ['inspection', 'inspection']] as [$type, $category]) {
+            $this->jsonRequest('POST', '/api/maintenances', [
+                'vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-01', 'km' => 1000, 'type' => $type, 'category' => $category,
+                'description' => 'Lavoro', 'components' => $category === 'unscheduled' ? ['Pastiglie', 'Dischi'] : [],
+            ], accessToken: $token);
+        }
+        foreach ([['tax', 'Bollo', null], ['insurance', '', 'Allianz'], ['other', 'Pedaggio', null], ['other', 'Parcheggio', null]] as [$section, $category, $insurer]) {
+            $this->jsonRequest('POST', '/api/expenses', [
+                'vehicleId' => $vehicle->getId(), 'occurredAt' => '2026-05-01', 'section' => $section, 'category' => $category,
+                'insurer' => $insurer, 'description' => 'Spesa', 'amount' => '10.00',
+            ], accessToken: $token);
+        }
+        $this->jsonRequest('GET', '/api/components?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/components/'.array_column($this->jsonBody(), 'id')[0], accessToken: $token);
+
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+
+        self::assertSame(
+            ['scheduled' => 2, 'unscheduled' => 1, 'inspection' => 1, 'tax' => 1, 'insurance' => 1, 'expense' => 2, 'component' => 1],
+            $this->jsonBody()['totals']['sections'],
+        );
     }
 
     public function testStatsCrossTenantAccessDenied(): void

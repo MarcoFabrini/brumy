@@ -3,12 +3,15 @@ import {
   adaptMaintenance,
   type CreateMaintenanceDto,
   type Maintenance,
+  type MaintenanceCategory,
   type MaintenanceResponse,
   type UpdateMaintenanceDto,
 } from '@/api/types/maintenance';
 
-export async function listMaintenances(vehicleId: number): Promise<Maintenance[]> {
-  const raw = await authFetch<MaintenanceResponse[]>(`/api/maintenances?vehicleId=${vehicleId}`);
+/** Lavori del veicolo (i più recenti), di una sezione o di tutte. */
+export async function listMaintenances(vehicleId: number, category?: MaintenanceCategory): Promise<Maintenance[]> {
+  const query = new URLSearchParams({ vehicleId: String(vehicleId), ...(category ? { category } : {}) });
+  const raw = await authFetch<MaintenanceResponse[]>(`/api/maintenances?${query}`);
   return raw.map(adaptMaintenance);
 }
 

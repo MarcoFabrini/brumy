@@ -1,12 +1,15 @@
 import { z } from 'zod';
-import { EXPENSE_CATEGORIES, RECURRING_PERIODS } from '@/api/types/expense';
+import { EXPENSE_SECTIONS, RECURRING_PERIODS } from '@/api/types/expense';
 import { decimalString } from './decimal';
 
 export const expenseSchema = z
   .object({
     vehicleId: z.number({ message: 'expense.vehicle.required' }).int().positive(),
     occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'common.invalid_date'),
-    category: z.enum(EXPENSE_CATEGORIES, { message: 'expense.category.required' }),
+    section: z.enum(EXPENSE_SECTIONS),
+    // Categoria (altre spese) o tipo di tassa (tasse); l'assicurazione non ce l'ha ma ha la compagnia, facoltativa
+    category: z.string().trim().max(200),
+    insurer: z.string().max(200).nullable().optional(),
     description: z.string().min(1, 'expense.description.required').max(500),
     amount: decimalString(2, { maxIntegerDigits: 8 }),
     recurring: z.boolean(),
@@ -18,6 +21,16 @@ export const expenseSchema = z
       .nullable()
       .optional(),
     notes: z.string().max(2000).nullable().optional(),
+    // Solo in creazione di assicurazione e bollo: prossima scadenza per il promemoria (null = nessuno)
+    nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'common.invalid_date').or(z.literal('')).nullable().optional(),
+  })
+  .refine((d) => d.section !== 'other' || d.category !== '', {
+    message: 'expense.category.required',
+    path: ['category'],
+  })
+  .refine((d) => d.section !== 'tax' || d.category !== '', {
+    message: 'expense.tax_type.required',
+    path: ['category'],
   })
   .refine((d) => !d.recurring || !!d.recurringPeriod, {
     message: 'expense.recurring_period.required',

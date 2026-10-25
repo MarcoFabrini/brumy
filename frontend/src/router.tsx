@@ -26,12 +26,18 @@ const ResetPasswordPage = lazyNamed(() => import('./pages/auth/ResetPasswordPage
 const VerifyEmailPage = lazyNamed(() => import('./pages/auth/VerifyEmailPage'), 'VerifyEmailPage');
 const AcceptInvitePage = lazyNamed(() => import('./pages/auth/AcceptInvitePage'), 'AcceptInvitePage');
 const SettingsPage = lazyNamed(() => import('./pages/SettingsPage'), 'SettingsPage');
+const UserValuesPage = lazyNamed(() => import('./pages/settings'), 'UserValuesPage');
+const UserValueListPage = lazyNamed(() => import('./pages/settings'), 'UserValueListPage');
 const VehicleListPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleListPage');
 const VehicleNewPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleNewPage');
 const VehicleDetailPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleDetailPage');
 const VehicleEditPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleEditPage');
 const VehicleSharingPage = lazyNamed(() => import('./pages/vehicles'), 'VehicleSharingPage');
 const MaintenanceListPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceListPage');
+const ComponentListPage = lazyNamed(() => import('./pages/components'), 'ComponentListPage');
+const ComponentNewPage = lazyNamed(() => import('./pages/components'), 'ComponentNewPage');
+const ComponentDetailPage = lazyNamed(() => import('./pages/components'), 'ComponentDetailPage');
+const ComponentEditPage = lazyNamed(() => import('./pages/components'), 'ComponentEditPage');
 const MaintenanceNewPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceNewPage');
 const MaintenanceDetailPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceDetailPage');
 const MaintenanceEditPage = lazyNamed(() => import('./pages/maintenance'), 'MaintenanceEditPage');
@@ -142,6 +148,10 @@ export const routes: RouteObject[] = [
           { path: '/maintenance/new', element: <MaintenanceNewPage /> },
           { path: '/maintenance/:id', element: <MaintenanceDetailPage /> },
           { path: '/maintenance/:id/edit', element: <MaintenanceEditPage /> },
+          { path: '/components', element: <ComponentListPage /> },
+          { path: '/components/new', element: <ComponentNewPage /> },
+          { path: '/components/:id', element: <ComponentDetailPage /> },
+          { path: '/components/:id/edit', element: <ComponentEditPage /> },
           { path: '/refueling', element: <RefuelingListPage /> },
           { path: '/refueling/new', element: <RefuelingNewPage /> },
           { path: '/refueling/:id', element: <RefuelingDetailPage /> },
@@ -155,6 +165,8 @@ export const routes: RouteObject[] = [
           { path: '/reminders/:id', element: <ReminderDetailPage /> },
           { path: '/reminders/:id/edit', element: <ReminderEditPage /> },
           { path: '/settings', element: <SettingsPage /> },
+          { path: '/settings/values', element: <UserValuesPage /> },
+          { path: '/settings/values/:kind', element: <UserValueListPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

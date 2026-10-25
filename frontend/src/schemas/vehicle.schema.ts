@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decimalString } from './decimal';
 import { FUEL_TYPES, VEHICLE_TYPES } from '@/api/types/vehicle';
 
 /** Lunghezza massima delle note: stessa del backend (`VehicleRequest::$notes`) e del `maxLength` del form. */
@@ -26,6 +27,7 @@ export const vehicleSchema = z
     licensePlate: z.string().max(20).nullable().optional(),
     vin: z.string().max(17).nullable().optional(),
     initialKm: z.number({ message: 'vehicle.initial_km.required' }).int().nonnegative().max(9_999_999, 'common.km_too_large'),
+    purchasePrice: decimalString(2, { maxIntegerDigits: 8, allowZero: true }).nullable().optional(),
     notes: z.string().max(VEHICLE_NOTES_MAX_LENGTH).nullable().optional(),
   })
   .refine((data) => !data.secondaryFuelType || data.secondaryFuelType !== data.fuelType, {

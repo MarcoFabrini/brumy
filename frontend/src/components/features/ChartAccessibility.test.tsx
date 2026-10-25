@@ -19,8 +19,8 @@ vi.mock('recharts', async (importOriginal) => {
 });
 
 const spending: MonthlySpendingRow[] = [
-  { month: '2026-09', label: 'set 26', refuelings: 84.58, maintenances: 120, expenses: 12345.6, total: 12550.18 },
-  { month: '2026-10', label: 'ott 26', refuelings: 0, maintenances: 0, expenses: 0, total: 0 },
+  { month: '2026-09', label: 'set 26', refuelings: 84.58, scheduled: 120, unscheduled: 0, inspection: 0, taxes: 0, insurance: 0, expenses: 12345.6, total: 12550.18 },
+  { month: '2026-10', label: 'ott 26', refuelings: 0, scheduled: 0, unscheduled: 0, inspection: 0, taxes: 0, insurance: 0, expenses: 0, total: 0 },
 ];
 const km: KmDrivenRow[] = [
   { month: '2026-09', label: 'set 26', km: 12345 },
@@ -31,8 +31,8 @@ const consumption: ConsumptionRow[] = [
   { month: '2026-10', label: 'ott 26', values: { gasoline: 15.1, lpg: null } },
 ];
 const slices: CategorySlice[] = [
-  { category: 'insurance', amount: 1650 },
-  { category: 'fuel', amount: 84.58 },
+  { category: 'expense:1', name: 'Assicurazione', amount: 1650 },
+  { category: 'fuel', name: null, amount: 84.58 },
 ];
 
 /** Testo di ogni cella di una riga, con gli spazi non separabili di Intl resi spazi normali. */
@@ -72,7 +72,8 @@ describe('grafici — alternativa testuale per screen reader', () => {
       const { container } = render(<MonthlySpendingChart rows={spending} />);
       const table = screen.getByRole('table', { name: 'Spese mensili' });
 
-      expect(headers(table)).toEqual(['Mese', 'Rifornimenti', 'Manutenzioni', 'Spese', 'Totale']);
+      // Solo le sezioni con una spesa nella finestra
+      expect(headers(table)).toEqual(['Mese', 'Rifornimenti', 'Lavori ordinari', 'Altre spese', 'Totale']);
       expect(rowTexts(table, 'set 26')).toEqual(['84,58 €', '120,00 €', '12.345,60 €', '12.550,18 €']);
       expect(rowTexts(table, 'ott 26')).toEqual(['0,00 €', '0,00 €', '0,00 €', '0,00 €']);
       expectVisualHiddenAndTableExposed(container, table);
@@ -83,7 +84,7 @@ describe('grafici — alternativa testuale per screen reader', () => {
       render(<MonthlySpendingChart rows={spending} />);
       const table = screen.getByRole('table', { name: 'Monthly spending' });
 
-      expect(headers(table)).toEqual(['Month', 'Refuelings', 'Maintenance', 'Expenses', 'Total']);
+      expect(headers(table)).toEqual(['Month', 'Refuelings', 'Scheduled work', 'Other expenses', 'Total']);
       expect(rowTexts(table, 'set 26')).toEqual(['€84.58', '€120.00', '€12,345.60', '€12,550.18']);
     });
 
@@ -162,17 +163,24 @@ describe('grafici — alternativa testuale per screen reader', () => {
 
       expect(headers(table)).toEqual(['Categoria', 'Importo']);
       expect(rowTexts(table, 'Assicurazione')).toEqual(['1650,00 €']);
-      expect(rowTexts(table, 'Carburante')).toEqual(['84,58 €']);
+      expect(rowTexts(table, 'Rifornimenti')).toEqual(['84,58 €']);
       expectVisualHiddenAndTableExposed(container, table);
+    });
+
+    it('una fetta di spesa usa il nome della categoria scelto dall\'utente', () => {
+      render(<SpendingByCategoryChart slices={[{ category: 'expense:4', name: 'Revisione camper', amount: 80 }]} />);
+      const table = screen.getByRole('table', { name: 'Spese per categoria' });
+
+      expect(rowTexts(table, 'Revisione camper')).toEqual(['80,00 €']);
     });
 
     it('in inglese categorie e importi in inglese', async () => {
       await i18n.changeLanguage('en');
-      render(<SpendingByCategoryChart slices={[{ category: 'insurance', amount: 12345.5 }]} />);
+      render(<SpendingByCategoryChart slices={[{ category: 'expense:1', name: 'Assicurazione', amount: 12345.5 }]} />);
       const table = screen.getByRole('table', { name: 'Spending by category' });
 
       expect(headers(table)).toEqual(['Category', 'Amount']);
-      expect(rowTexts(table, 'Insurance')).toEqual(['€12,345.50']);
+      expect(rowTexts(table, 'Assicurazione')).toEqual(['€12,345.50']);
     });
 
     it('la legenda sotto l\'anello è nascosta agli screen reader come il grafico', () => {

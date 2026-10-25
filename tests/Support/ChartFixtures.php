@@ -6,6 +6,7 @@ namespace App\Tests\Support;
 
 use App\Entity\Organization;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\Vehicle;
 use App\Enum\ExpenseCategory;
 use App\Enum\FuelType;
@@ -78,7 +79,8 @@ trait ChartFixtures
         ]);
     }
 
-    private function expense(Vehicle $vehicle, \DateTimeImmutable $on, string $amount, ExpenseCategory $category = ExpenseCategory::OTHER): void
+    /** `$category` come ExpenseCategory diventa la voce di partenza nella lista del proprietario del veicolo. */
+    private function expense(Vehicle $vehicle, \DateTimeImmutable $on, string $amount, ExpenseCategory|UserValue $category = ExpenseCategory::OTHER): void
     {
         ExpenseFactory::createOne([
             'organization' => $vehicle->getOrganization(), 'vehicle' => $vehicle,
@@ -87,12 +89,40 @@ trait ChartFixtures
     }
 
     /** Spesa ricorrente: `$on` è il primo addebito, `$until` l'ultimo possibile (inclusivo, null = in corso). */
-    private function recurringExpense(Vehicle $vehicle, \DateTimeImmutable $on, string $amount, RecurringPeriod $period, ExpenseCategory $category = ExpenseCategory::OTHER, ?\DateTimeImmutable $until = null): void
+    private function recurringExpense(Vehicle $vehicle, \DateTimeImmutable $on, string $amount, RecurringPeriod $period, ExpenseCategory|UserValue $category = ExpenseCategory::OTHER, ?\DateTimeImmutable $until = null): void
     {
         ExpenseFactory::createOne([
             'organization' => $vehicle->getOrganization(), 'vehicle' => $vehicle,
             'occurredAt' => $on, 'amount' => $amount, 'category' => $category,
             'recurring' => true, 'recurringPeriod' => $period, 'recurringUntil' => $until,
         ]);
+    }
+
+    /** Voce di partenza `$category` nella lista del proprietario del veicolo (quella usata da expense()). */
+    private function starterCategory(Vehicle $vehicle, ExpenseCategory $category): UserValue
+    {
+        return ExpenseFactory::new()->starterCategory($vehicle, $category);
+    }
+
+    /**
+     * Fetta attesa di `spendingByCategory` per le spese di una categoria.
+     *
+     * @return array{category: string, name: string|null, amount: string}
+     */
+    private function expenseSlice(Vehicle $vehicle, ExpenseCategory|UserValue $category, string $amount): array
+    {
+        $value = $category instanceof UserValue ? $category : $this->starterCategory($vehicle, $category);
+
+        return ['category' => 'expense:'.$value->getId(), 'name' => $value->getName(), 'amount' => $amount];
+    }
+
+    /**
+     * Fetta attesa di `spendingByCategory` per rifornimenti (`fuel`) o manutenzioni (`maintenance`).
+     *
+     * @return array{category: string, name: null, amount: string}
+     */
+    private function costSlice(string $category, string $amount): array
+    {
+        return ['category' => $category, 'name' => null, 'amount' => $amount];
     }
 }

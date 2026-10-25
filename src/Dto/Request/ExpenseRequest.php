@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Dto\Request;
 
-use App\Enum\ExpenseCategory;
+use App\Entity\UserValue;
+use App\Enum\ExpenseSection;
 use App\Enum\RecurringPeriod;
 use App\Validator\DecimalString;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -23,7 +24,19 @@ final class ExpenseRequest
         #[Assert\GreaterThanOrEqual('1970-01-01')]
         public string $occurredAt = '',
 
-        public ExpenseCategory $category = ExpenseCategory::OTHER,
+        /**
+         * Nome della categoria (altre spese) o del tipo di tassa (tasse): si cerca nella lista del proprietario del
+         * veicolo o diventa una voce nuova; obbligatorio tranne che per l'assicurazione ({@see self::validateSection()}).
+         * Lo slug di un vecchio client ('toll') punta alla voce di partenza.
+         */
+        #[Assert\Length(max: 200)]
+        public string $category = '',
+
+        public ExpenseSection $section = ExpenseSection::OTHER,
+
+        /** Compagnia, solo per l'assicurazione (facoltativa). */
+        #[Assert\Length(max: 200)]
+        public ?string $insurer = null,
 
         #[Assert\NotBlank]
         #[Assert\Length(max: 500)]
@@ -41,7 +54,25 @@ final class ExpenseRequest
 
         #[Assert\Length(max: 2000)]
         public ?string $notes = null,
+
+        /**
+         * Solo in creazione, per revisione, assicurazione e bollo/superbollo: data della prossima scadenza, che
+         * aggiorna o crea il promemoria ({@see \App\Service\RecordReminders}); null = nessun promemoria.
+         */
+        #[Assert\Date]
+        public ?string $nextDueDate = null,
     ) {
+    }
+
+    /** Categoria o tipo di tassa obbligatori (vuoti anche se di soli spazi Unicode); l'assicurazione ha la compagnia. */
+    #[Assert\Callback]
+    public function validateSection(ExecutionContextInterface $context): void
+    {
+        $blank = UserValue::normalizeName($this->category) === '';
+        if ($blank && $this->section !== ExpenseSection::INSURANCE) {
+            $message = $this->section === ExpenseSection::TAX ? 'expense.tax_type.required' : 'expense.category.required';
+            $context->buildViolation($message)->atPath('category')->addViolation();
+        }
     }
 
     /**

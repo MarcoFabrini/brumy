@@ -78,6 +78,7 @@ export {
   type SheetContentProps,
 } from './Sheet';
 export { Skeleton } from './Skeleton';
+export { SuggestInput, type SuggestInputProps } from './SuggestInput';
 export { Spinner, type SpinnerProps } from './Spinner';
 export { SwipeActions, type SwipeAction, type SwipeActionsProps } from './SwipeActions';
 export { Switch, type SwitchProps } from './Switch';

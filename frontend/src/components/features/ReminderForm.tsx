@@ -14,6 +14,7 @@ import {
   SelectValue,
   Spinner,
   Text,
+  Textarea,
 } from '@/components/ui';
 import {
   DEFAULT_NOTIFY_KM_BEFORE,
@@ -60,6 +61,7 @@ export function ReminderForm({
     vehicleId,
     type: defaultValues?.type ?? 'custom',
     description: defaultValues?.description ?? '',
+    notes: defaultValues?.notes ?? null,
     dueDate: defaultValues?.dueDate ?? null,
     dueKm: defaultValues?.dueKm ?? null,
     notifyDaysBefore: defaultValues?.notifyDaysBefore ?? 30,
@@ -114,7 +116,6 @@ export function ReminderForm({
         <FormField
           label={t('reminder.due_date')}
           error={tErr(errors.dueDate?.message)}
-          hint={t('reminder.due_hint')}
         >
           {(id) => (
             <Input
@@ -142,7 +143,6 @@ export function ReminderForm({
         <FormField
           label={t('reminder.notify_days_before')}
           error={tErr(errors.notifyDaysBefore?.message)}
-          hint={t('reminder.notify_hint')}
           required
         >
           {(id) => (
@@ -158,7 +158,6 @@ export function ReminderForm({
         <FormField
           label={t('reminder.notify_km_before')}
           error={tErr(errors.notifyKmBefore?.message)}
-          hint={t('reminder.notify_km_hint')}
           required
         >
           {(id) => (
@@ -194,7 +193,6 @@ export function ReminderForm({
         <FormField
           label={t('reminder.recurrence_km')}
           error={tErr(errors.recurrenceKm?.message)}
-          hint={t('reminder.recurrence_km_hint')}
         >
           {(id) => (
             <Input
@@ -207,6 +205,17 @@ export function ReminderForm({
           )}
         </FormField>
       </fieldset>
+
+      <FormField label={t('reminder.notes')} error={tErr(errors.notes?.message)}>
+        {(id) => (
+          <Textarea
+            id={id}
+            maxLength={2000}
+            invalid={!!errors.notes}
+            {...form.register('notes', { setValueAs: (v) => (v === '' ? null : v) })}
+          />
+        )}
+      </FormField>
 
       {error instanceof ApiError && (error.title !== 'validation_failed' || hasUnmapped) && (
         <Alert variant="error">

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Tests\Functional\Service;
 
 use App\Entity\Vehicle;
+use App\Enum\ExpenseCategory;
 use App\Service\VehicleStatsService;
+use App\Tests\Factory\ExpenseFactory;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\VehicleFactory;
 use Doctrine\DBAL\Connection;
@@ -82,6 +84,7 @@ final class ListenerStateAfterFailedFlushTest extends KernelTestCase
         $stats = static::getContainer()->get(VehicleStatsService::class);
         $vehicle = VehicleFactory::createOne(['initialKm' => 0]);
         $id = (int) $vehicle->getId();
+        $categoryId = (int) ExpenseFactory::new()->starterCategory($vehicle, ExpenseCategory::OTHER)->getId();
         self::assertSame(0, $stats->compute($vehicle)['totals']['expenses']); // ora in cache
 
         $this->failAFlushThatAlsoTouches(function (EntityManagerInterface $em) use ($id): void {
@@ -90,8 +93,8 @@ final class ListenerStateAfterFailedFlushTest extends KernelTestCase
 
         // Scrittura FUORI da Doctrine: la cache non lo sa, quindi resta il dato in cache...
         static::getContainer()->get(Connection::class)->executeStatement(
-            "INSERT INTO expenses (organization_id, vehicle_id, category, occurred_at, amount, description, recurring, created_at) "
-            ."SELECT organization_id, id, 'other', CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
+            "INSERT INTO expenses (organization_id, vehicle_id, category_id, occurred_at, amount, description, recurring, created_at) "
+            ."SELECT organization_id, id, $categoryId, CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
         );
         // ...e un flush riuscito che non tocca quel veicolo non deve invalidarla per un id rimasto dal flush fallito
         OrganizationFactory::createOne();
@@ -105,6 +108,7 @@ final class ListenerStateAfterFailedFlushTest extends KernelTestCase
         $stats = static::getContainer()->get(VehicleStatsService::class);
         $vehicle = VehicleFactory::createOne(['initialKm' => 0]);
         $id = (int) $vehicle->getId();
+        $categoryId = (int) ExpenseFactory::new()->starterCategory($vehicle, ExpenseCategory::OTHER)->getId();
         self::assertSame(0, $stats->compute($vehicle)['totals']['expenses']);
 
         $this->failAFlushThatAlsoTouches(function (EntityManagerInterface $em) use ($id): void {
@@ -113,8 +117,8 @@ final class ListenerStateAfterFailedFlushTest extends KernelTestCase
         // Anche senza un nuovo onFlush, il clear dell'EntityManager (reset del worker) svuota la raccolta
         $this->em()->clear();
         static::getContainer()->get(Connection::class)->executeStatement(
-            "INSERT INTO expenses (organization_id, vehicle_id, category, occurred_at, amount, description, recurring, created_at) "
-            ."SELECT organization_id, id, 'other', CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
+            "INSERT INTO expenses (organization_id, vehicle_id, category_id, occurred_at, amount, description, recurring, created_at) "
+            ."SELECT organization_id, id, $categoryId, CURRENT_DATE, 10, 'raw', 0, NOW() FROM vehicles WHERE id = $id",
         );
         $this->em()->flush(); // flush senza modifiche: arriva il postFlush ma, se onFlush non gira, nessuna raccolta nuova
 

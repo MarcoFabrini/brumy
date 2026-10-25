@@ -48,15 +48,20 @@ final class DashboardController extends AbstractController
                         new OA\Property(property: 'month', type: 'string', example: '2026-10'),
                         new OA\Property(property: 'spending', type: 'object', properties: [
                             new OA\Property(property: 'refuelings', type: 'string', example: '84.58'),
-                            new OA\Property(property: 'maintenances', type: 'string', example: '0.00'),
-                            new OA\Property(property: 'expenses', type: 'string', example: '650.00'),
+                            new OA\Property(property: 'scheduled', type: 'string', example: '0.00'),
+                            new OA\Property(property: 'unscheduled', type: 'string', example: '0.00'),
+                            new OA\Property(property: 'inspection', type: 'string', example: '0.00'),
+                            new OA\Property(property: 'taxes', type: 'string', example: '0.00'),
+                            new OA\Property(property: 'insurance', type: 'string', example: '650.00'),
+                            new OA\Property(property: 'expenses', type: 'string', example: '0.00', description: 'Other expenses'),
                             new OA\Property(property: 'total', type: 'string', example: '734.58'),
                         ]),
                         new OA\Property(property: 'kmDriven', type: 'integer'),
                         new OA\Property(property: 'consumption', type: 'object', description: 'Keys = fuelTypes', additionalProperties: new OA\AdditionalProperties(type: 'number', nullable: true)),
                     ])),
-                    new OA\Property(property: 'spendingByCategory', type: 'array', description: '`fuel`, `maintenance` or an expense category; zero entries omitted; amount descending', items: new OA\Items(properties: [
-                        new OA\Property(property: 'category', type: 'string', example: 'insurance'),
+                    new OA\Property(property: 'spendingByCategory', type: 'array', description: 'One entry per cost section (`fuel`, `scheduled`, `unscheduled`, `inspection`, `tax`, `insurance`) and `expense:<id>` for each category of the other expenses (recurring charges included); zero entries omitted; amount descending', items: new OA\Items(properties: [
+                        new OA\Property(property: 'category', type: 'string', example: 'expense:12'),
+                        new OA\Property(property: 'name', type: 'string', nullable: true, description: 'Current name of the expense category; null for the section entries', example: 'Assicurazione'),
                         new OA\Property(property: 'amount', type: 'string', example: '650.00'),
                     ])),
                     new OA\Property(property: 'totals', type: 'object', properties: [

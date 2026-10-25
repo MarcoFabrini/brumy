@@ -15,7 +15,7 @@ vi.mock('recharts', async (importOriginal) => {
   };
 });
 
-const zero = { refuelings: '0.00', maintenances: '0.00', expenses: '0.00', total: '0.00' };
+const zero = { refuelings: '0.00', scheduled: '0.00', unscheduled: '0.00', inspection: '0.00', taxes: '0.00', insurance: '0.00', expenses: '0.00', total: '0.00' };
 const data: DashboardCharts = {
   from: '2026-09',
   to: '2026-10',

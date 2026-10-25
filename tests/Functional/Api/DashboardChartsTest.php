@@ -8,10 +8,17 @@ use App\Entity\Organization;
 use App\Entity\User;
 use App\Entity\Vehicle;
 use App\Enum\ExpenseCategory;
+use App\Enum\ExpenseSection;
 use App\Enum\FuelType;
+use App\Enum\MaintenanceCategory;
+use App\Enum\MaintenanceType;
 use App\Enum\OrgRole;
 use App\Enum\RecurringPeriod;
 use App\Enum\ShareRole;
+use App\Enum\UserValueKind;
+use App\Service\UserValues;
+use App\Tests\Factory\ExpenseFactory;
+use App\Tests\Factory\MaintenanceFactory;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\UserFactory;
@@ -84,7 +91,7 @@ final class DashboardChartsTest extends ApiTestCase
         self::assertSame(['gasoline', 'lpg'], $body['fuelTypes']);
         foreach ($body['months'] as $point) {
             self::assertMatchesRegularExpression('/^\d{4}-\d{2}$/', $point['month']);
-            self::assertSame(['refuelings' => '0.00', 'maintenances' => '0.00', 'expenses' => '0.00', 'total' => '0.00'], $point['spending']);
+            self::assertSame(['refuelings' => '0.00', 'scheduled' => '0.00', 'unscheduled' => '0.00', 'inspection' => '0.00', 'taxes' => '0.00', 'insurance' => '0.00', 'expenses' => '0.00', 'total' => '0.00'], $point['spending']);
             self::assertSame(0, $point['kmDriven']);
             self::assertSame(['gasoline' => null, 'lpg' => null], $point['consumption']);
         }
@@ -129,11 +136,11 @@ final class DashboardChartsTest extends ApiTestCase
         $body = $this->charts($token, '?months=2');
 
         self::assertSame(
-            ['refuelings' => '80.00', 'maintenances' => '120.50', 'expenses' => '30.25', 'total' => '230.75'],
+            ['refuelings' => '80.00', 'scheduled' => '120.50', 'unscheduled' => '0.00', 'inspection' => '0.00', 'taxes' => '0.00', 'insurance' => '0.00', 'expenses' => '30.25', 'total' => '230.75'],
             $body['months'][0]['spending'],
         );
         self::assertSame(
-            ['refuelings' => '0.00', 'maintenances' => '0.00', 'expenses' => '5.00', 'total' => '5.00'],
+            ['refuelings' => '0.00', 'scheduled' => '0.00', 'unscheduled' => '0.00', 'inspection' => '0.00', 'taxes' => '0.00', 'insurance' => '0.00', 'expenses' => '5.00', 'total' => '5.00'],
             $body['months'][1]['spending'],
         );
         self::assertSame('235.75', $body['totals']['spending']);
@@ -173,10 +180,61 @@ final class DashboardChartsTest extends ApiTestCase
         $body = $this->charts($token, '?months=3');
 
         self::assertSame([
-            ['category' => 'insurance', 'amount' => '500.00'],
-            ['category' => 'fuel', 'amount' => '30.00'],
-            ['category' => 'maintenance', 'amount' => '30.00'],
-            ['category' => 'toll', 'amount' => '7.50'],
+            $this->expenseSlice($vehicle, ExpenseCategory::INSURANCE, '500.00'),
+            $this->costSlice('fuel', '30.00'),
+            $this->costSlice('scheduled', '30.00'),
+            $this->expenseSlice($vehicle, ExpenseCategory::TOLL, '7.50'),
+        ], $body['spendingByCategory']);
+    }
+
+    public function testEverySectionHasItsSeriesAndSlice(): void
+    {
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = $this->ownedVehicle($user, $org);
+        $values = static::getContainer()->get(UserValues::class);
+        $roadTax = $values->findOrCreate($user, $org, UserValueKind::TAX_TYPE, 'Bollo');
+        $allianz = $values->findOrCreate($user, $org, UserValueKind::INSURER, 'Allianz');
+        ExpenseFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'occurredAt' => $this->day(-1), 'amount' => '300.00', 'section' => ExpenseSection::INSURANCE, 'category' => null, 'insurer' => $allianz]);
+        ExpenseFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'occurredAt' => $this->day(0), 'amount' => '50.00', 'section' => ExpenseSection::INSURANCE, 'category' => null, 'insurer' => null]);
+        ExpenseFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'occurredAt' => $this->day(0), 'amount' => '200.00', 'section' => ExpenseSection::TAX, 'category' => $roadTax]);
+
+        $this->maintenance($vehicle, $this->day(0), 1000, '80.00');
+        MaintenanceFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'performedAt' => $this->day(0), 'km' => 1100, 'cost' => '60.00', 'category' => MaintenanceCategory::UNSCHEDULED]);
+        MaintenanceFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'performedAt' => $this->day(0), 'km' => 1200, 'cost' => '70.00', 'type' => MaintenanceType::INSPECTION, 'category' => MaintenanceCategory::INSPECTION]);
+
+        $body = $this->charts($token, '?months=3');
+
+        self::assertSame([
+            ['category' => 'insurance', 'name' => null, 'amount' => '350.00'],
+            ['category' => 'tax', 'name' => null, 'amount' => '200.00'],
+            ['category' => 'scheduled', 'name' => null, 'amount' => '80.00'],
+            ['category' => 'inspection', 'name' => null, 'amount' => '70.00'],
+            ['category' => 'unscheduled', 'name' => null, 'amount' => '60.00'],
+        ], $body['spendingByCategory']);
+        self::assertSame(
+            ['refuelings' => '0.00', 'scheduled' => '80.00', 'unscheduled' => '60.00', 'inspection' => '70.00', 'taxes' => '200.00', 'insurance' => '50.00', 'expenses' => '0.00', 'total' => '460.00'],
+            $body['months'][2]['spending'],
+        );
+    }
+
+    public function testSpendingByCategoryUsesValueNames(): void
+    {
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = $this->ownedVehicle($user, $org);
+        $values = static::getContainer()->get(UserValues::class);
+        $insurance = $this->starterCategory($vehicle, ExpenseCategory::INSURANCE);
+        $values->rename($insurance, 'Polizza Kasko');
+        $camper = $values->findOrCreate($user, $org, UserValueKind::EXPENSE_CATEGORY, 'Revisione camper');
+        $this->expense($vehicle, $this->day(-1, 3), '40.00', $insurance);
+        $this->expense($vehicle, $this->day(0), '25.00', $camper);
+        // Ricorrente sulla stessa voce: addebiti a -1 e 0, nella stessa fetta della spesa singola
+        $this->recurringExpense($vehicle, $this->day(-1), '10.00', RecurringPeriod::MONTHLY, $insurance);
+
+        $body = $this->charts($token, '?months=3');
+
+        self::assertSame([
+            ['category' => 'expense:'.$insurance->getId(), 'name' => 'Polizza Kasko', 'amount' => '60.00'],
+            ['category' => 'expense:'.$camper->getId(), 'name' => 'Revisione camper', 'amount' => '25.00'],
         ], $body['spendingByCategory']);
     }
 
@@ -285,7 +343,7 @@ final class DashboardChartsTest extends ApiTestCase
             static fn (array $point): string => $point['spending']['total'],
             $body['months'],
         ));
-        self::assertSame([['category' => 'subscription', 'amount' => '200.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::SUBSCRIPTION, '200.00')], $body['spendingByCategory']);
         self::assertSame('200.00', $body['totals']['spending']);
     }
 
@@ -298,7 +356,7 @@ final class DashboardChartsTest extends ApiTestCase
         $body = $this->charts($token, '?months=3');
 
         self::assertSame(['50.00', '50.00', '50.00'], $this->expensesPerMonth($body));
-        self::assertSame([['category' => 'subscription', 'amount' => '150.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::SUBSCRIPTION, '150.00')], $body['spendingByCategory']);
         self::assertSame('150.00', $body['totals']['spending']);
     }
 
@@ -315,7 +373,7 @@ final class DashboardChartsTest extends ApiTestCase
         self::assertSame('300.00', $perMonth[$this->monthKey(0)]);
         unset($perMonth[$this->monthKey(-12)], $perMonth[$this->monthKey(0)]);
         self::assertSame(['0.00'], array_values(array_unique($perMonth)), 'Negli altri mesi non cade nessun addebito');
-        self::assertSame([['category' => 'insurance', 'amount' => '600.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::INSURANCE, '600.00')], $body['spendingByCategory']);
     }
 
     public function testWeeklyRecurringCountsOneChargePerWeekInTheRightMonths(): void
@@ -339,7 +397,7 @@ final class DashboardChartsTest extends ApiTestCase
             array_map(static fn (int $cents): string => number_format($cents / 100, 2, '.', ''), array_values($expected)),
             $this->expensesPerMonth($body),
         );
-        self::assertSame([['category' => 'parking', 'amount' => '40.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::PARKING, '40.00')], $body['spendingByCategory']);
     }
 
     public function testStartingTodayCountsTheFirstCharge(): void
@@ -351,7 +409,7 @@ final class DashboardChartsTest extends ApiTestCase
         $body = $this->charts($token, '?months=2');
 
         self::assertSame(['0.00', '25.00'], $this->expensesPerMonth($body));
-        self::assertSame([['category' => 'toll', 'amount' => '25.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::TOLL, '25.00')], $body['spendingByCategory']);
     }
 
     public function testRecurringUntilInTheMiddleOfTheWindowStopsTheCharges(): void
@@ -403,7 +461,7 @@ final class DashboardChartsTest extends ApiTestCase
         $body = $this->charts($token, '?months=3');
 
         self::assertSame(['0.00', '90.00', '0.00'], $this->expensesPerMonth($body));
-        self::assertSame([['category' => 'insurance', 'amount' => '90.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::INSURANCE, '90.00')], $body['spendingByCategory']);
         self::assertSame('90.00', $body['totals']['spending']);
     }
 
@@ -419,8 +477,8 @@ final class DashboardChartsTest extends ApiTestCase
 
         self::assertSame(['80.25', '57.50'], $this->expensesPerMonth($body));
         self::assertSame([
-            ['category' => 'insurance', 'amount' => '130.25'],
-            ['category' => 'toll', 'amount' => '7.50'],
+            $this->expenseSlice($vehicle, ExpenseCategory::INSURANCE, '130.25'),
+            $this->expenseSlice($vehicle, ExpenseCategory::TOLL, '7.50'),
         ], $body['spendingByCategory']);
     }
 
@@ -448,7 +506,7 @@ final class DashboardChartsTest extends ApiTestCase
             $spending = $point['spending'];
             self::assertSame(
                 self::toCents($spending['total']),
-                self::toCents($spending['refuelings']) + self::toCents($spending['maintenances']) + self::toCents($spending['expenses']),
+                array_sum(array_map(self::toCents(...), array_diff_key($spending, ['total' => true]))),
             );
         }
     }
@@ -524,7 +582,7 @@ final class DashboardChartsTest extends ApiTestCase
         self::assertSame(['10.00', '10.00'], array_map(static fn (array $p): string => $p['spending']['total'], $body['months']));
         self::assertSame([0, 125], array_column($body['months'], 'kmDriven'));
         self::assertSame([['diesel' => null], ['diesel' => 12.5]], array_column($body['months'], 'consumption'));
-        self::assertSame([['category' => 'fuel', 'amount' => '20.00']], $body['spendingByCategory']);
+        self::assertSame([$this->costSlice('fuel', '20.00')], $body['spendingByCategory']);
         self::assertSame(['spending' => '20.00', 'kmDriven' => 125], $body['totals']);
     }
 

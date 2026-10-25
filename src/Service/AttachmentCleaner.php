@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Attachment;
+use App\Entity\Component;
 use App\Entity\Expense;
 use App\Entity\Maintenance;
 use App\Entity\Organization;
@@ -65,6 +66,7 @@ final class AttachmentCleaner
                 AttachmentEntityType::EXPENSE->value => $this->childIds(Expense::class, $vehicle),
                 AttachmentEntityType::REFUELING->value => $this->childIds(Refueling::class, $vehicle),
                 AttachmentEntityType::REMINDER->value => $this->childIds(Reminder::class, $vehicle),
+                AttachmentEntityType::COMPONENT->value => $this->childIds(Component::class, $vehicle),
             ]);
             $this->em->remove($vehicle);
         });

@@ -25,12 +25,12 @@ const validCharts = {
   months: [
     {
       month: '2026-10',
-      spending: { refuelings: '10.00', maintenances: '0.00', expenses: '0.00', total: '10.00' },
+      spending: { refuelings: '10.00', scheduled: '0.00', unscheduled: '0.00', inspection: '0.00', taxes: '0.00', insurance: '0.00', expenses: '0.00', total: '10.00' },
       kmDriven: 100,
       consumption: { diesel: 12.5 },
     },
   ],
-  spendingByCategory: [{ category: 'fuel', amount: '10.00' }],
+  spendingByCategory: [{ category: 'fuel', name: null, amount: '10.00' }],
   totals: { spending: '10.00', kmDriven: 100 },
 };
 

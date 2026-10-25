@@ -38,6 +38,7 @@ export function ExpenseEditPage() {
 
       <VehicleUsableGate vehicleId={data.vehicleId}>
         <ExpenseForm
+          section={data.section}
           vehicleId={data.vehicleId}
           defaultValues={data}
           isPending={updateMutation.isPending}

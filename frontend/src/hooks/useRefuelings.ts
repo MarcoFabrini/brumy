@@ -7,6 +7,7 @@ import {
   updateRefueling,
 } from '@/api/endpoints/refuelings';
 import type { CreateRefuelingDto, UpdateRefuelingDto } from '@/api/types/refueling';
+import { userValueKeys } from '@/hooks/userValueKeys';
 import { invalidateVehicleStats } from '@/hooks/useVehicles';
 
 export const refuelingKeys = {
@@ -37,6 +38,7 @@ export function useCreateRefueling() {
     mutationFn: (body: CreateRefuelingDto) => createRefueling(body),
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: refuelingKeys.byVehicle(vars.vehicleId) });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
       invalidateVehicleStats(qc, vars.vehicleId);
     },
   });
@@ -49,6 +51,7 @@ export function useUpdateRefueling(id: number) {
     onSuccess: (_data, vars) => {
       // Il PUT può spostare la voce su un altro veicolo: si invalida tutto il dominio, non solo il veicolo corrente.
       void qc.invalidateQueries({ queryKey: refuelingKeys.all });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
       invalidateVehicleStats(qc, vars.vehicleId);
     },
   });
@@ -60,6 +63,7 @@ export function useDeleteRefueling(vehicleId: number) {
     mutationFn: (id: number) => deleteRefueling(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: refuelingKeys.all });
+      void qc.invalidateQueries({ queryKey: userValueKeys.all });
       invalidateVehicleStats(qc, vehicleId);
     },
   });

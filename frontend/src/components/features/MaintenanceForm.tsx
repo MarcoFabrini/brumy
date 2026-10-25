@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,32 +13,49 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
+  SuggestInput,
+  Textarea,
 } from '@/components/ui';
 import {
-  MAINTENANCE_CATEGORIES,
   MAINTENANCE_TYPES,
   type Maintenance,
+  type MaintenanceCategory,
 } from '@/api/types/maintenance';
 import { maintenanceSchema, type MaintenanceFormData } from '@/schemas/maintenance.schema';
 import { ApiError } from '@/api/client';
 import { useServerFieldErrors } from '@/hooks/useServerFieldErrors';
+import { useValueSuggestions } from '@/hooks/useUserValues';
+import { useComponents } from '@/hooks/useComponents';
+import { nameKey } from '@/lib/componentNames';
+import { ComponentsInput } from './ComponentsInput';
+import { NextDueReminder } from './NextDueReminder';
 import { useResyncPristineForm } from '@/hooks/useResyncPristineForm';
-import { todayIso } from '@/lib/format';
+import { addMonthsIso, todayIso } from '@/lib/format';
 
 export interface MaintenanceFormProps {
   vehicleId: number;
+  /** Sezione: lavoro ordinario, imprevisto o revisione. Decide la categoria; la revisione non ha il tipo. */
+  category: MaintenanceCategory;
   /** Ultimo km noto del veicolo (da stats), usato per pre-compilare il campo km su una nuova manutenzione */
   defaultKm?: number;
   defaultValues?: Partial<Maintenance>;
   isPending?: boolean;
   error?: unknown;
-  onSubmit: (data: MaintenanceFormData) => void;
+  /** `newComponents`: nomi scritti che il veicolo non aveva, da aprire dopo il salvataggio per completarli. */
+  onSubmit: (data: MaintenanceFormData, extra: { newComponents: string[] }) => void;
   submitLabel?: string;
   onCancel?: () => void;
 }
 
+/** Mesi tra una revisione e la successiva: la data proposta per il promemoria (come `RecordReminders` sul server). */
+const INSPECTION_MONTHS = 24;
+
+/** Tipi offerti nei lavori: la revisione è una sezione a sé. */
+const WORK_TYPES = MAINTENANCE_TYPES.filter((type) => type !== 'inspection');
+
 export function MaintenanceForm({
   vehicleId,
+  category,
   defaultKm,
   defaultValues,
   isPending,
@@ -53,11 +70,16 @@ export function MaintenanceForm({
     vehicleId,
     performedAt: defaultValues?.performedAt ?? todayIso(),
     km: defaultValues?.km ?? defaultKm ?? 0,
-    type: defaultValues?.type ?? 'oil_change',
-    category: defaultValues?.category ?? 'scheduled',
+    type: category === 'inspection' ? 'inspection' : (defaultValues?.type ?? 'oil_change'),
+    category,
     description: defaultValues?.description ?? '',
     cost: defaultValues?.cost ?? null,
     workshop: defaultValues?.workshop ?? null,
+    shop: defaultValues?.shop ?? null,
+    components: defaultValues?.components?.map((c) => c.name) ?? [],
+    notes: defaultValues?.notes ?? null,
+    // '' = la data proposta, che NextDueReminder imposta appena montato; null = nessun promemoria
+    nextDueDate: '',
   };
 
   const form = useForm<MaintenanceFormData>({
@@ -71,6 +93,21 @@ export function MaintenanceForm({
   // dirtyFields è dietro un Proxy: va letto in fase di render per attivare
   // la subscription, altrimenti nell'effect sotto risulta sempre stale.
   const { errors, dirtyFields } = form.formState;
+  const workshops = useValueSuggestions(vehicleId, 'workshop');
+  const shops = useValueSuggestions(vehicleId, 'shop');
+  const components = useComponents(vehicleId);
+  const componentNames = (components.data ?? []).map((c) => c.name);
+
+  // Solo creando una revisione si propone il promemoria della prossima
+  const offersReminder = category === 'inspection' && defaultValues?.id === undefined;
+  const performedAt = useWatch({ control: form.control, name: 'performedAt' });
+
+  const submit = (values: MaintenanceFormData) => {
+    const data = { ...values, nextDueDate: offersReminder && values.nextDueDate ? values.nextDueDate : null };
+    // Già del lavoro (anche se eliminati dopo) o del veicolo: non sono nuovi
+    const known = new Set([...componentNames, ...initialValues.components].map(nameKey));
+    onSubmit(data, { newComponents: data.components.filter((name) => !known.has(nameKey(name))) });
+  };
 
   // defaultKm arriva async (query stats separata dal mount del form): se il
   // campo km non è ancora stato toccato dall'utente e non c'è un defaultValues
@@ -85,54 +122,33 @@ export function MaintenanceForm({
     key ? t(`errors.${key}`, { defaultValue: key }) : undefined;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
       <input type="hidden" {...form.register('vehicleId', { valueAsNumber: true })} />
 
-      <FormField label={t('maintenance.type')} error={tErr(errors.type?.message)} required>
-        {(id) => (
-          <Controller
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id={id}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MAINTENANCE_TYPES.map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {t(`maintenance.type_options.${v}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        )}
-      </FormField>
-
-      <FormField label={t('maintenance.category')} error={tErr(errors.category?.message)} required>
-        {(id) => (
-          <Controller
-            control={form.control}
-            name="category"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id={id}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MAINTENANCE_CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {t(`maintenance.category_options.${c}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        )}
-      </FormField>
+      {category !== 'inspection' && (
+        <FormField label={t('maintenance.type')} error={tErr(errors.type?.message)} required>
+          {(id) => (
+            <Controller
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WORK_TYPES.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {t(`maintenance.type_options.${v}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          )}
+        </FormField>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label={t('maintenance.performed_at')} error={tErr(errors.performedAt?.message)} required>
@@ -156,7 +172,7 @@ export function MaintenanceForm({
       </FormField>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label={t('maintenance.cost')} error={tErr(errors.cost?.message)} hint={t('common.optional')}>
+        <FormField label={t('maintenance.cost')} error={tErr(errors.cost?.message)}>
           {(id) => (
             <Input
               id={id}
@@ -168,16 +184,83 @@ export function MaintenanceForm({
             />
           )}
         </FormField>
-        <FormField label={t('maintenance.workshop')} error={tErr(errors.workshop?.message)} hint={t('common.optional')}>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormField label={t('maintenance.workshop')} error={tErr(errors.workshop?.message)}>
           {(id) => (
-            <Input
-              id={id}
-              invalid={!!errors.workshop}
-              {...form.register('workshop', { setValueAs: (v) => (v === '' ? null : v) })}
+            <Controller
+              control={form.control}
+              name="workshop"
+              render={({ field }) => (
+                <SuggestInput
+                  ref={field.ref}
+                  id={id}
+                  value={field.value ?? ''}
+                  onChange={(v) => field.onChange(v === '' ? null : v)}
+                  onBlur={field.onBlur}
+                  suggestions={(workshops.data ?? []).map((w) => w.name)}
+                  invalid={!!errors.workshop}
+                  maxLength={200}
+                />
+              )}
+            />
+          )}
+        </FormField>
+        <FormField label={t('maintenance.shop')} error={tErr(errors.shop?.message)}>
+          {(id) => (
+            <Controller
+              control={form.control}
+              name="shop"
+              render={({ field }) => (
+                <SuggestInput
+                  ref={field.ref}
+                  id={id}
+                  value={field.value ?? ''}
+                  onChange={(v) => field.onChange(v === '' ? null : v)}
+                  onBlur={field.onBlur}
+                  suggestions={(shops.data ?? []).map((s) => s.name)}
+                  invalid={!!errors.shop}
+                  maxLength={200}
+                />
+              )}
             />
           )}
         </FormField>
       </div>
+
+      <FormField label={t('maintenance.components')} error={tErr(errors.components?.message)}>
+        {(id) => (
+          <Controller
+            control={form.control}
+            name="components"
+            render={({ field }) => (
+              <ComponentsInput
+                id={id}
+                value={field.value}
+                onChange={field.onChange}
+                suggestions={componentNames}
+                invalid={!!errors.components}
+              />
+            )}
+          />
+        )}
+      </FormField>
+
+      <FormField label={t('maintenance.notes')} error={tErr(errors.notes?.message)}>
+        {(id) => (
+          <Textarea
+            id={id}
+            maxLength={2000}
+            invalid={!!errors.notes}
+            {...form.register('notes', { setValueAs: (v) => (v === '' ? null : v) })}
+          />
+        )}
+      </FormField>
+
+      {offersReminder && (
+        <NextDueReminder control={form.control} name="nextDueDate" proposedDate={addMonthsIso(performedAt, INSPECTION_MONTHS)} />
+      )}
 
       {error instanceof ApiError && (error.title !== 'validation_failed' || hasUnmapped) && (
         <Alert variant="error">

@@ -1,9 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/i18n';
-import { ApiError } from '@/api/client';
+import { ApiError, authFetch } from '@/api/client';
 import { RefuelingForm } from './RefuelingForm';
+
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/client')>()),
+  authFetch: vi.fn(),
+}));
+const mockedAuthFetch = vi.mocked(authFetch);
+
+/** I form chiedono i suggerimenti con una query: serve un QueryClient. */
+const render: typeof rtlRender = (ui, options) =>
+  rtlRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        {children}
+      </QueryClientProvider>
+    ),
+    ...options,
+  });
+
+/** Il veicolo 7 di ogni test: per default benzina e GPL. */
+let vehicleFuels: { fuelType: string; secondaryFuelType: string | null } = { fuelType: 'gasoline', secondaryFuelType: 'lpg' };
+
+beforeEach(() => {
+  vehicleFuels = { fuelType: 'gasoline', secondaryFuelType: 'lpg' };
+  mockedAuthFetch.mockImplementation(async (path) =>
+    path === '/api/vehicles/7'
+      ? { id: 7, name: 'Panda', brand: 'Fiat', model: 'Panda', year: 2019, type: 'car', initialKm: 0, notes: null, licensePlate: null, vin: null, ...vehicleFuels }
+      : [
+          { id: 1, name: 'Q8 Via Roma' },
+          { id: 2, name: 'Eni A1' },
+        ],
+  );
+});
 
 function renderForm(props: Partial<React.ComponentProps<typeof RefuelingForm>> = {}) {
   const onSubmit = vi.fn();
@@ -112,5 +145,62 @@ describe('RefuelingForm', () => {
     renderForm({ defaultKm: 45230, defaultValues: { km: 30000 } });
 
     expect(screen.getByLabelText(/Km/)).toHaveValue(30000);
+  });
+});
+
+describe('RefuelingForm — suggerimenti del distributore', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('it');
+  });
+
+  it('toccando un suggerimento il payload ha quel distributore', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    await user.type(screen.getByLabelText(/Litri/), '30');
+    await user.type(screen.getByLabelText(/€\/L/), '1,8');
+    await user.click(screen.getByLabelText(/Distributore/));
+    await user.click(await screen.findByRole('option', { name: 'Q8 Via Roma' }));
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ station: 'Q8 Via Roma' });
+    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/vehicles/7/values/station');
+  });
+
+  it('distributore lasciato vuoto → null', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    await user.type(screen.getByLabelText(/Litri/), '30');
+    await user.type(screen.getByLabelText(/€\/L/), '1,8');
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ station: null });
+  });
+
+  it('carburante: solo quelli del veicolo; con uno solo è già impostato e non si sceglie', async () => {
+    // Radix Select in jsdom: mancano alcune API del puntatore
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.setPointerCapture = () => undefined;
+    Element.prototype.releasePointerCapture = () => undefined;
+    Element.prototype.scrollIntoView = () => undefined;
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(await screen.findByRole('combobox', { name: /Carburante/ }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Benzina', 'GPL']);
+    cleanup();
+
+    vehicleFuels = { fuelType: 'diesel', secondaryFuelType: null };
+    const { onSubmit } = renderForm(); // proposto 'gasoline' (default): il veicolo è diesel
+    const field = await screen.findByDisplayValue('Diesel');
+    expect(field).toHaveAttribute('readonly');
+    await user.type(screen.getByLabelText(/Litri/), '40');
+    await user.type(screen.getByLabelText(/€\/L/), '1,8');
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ fuelType: 'diesel' });
   });
 });

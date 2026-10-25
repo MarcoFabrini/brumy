@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -10,7 +10,9 @@ import {
   EditLink,
   InfoList,
   InfoRow,
+  NotesRow,
 } from '@/components/features';
+import { maintenanceKind, sectionOf, withVehicle } from '@/components/features/vehicleRecordActions';
 import { useDeleteMaintenance, useMaintenance } from '@/hooks/useMaintenances';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
@@ -43,13 +45,15 @@ export function MaintenanceDetailPage() {
 
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
+  const section = sectionOf(maintenanceKind(data.category));
+  const listPath = withVehicle(section.listPath, data.vehicleId);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t(`maintenance.type_options.${data.type}`)}
+        title={data.category === 'inspection' ? t(section.titleKey) : t(`maintenance.type_options.${data.type}`)}
         description={data.description}
-        onBack={() => navigate(`/maintenance?vehicleId=${data.vehicleId}`)}
+        onBack={() => navigate(listPath)}
         action={canEdit ? <EditLink to={`/maintenance/${data.id}/edit`} /> : undefined}
       />
 
@@ -58,14 +62,34 @@ export function MaintenanceDetailPage() {
         <InfoRow label={t('maintenance.performed_at')} value={fmt.date(data.performedAt)} />
         <InfoRow label={t('maintenance.km')} value={fmt.km(data.km)} />
         <InfoRow
-          label={t('maintenance.category')}
+          label={t('maintenance.section')}
           value={
-            <Badge variant={data.category === 'scheduled' ? 'success' : 'warning'}>
-              {t(`maintenance.category_options.${data.category}`)}
+            <Badge variant={data.category === 'unscheduled' ? 'warning' : 'success'}>
+              {t(section.titleKey)}
             </Badge>
           }
         />
         {data.workshop && <InfoRow label={t('maintenance.workshop')} value={<span className="truncate">{data.workshop}</span>} />}
+        {data.shop && <InfoRow label={t('maintenance.shop')} value={<span className="truncate">{data.shop}</span>} />}
+        {data.components.length > 0 && (
+          <InfoRow
+            label={t('maintenance.components')}
+            value={
+              <span className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                {data.components.map((c) =>
+                  c.deleted ? (
+                    <span key={c.id}>{t('component.deleted_name', { name: c.name })}</span>
+                  ) : (
+                    <Link key={c.id} to={`/components/${c.id}`} className="text-primary">
+                      {c.name}
+                    </Link>
+                  ),
+                )}
+              </span>
+            }
+          />
+        )}
+        <NotesRow label={t('common.notes')} notes={data.notes} />
       </InfoList>
 
       <AttachmentsSection entityType="maintenance" entityId={data.id} readOnly={!canEdit} />
@@ -83,7 +107,7 @@ export function MaintenanceDetailPage() {
           deleteMutation.mutate(maintenanceId, {
             onSuccess: () => {
               toast({ title: t('maintenance.deleted'), variant: 'success' });
-              navigate(`/maintenance?vehicleId=${data.vehicleId}`, { replace: true });
+              navigate(listPath, { replace: true });
             },
             onError: (e) => toast({ title: errorMessage(e), variant: 'error' }),
           })

@@ -13,16 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
+  SuggestInput,
   SwitchCell,
   Text,
   Textarea,
 } from '@/components/ui';
-import { FUEL_TYPES } from '@/api/types/vehicle';
+import { FUEL_TYPES, type FuelType } from '@/api/types/vehicle';
 import type { Refueling } from '@/api/types/refueling';
 import { refuelingSchema, type RefuelingFormData } from '@/schemas/refueling.schema';
 import { ApiError } from '@/api/client';
 import { useServerFieldErrors } from '@/hooks/useServerFieldErrors';
 import { useResyncPristineForm } from '@/hooks/useResyncPristineForm';
+import { useValueSuggestions } from '@/hooks/useUserValues';
+import { useVehicle } from '@/hooks/useVehicles';
 import { useFormat } from '@/hooks/useFormat';
 import { todayIso } from '@/lib/format';
 import { parseDecimal } from '@/lib/decimal';
@@ -64,6 +67,7 @@ export function RefuelingForm({
     fuelType: defaultValues?.fuelType ?? defaultFuelType,
     fullTank: defaultValues?.fullTank ?? true,
     station: defaultValues?.station ?? null,
+    description: defaultValues?.description ?? null,
     notes: defaultValues?.notes ?? null,
   };
 
@@ -90,6 +94,23 @@ export function RefuelingForm({
   }, [defaultKm, dirtyFields.km]);
 
   // Computed total cost (client-side preview; backend ricalcola)
+  // Solo i carburanti del veicolo (uno o due); finché il veicolo non è caricato, tutti
+  const vehicle = useVehicle(vehicleId).data;
+  const vehicleFuels: readonly FuelType[] = vehicle
+    ? [vehicle.fuelType, ...(vehicle.secondaryFuelType ? [vehicle.secondaryFuelType] : [])]
+    : FUEL_TYPES;
+  const fuelType = useWatch({ control: form.control, name: 'fuelType' });
+  // Un rifornimento già salvato con un carburante che il veicolo non ha più resta visibile (il server lo rifiuterà)
+  const fuelOptions = vehicleFuels.includes(fuelType) ? vehicleFuels : [...vehicleFuels, fuelType];
+  useEffect(() => {
+    // Nuovo rifornimento con un carburante proposto che il veicolo non ha (es. benzina su un diesel): il primo del veicolo
+    const first = vehicleFuels[0];
+    if (vehicle && !defaultValues?.fuelType && first && !vehicleFuels.includes(form.getValues('fuelType'))) {
+      form.setValue('fuelType', first);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicle]);
+
   const liters = useWatch({ control: form.control, name: 'liters' });
   const pricePerLiter = useWatch({ control: form.control, name: 'pricePerLiter' });
   const litersNum = parseDecimal(liters ?? '');
@@ -101,6 +122,7 @@ export function RefuelingForm({
     form.setValue('vehicleId', vehicleId);
   }, [vehicleId, form]);
 
+  const stations = useValueSuggestions(vehicleId, 'station');
   const errors = form.formState.errors;
   const tErr = (key: string | undefined) =>
     key ? t(`errors.${key}`, { defaultValue: key }) : undefined;
@@ -131,20 +153,25 @@ export function RefuelingForm({
           <Controller
             control={form.control}
             name="fuelType"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id={id}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FUEL_TYPES.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {t(`vehicle.fuel.${f}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            render={({ field }) =>
+              fuelOptions.length === 1 ? (
+                // Veicolo a un solo carburante: già impostato, niente da scegliere
+                <Input id={id} readOnly value={t(`vehicle.fuel.${field.value}`)} />
+              ) : (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fuelOptions.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {t(`vehicle.fuel.${f}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            }
           />
         )}
       </FormField>
@@ -186,12 +213,23 @@ export function RefuelingForm({
         </Text>
       )}
 
-      <FormField label={t('refueling.station')} error={tErr(errors.station?.message)} hint={t('common.optional')}>
+      <FormField label={t('refueling.station')} error={tErr(errors.station?.message)}>
         {(id) => (
-          <Input
-            id={id}
-            invalid={!!errors.station}
-            {...form.register('station', { setValueAs: (v) => (v === '' ? null : v) })}
+          <Controller
+            control={form.control}
+            name="station"
+            render={({ field }) => (
+              <SuggestInput
+                ref={field.ref}
+                id={id}
+                value={field.value ?? ''}
+                onChange={(v) => field.onChange(v === '' ? null : v)}
+                onBlur={field.onBlur}
+                suggestions={(stations.data ?? []).map((s) => s.name)}
+                invalid={!!errors.station}
+                maxLength={200}
+              />
+            )}
           />
         )}
       </FormField>
@@ -205,7 +243,18 @@ export function RefuelingForm({
         )}
       />
 
-      <FormField label={t('refueling.notes')} error={tErr(errors.notes?.message)} hint={t('common.optional')}>
+      <FormField label={t('refueling.description')} error={tErr(errors.description?.message)}>
+        {(id) => (
+          <Input
+            id={id}
+            maxLength={500}
+            invalid={!!errors.description}
+            {...form.register('description', { setValueAs: (v) => (v === '' ? null : v) })}
+          />
+        )}
+      </FormField>
+
+      <FormField label={t('refueling.notes')} error={tErr(errors.notes?.message)}>
         {(id) => (
           <Textarea
             id={id}

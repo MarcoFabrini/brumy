@@ -6,6 +6,7 @@ namespace App\Dto\Request;
 
 use App\Enum\FuelType;
 use App\Enum\VehicleType;
+use App\Validator\DecimalString;
 use Symfony\Component\Validator\Constraints as Assert;
 
 final class VehicleRequest
@@ -43,6 +44,9 @@ final class VehicleRequest
         #[Assert\PositiveOrZero]
         #[Assert\LessThanOrEqual(value: 9_999_999, message: 'common.km_too_large')]
         public int $initialKm = 0,
+
+        #[DecimalString(maxDecimals: 2, maxIntegerDigits: 8, allowZero: true, message: 'validation.amount_format')]
+        public ?string $purchasePrice = null,
 
         #[Assert\Length(max: 5000)]
         public ?string $notes = null,

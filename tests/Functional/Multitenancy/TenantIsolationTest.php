@@ -250,7 +250,7 @@ final class TenantIsolationTest extends ApiTestCase
      */
     public static function recordsByIdEndpoints(): iterable
     {
-        $expense = ['vehicleId' => 0, 'occurredAt' => '2026-01-10', 'description' => 'hack', 'amount' => '10.00'];
+        $expense = ['vehicleId' => 0, 'occurredAt' => '2026-01-10', 'category' => 'other', 'description' => 'hack', 'amount' => '10.00'];
         $refueling = ['vehicleId' => 0, 'refueledAt' => '2026-01-10', 'km' => 1000, 'liters' => '40.000', 'pricePerLiter' => '1.8000'];
         $maintenance = ['vehicleId' => 0, 'performedAt' => '2026-01-10', 'km' => 1000, 'type' => 'oil_change', 'description' => 'hack'];
         $reminder = ['vehicleId' => 0, 'description' => 'hack', 'dueDate' => '2030-01-01'];

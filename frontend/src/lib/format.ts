@@ -91,6 +91,18 @@ export function todayIso(now: Date = new Date()): string {
 }
 
 /**
+ * `iso` ("YYYY-MM-DD") più `months` mesi, col giorno ridotto all'ultimo del mese di arrivo se non esiste
+ * (31 gen + 1 → 28/29 feb), come `RecurringSchedule::addMonths()` sul server. '' se `iso` non è una data.
+ */
+export function addMonthsIso(iso: string, months: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return '';
+  const [year, month, day] = [Number(match[1]), Number(match[2]) - 1 + months, Number(match[3])];
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return toLocalIsoDate(new Date(year, month, Math.min(day, lastDay)));
+}
+
+/**
  * Giorni di calendario da oggi (locale) a `iso` ("YYYY-MM-DD"): 0 = oggi, negativo = passata.
  * Confronta giorni interi, non istanti: una scadenza di oggi non è mai "scaduta".
  * Null se `iso` non è una data valida.

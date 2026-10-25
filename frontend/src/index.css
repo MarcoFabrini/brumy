@@ -138,17 +138,18 @@
   .pb-safe {
     padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
   }
-  /* Solo per la BottomNav: un quinto dell'inset. L'inset intero (34px su iPhone con home indicator) lascia una
-     fascia vuota sotto le icone e la barra sembra sollevata; l'indicatore occupa solo gli ultimi pixel. */
+  /* Solo per la BottomNav: metà dell'inset. L'inset intero (34px su iPhone con home indicator) lascia una
+     fascia vuota sotto le icone e la barra sembra sollevata; un quinto le portava dentro la curvatura dello
+     schermo, che ne copriva gli angoli. Senza inset (Android, browser) 0.5rem dal bordo. */
   .pb-safe-nav {
-    padding-bottom: max(calc(env(safe-area-inset-bottom) * 0.2), 0.25rem);
+    padding-bottom: max(calc(env(safe-area-inset-bottom) * 0.5), 0.5rem);
   }
   /* Spazio che il contenuto di <main> lascia in fondo per non finire sotto la BottomNav fissa, calcolato
      dalla barra stessa: 5.5rem = riga della barra (bordo + 3rem), sporgenza del "+" (1.5rem) e 1rem di
-     respiro; più lo stesso padding-bottom di .pb-safe. Con inset 0 fa 96px (il vecchio pb-24), su
+     respiro; più lo stesso padding-bottom di .pb-safe-nav. Con inset 0 fa 96px (il vecchio pb-24), su
      iPhone con home indicator segue l'inset invece di restare fisso. */
   .pb-nav-clearance {
-    padding-bottom: calc(5.5rem + max(calc(env(safe-area-inset-bottom) * 0.2), 0.25rem));
+    padding-bottom: calc(5.5rem + max(calc(env(safe-area-inset-bottom) * 0.5), 0.5rem));
   }
   .pt-safe {
     padding-top: max(env(safe-area-inset-top), 0.5rem);

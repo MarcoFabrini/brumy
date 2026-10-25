@@ -162,11 +162,11 @@ export function PushSettingsCard() {
             </div>
           ) : (
             <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
-              <FormField label={t('settings.push.public_key')} hint={t('settings.push.public_key_hint')}>
+              <FormField label={t('settings.push.public_key')}>
                 {(id) => <Input id={id} readOnly value={settings.data?.publicKey ?? ''} className="font-mono text-xs" />}
               </FormField>
 
-              <FormField label={t('settings.push.subject')} hint={t('settings.push.subject_hint')} error={tErr(errors.subject?.message)}>
+              <FormField label={t('settings.push.subject')} error={tErr(errors.subject?.message)}>
                 {(id) => <Input id={id} placeholder="mailto:admin@example.com" {...form.register('subject')} />}
               </FormField>
 

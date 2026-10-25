@@ -4,11 +4,14 @@ import {
   type CreateExpenseDto,
   type Expense,
   type ExpenseResponse,
+  type ExpenseSection,
   type UpdateExpenseDto,
 } from '@/api/types/expense';
 
-export async function listExpenses(vehicleId: number): Promise<Expense[]> {
-  const raw = await authFetch<ExpenseResponse[]>(`/api/expenses?vehicleId=${vehicleId}`);
+/** Spese del veicolo (le più recenti), di una sezione o di tutte. */
+export async function listExpenses(vehicleId: number, section?: ExpenseSection): Promise<Expense[]> {
+  const query = new URLSearchParams({ vehicleId: String(vehicleId), ...(section ? { section } : {}) });
+  const raw = await authFetch<ExpenseResponse[]>(`/api/expenses?${query}`);
   return raw.map(adaptExpense);
 }
 

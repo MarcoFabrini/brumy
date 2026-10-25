@@ -205,7 +205,7 @@ final class VehicleChartsTest extends ApiTestCase
         $body = $this->charts($token, $vehicle, '?months=4');
 
         self::assertSame(['50.00', '80.00', '50.00', '50.00'], array_map(static fn (array $p): string => $p['spending']['expenses'], $body['months']));
-        self::assertSame([['category' => 'subscription', 'amount' => '230.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::SUBSCRIPTION, '230.00')], $body['spendingByCategory']);
         self::assertSame('230.00', $body['totals']['spending']);
     }
 
@@ -219,7 +219,7 @@ final class VehicleChartsTest extends ApiTestCase
         $body = $this->charts($token, $vehicle, '?months=5');
 
         self::assertSame(['20.00', '20.00', '20.00', '0.00', '0.00'], array_map(static fn (array $p): string => $p['spending']['expenses'], $body['months']));
-        self::assertSame([['category' => 'parking', 'amount' => '60.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::PARKING, '60.00')], $body['spendingByCategory']);
     }
 
     public function testArchivedVehicleKeepsItsRecurringCharges(): void
@@ -245,7 +245,7 @@ final class VehicleChartsTest extends ApiTestCase
         $body = $this->charts($token, $vehicle, '?months=2');
 
         self::assertSame(['10.00', '10.00'], array_map(static fn (array $p): string => $p['spending']['total'], $body['months']));
-        self::assertSame([['category' => 'insurance', 'amount' => '20.00']], $body['spendingByCategory']);
+        self::assertSame([$this->expenseSlice($vehicle, ExpenseCategory::INSURANCE, '20.00')], $body['spendingByCategory']);
         self::assertSame('20.00', $body['totals']['spending']);
     }
 
@@ -295,7 +295,7 @@ final class VehicleChartsTest extends ApiTestCase
         self::assertSame(['10.00', '10.00'], array_map(static fn (array $p): string => $p['spending']['total'], $lastTwo));
         self::assertSame([0, 125], array_column($lastTwo, 'kmDriven'));
         self::assertSame([['diesel' => null], ['diesel' => 12.5]], array_column($lastTwo, 'consumption'));
-        self::assertSame([['category' => 'fuel', 'amount' => '20.00']], $body['spendingByCategory']);
+        self::assertSame([$this->costSlice('fuel', '20.00')], $body['spendingByCategory']);
         self::assertSame(['spending' => '20.00', 'kmDriven' => 125], $body['totals']);
     }
 

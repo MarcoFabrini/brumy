@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui';
-import { VEHICLE_RECORD_ACTIONS } from './vehicleRecordActions';
+import { VEHICLE_RECORD_ACTIONS, withVehicle } from './vehicleRecordActions';
 
 export interface VehicleAddRecordMenuProps {
   vehicleId: number;
@@ -16,8 +16,8 @@ export interface VehicleAddRecordMenuProps {
 }
 
 /**
- * Pulsante "Aggiungi" del dettaglio veicolo: apre la scelta di cosa inserire (manutenzione,
- * rifornimento, spesa, promemoria) per quel veicolo. Su mobile lo stesso ruolo lo ha il "+"
+ * Pulsante "Aggiungi" del dettaglio veicolo: apre la scelta di cosa inserire (una voce per sezione)
+ * per quel veicolo. Su mobile lo stesso ruolo lo ha il "+"
  * della barra in basso.
  */
 export function VehicleAddRecordMenu({ vehicleId, className }: VehicleAddRecordMenuProps) {
@@ -34,7 +34,7 @@ export function VehicleAddRecordMenu({ vehicleId, className }: VehicleAddRecordM
       <DropdownMenuContent align="end" className="w-56">
         {VEHICLE_RECORD_ACTIONS.map(({ path, labelKey, Icon }) => (
           <DropdownMenuItem key={path} asChild>
-            <Link to={`${path}?vehicleId=${vehicleId}`}>
+            <Link to={withVehicle(path, vehicleId)}>
               <Icon className="size-4 text-primary" />
               {t(labelKey)}
             </Link>

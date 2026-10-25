@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Entity\Concern\VehicleScoped;
-use App\Enum\ExpenseCategory;
+use App\Enum\ExpenseSection;
 use App\Enum\RecurringPeriod;
 use App\Repository\ExpenseRepository;
 use Doctrine\ORM\Mapping as ORM;
@@ -38,9 +38,24 @@ class Expense implements VehicleScoped
     #[Groups(['expense:read', 'expense:list', 'expense:write'])]
     private \DateTimeImmutable $occurredAt;
 
-    #[ORM\Column(length: 30, enumType: ExpenseCategory::class)]
-    #[Groups(['expense:read', 'expense:list', 'expense:write'])]
-    private ExpenseCategory $category = ExpenseCategory::OTHER;
+    #[ORM\Column(length: 20, enumType: ExpenseSection::class, options: ['default' => 'other'])]
+    #[Groups(['expense:read', 'expense:list'])]
+    private ExpenseSection $section = ExpenseSection::OTHER;
+
+    /**
+     * Voce della lista del proprietario del veicolo: categoria (altre spese) o tipo di tassa (tasse); null solo per
+     * l'assicurazione ({@see self::classify()}). RESTRICT: una voce in uso non sparisce di nascosto.
+     */
+    #[ORM\ManyToOne(targetEntity: UserValue::class)]
+    #[ORM\JoinColumn(name: 'category_id', nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['expense:read', 'expense:list'])]
+    private ?UserValue $category = null;
+
+    /** Compagnia assicurativa (lista del proprietario), solo per l'assicurazione. */
+    #[ORM\ManyToOne(targetEntity: UserValue::class)]
+    #[ORM\JoinColumn(name: 'insurer_id', nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['expense:read', 'expense:list'])]
+    private ?UserValue $insurer = null;
 
     #[ORM\Column(length: 500)]
     #[Assert\NotBlank]
@@ -88,8 +103,27 @@ class Expense implements VehicleScoped
     public function setVehicle(Vehicle $v): self { $this->vehicle = $v; return $this; }
     public function getOccurredAt(): \DateTimeImmutable { return $this->occurredAt; }
     public function setOccurredAt(\DateTimeImmutable $d): self { $this->occurredAt = $d; return $this; }
-    public function getCategory(): ExpenseCategory { return $this->category; }
-    public function setCategory(ExpenseCategory $c): self { $this->category = $c; return $this; }
+    public function getSection(): ExpenseSection { return $this->section; }
+    public function getCategory(): ?UserValue { return $this->category; }
+    public function getInsurer(): ?UserValue { return $this->insurer; }
+
+    /**
+     * Sezione con la sua voce: tasse e altre spese hanno sempre la categoria (tipo di tassa / categoria) e nessuna
+     * compagnia; l'assicurazione ha solo la compagnia, facoltativa.
+     */
+    public function classify(ExpenseSection $section, ?UserValue $category, ?UserValue $insurer = null): self
+    {
+        if ($section === ExpenseSection::INSURANCE) {
+            $this->category = null;
+            $this->insurer = $insurer;
+        } else {
+            $this->category = $category ?? throw new \InvalidArgumentException('Tasse e altre spese hanno una categoria.');
+            $this->insurer = null;
+        }
+        $this->section = $section;
+
+        return $this;
+    }
     public function getDescription(): string { return $this->description; }
     public function setDescription(string $d): self { $this->description = $d; return $this; }
     public function getAmount(): string { return $this->amount; }

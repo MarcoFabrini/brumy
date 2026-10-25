@@ -5,6 +5,8 @@ export interface VehicleStats {
     refuelings: number;
     maintenances: number;
     expenses: number;
+    /** Record per sezione (scheduled, unscheduled, inspection, tax, insurance, expense, component). */
+    sections?: Partial<Record<string, number>>;
   };
   currentKm: number;
   kmDriven: number;

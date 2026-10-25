@@ -155,6 +155,7 @@ final class ReminderController extends AbstractController
             ->setVehicle($vehicle)
             ->setType($payload->type)
             ->setDescription($payload->description)
+            ->setNotes($payload->notes)
             ->setDueDate($payload->dueDate ? new \DateTimeImmutable($payload->dueDate) : null)
             ->setDueKm($payload->dueKm)
             ->setNotifyDaysBefore($payload->notifyDaysBefore)
@@ -186,6 +187,7 @@ final class ReminderController extends AbstractController
         $r
             ->setType($payload->type)
             ->setDescription($payload->description)
+            ->setNotes($payload->notes)
             ->setDueDate($payload->dueDate ? new \DateTimeImmutable($payload->dueDate) : null)
             ->setDueKm($payload->dueKm)
             ->setNotifyDaysBefore($payload->notifyDaysBefore)

@@ -64,6 +64,7 @@ describe('endpoint promemoria', () => {
       completedAt: null,
       completedOn: null,
       completedKm: null,
+      notes: null,
     });
   });
 

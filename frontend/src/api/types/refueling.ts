@@ -11,7 +11,8 @@ export interface RefuelingResponse {
   totalCost: string | null;    // decimal string (server-computed)
   fuelType: FuelType;
   fullTank: boolean;
-  station?: string | null;
+  station?: { id: number; name: string } | null;
+  description?: string | null;
   notes?: string | null;
 }
 
@@ -26,6 +27,7 @@ export interface Refueling {
   fuelType: FuelType;
   fullTank: boolean;
   station: string | null;
+  description: string | null;
   notes: string | null;
 }
 
@@ -38,6 +40,7 @@ export interface CreateRefuelingDto {
   fuelType: FuelType;
   fullTank: boolean;
   station?: string | null;
+  description?: string | null;
   notes?: string | null;
 }
 
@@ -54,7 +57,8 @@ export function adaptRefueling(raw: RefuelingResponse): Refueling {
     totalCost: raw.totalCost,
     fuelType: raw.fuelType,
     fullTank: raw.fullTank,
-    station: raw.station ?? null,
+    station: raw.station?.name ?? null,
+    description: raw.description ?? null,
     notes: raw.notes ?? null,
   };
 }

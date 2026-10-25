@@ -109,6 +109,8 @@ final class GdprDeleteService
 
         $deletedOrgs = 0;
         $keptMemberships = 0;
+        /** @var list<Organization> $orgsToRemove */
+        $orgsToRemove = [];
         $oldEmail = $user->getEmail();
 
         // Drop org dove non resta nessun'altra persona viva (membri pendenti o già anonimizzati non contano):
@@ -127,7 +129,7 @@ final class GdprDeleteService
                 $this->em->createQuery('DELETE FROM '.AuditLog::class.' l WHERE l.organization = :org')
                     ->setParameter('org', $org)
                     ->execute();
-                $this->em->remove($org);
+                $orgsToRemove[] = $org;
                 ++$deletedOrgs;
             } else {
                 // Altri membri restano: i veicoli dell'utente passano al più anziano degli owner
@@ -136,6 +138,11 @@ final class GdprDeleteService
                 $this->memberRemover->handOverVehicles($user, $org, $this->memberRepo->findOldestAcceptedOwner($org, $user));
                 ++$keptMemberships;
             }
+        }
+        // Rimosse dopo il ciclo: handOverVehicles() fa flush, e un'org già eliminata da un flush intermedio
+        // resterebbe referenziata dalle entity ancora gestite (es. un audit log già caricato) al flush finale.
+        foreach ($orgsToRemove as $org) {
+            $this->em->remove($org);
         }
 
         // Gli inviti pendenti spediti dall'utente non devono sopravvivergli

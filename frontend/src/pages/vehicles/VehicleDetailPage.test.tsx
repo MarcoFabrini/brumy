@@ -52,18 +52,21 @@ const charts = {
   months: [
     {
       month: '2026-10',
-      spending: { refuelings: '10.00', maintenances: '0.00', expenses: '0.00', total: '10.00' },
+      spending: { refuelings: '10.00', scheduled: '0.00', unscheduled: '0.00', inspection: '0.00', taxes: '0.00', insurance: '0.00', expenses: '0.00', total: '10.00' },
       kmDriven: 100,
       consumption: { diesel: 12.5 },
     },
   ],
-  spendingByCategory: [{ category: 'fuel', amount: '10.00' }],
+  spendingByCategory: [{ category: 'fuel', name: null, amount: '10.00' }],
   totals: { spending: '10.00', kmDriven: 100 },
 };
 
 const stats = {
   consumption: { diesel: 12.5 },
-  totals: { cost: '10.00', refuelings: 1, maintenances: 0, expenses: 0 },
+  totals: {
+    cost: '10.00', refuelings: 1, maintenances: 3, expenses: 2,
+    sections: { scheduled: 2, unscheduled: 0, inspection: 1, tax: 1, insurance: 0, expense: 1, component: 4 },
+  },
   currentKm: 100,
   kmDriven: 100,
   costPerKm: 0.1,
@@ -122,14 +125,26 @@ describe('VehicleDetailPage', () => {
     expect(await screen.findByRole('table', { name: 'Spese mensili' })).toBeInTheDocument();
   });
 
-  it('il registro apre le liste di questo veicolo e mostra i conteggi', async () => {
+  it('il registro ha una riga per sezione, con la sua lista per questo veicolo e il conteggio', async () => {
     renderPage([vehicle(1, 'Golf')]);
 
     const refuelings = await screen.findByRole('link', { name: /Rifornimenti/ });
     expect(refuelings).toHaveAttribute('href', '/refueling?vehicleId=1');
     await waitFor(() => expect(refuelings).toHaveTextContent('1'));
-    expect(screen.getByRole('link', { name: /Manutenzioni/ })).toHaveAttribute('href', '/maintenance?vehicleId=1');
-    expect(screen.getByRole('link', { name: /Spese/ })).toHaveAttribute('href', '/expenses?vehicleId=1');
+    const rows = [
+      ['Lavori ordinari', '/maintenance?category=scheduled&vehicleId=1', '2'],
+      ['Lavori imprevisti', '/maintenance?category=unscheduled&vehicleId=1', '0'],
+      ['Revisione', '/maintenance?category=inspection&vehicleId=1', '1'],
+      ['Tasse', '/expenses?section=tax&vehicleId=1', '1'],
+      ['Assicurazione', '/expenses?section=insurance&vehicleId=1', '0'],
+      ['Altre spese', '/expenses?section=other&vehicleId=1', '1'],
+      ['Componenti', '/components?vehicleId=1', '4'],
+    ] as const;
+    for (const [name, href, count] of rows) {
+      const link = screen.getByRole('link', { name: new RegExp(`^${name}`) });
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveTextContent(count);
+    }
     expect(screen.getByRole('link', { name: /Promemoria/ })).toHaveAttribute('href', '/reminders?vehicleId=1');
   });
 
@@ -177,9 +192,12 @@ describe('VehicleDetailPage', () => {
     await user.click(await findAddMenu());
 
     const links = [
-      ['Nuova manutenzione', '/maintenance/new?vehicleId=1'],
       ['Nuovo rifornimento', '/refueling/new?vehicleId=1'],
-      ['Nuova spesa', '/expenses/new?vehicleId=1'],
+      ['Nuovo lavoro ordinario', '/maintenance/new?category=scheduled&vehicleId=1'],
+      ['Nuova revisione', '/maintenance/new?category=inspection&vehicleId=1'],
+      ['Nuova tassa', '/expenses/new?section=tax&vehicleId=1'],
+      ['Nuova spesa', '/expenses/new?section=other&vehicleId=1'],
+      ['Nuovo componente', '/components/new?vehicleId=1'],
       ['Nuovo promemoria', '/reminders/new?vehicleId=1'],
     ];
     for (const [name, href] of links) {

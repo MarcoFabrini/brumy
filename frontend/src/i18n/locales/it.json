@@ -116,7 +116,6 @@
   },
   "common": {
     "none": "Nessuno",
-    "optional": "Opzionale",
     "coming_soon": "In arrivo",
     "loading": "Caricamento in corso",
     "notes": "Note"
@@ -141,6 +140,7 @@
       "category": {
         "fuel": "Carburante",
         "maintenance": "Manutenzione",
+        "insurance": "Assicurazione",
         "rest": "Altre categorie"
       },
       "table": {
@@ -179,6 +179,53 @@
     "vehicle": "Veicolo",
     "form_description": "Compila e salva: il veicolo è già scelto, puoi cambiarlo in cima."
   },
+  "sections": {
+    "refueling": {
+      "title": "Rifornimenti",
+      "new": "Nuovo rifornimento",
+      "empty": "Nessun rifornimento"
+    },
+    "scheduled": {
+      "title": "Lavori ordinari",
+      "new": "Nuovo lavoro ordinario",
+      "empty": "Nessun lavoro ordinario"
+    },
+    "unscheduled": {
+      "title": "Lavori imprevisti",
+      "new": "Nuovo lavoro imprevisto",
+      "empty": "Nessun lavoro imprevisto"
+    },
+    "inspection": {
+      "title": "Revisione",
+      "new": "Nuova revisione",
+      "empty": "Nessuna revisione"
+    },
+    "tax": {
+      "title": "Tasse",
+      "new": "Nuova tassa",
+      "empty": "Nessuna tassa"
+    },
+    "insurance": {
+      "title": "Assicurazione",
+      "new": "Nuova assicurazione",
+      "empty": "Nessuna assicurazione"
+    },
+    "expense": {
+      "title": "Altre spese",
+      "new": "Nuova spesa",
+      "empty": "Nessuna spesa"
+    },
+    "component": {
+      "title": "Componenti",
+      "new": "Nuovo componente",
+      "empty": "Nessun componente"
+    },
+    "reminder": {
+      "title": "Promemoria",
+      "new": "Nuovo promemoria",
+      "empty": "Nessun promemoria"
+    }
+  },
   "maintenance": {
     "new": "Nuova manutenzione",
     "new_description": "Registra una manutenzione effettuata.",
@@ -186,11 +233,14 @@
     "info_description": "Informazioni intervento.",
     "type": "Tipo intervento",
     "category": "Categoria",
+    "section": "Sezione",
     "performed_at": "Data",
     "km": "Km al momento",
     "description": "Descrizione",
     "cost": "Costo",
     "workshop": "Officina",
+    "shop": "Negozio",
+    "components": "Componenti",
     "select_vehicle": "Seleziona veicolo",
     "created": "Manutenzione registrata",
     "updated": "Manutenzione aggiornata",
@@ -231,7 +281,41 @@
     "category_options": {
       "scheduled": "Programmata",
       "unscheduled": "Imprevista"
-    }
+    },
+    "notes": "Note"
+  },
+  "values": {
+    "title": "Elenchi personali",
+    "description": "Distributori, officine, negozi, categorie, tipi di tassa e compagnie che ti vengono suggeriti mentre scrivi.",
+    "kind": {
+      "station": "Distributori",
+      "workshop": "Officine",
+      "shop": "Negozi",
+      "expense_category": "Categorie spese",
+      "tax_type": "Tipi di tassa",
+      "insurer": "Compagnie assicurative"
+    },
+    "usage_one": "usata {{count}} volta",
+    "usage_other": "usata {{count}} volte",
+    "empty": "Ancora vuoto: si riempie quando salvi",
+    "add": {
+      "station": "Nuovo distributore",
+      "workshop": "Nuova officina",
+      "shop": "Nuovo negozio",
+      "expense_category": "Nuova categoria",
+      "tax_type": "Nuovo tipo di tassa",
+      "insurer": "Nuova compagnia"
+    },
+    "edit_title": "Modifica voce",
+    "name": "Nome",
+    "name_required": "Scrivi un nome",
+    "merge": "Unisci a…",
+    "merge_placeholder": "Scegli una voce",
+    "merge_action": "Unisci",
+    "merge_confirm_title": "Unire le voci?",
+    "merge_confirm": "I record di «{{from}}» passano a «{{into}}» e «{{from}}» sparisce.",
+    "delete_confirm_title": "Eliminare la voce?",
+    "delete_confirm": "«{{name}}» sparisce dall'elenco e dai suggerimenti. I record già salvati mantengono questo nome."
   },
   "settings": {
     "description": "Account, preferenze e notifiche.",
@@ -263,9 +347,7 @@
       "generate": "Genera chiavi VAPID",
       "regenerate": "Rigenera chiavi",
       "public_key": "Chiave pubblica VAPID",
-      "public_key_hint": "Inviata al browser per la sottoscrizione (non è segreta).",
       "subject": "Soggetto VAPID",
-      "subject_hint": "mailto: o URL del responsabile (richiesto dallo standard).",
       "send_test": "Invia notifica di prova",
       "saved": "Configurazione push salvata",
       "test_sent": "Notifica di prova inviata ({{count}} device)",
@@ -325,11 +407,8 @@
     "description": "Descrizione",
     "due_date": "Scadenza (data)",
     "due_km": "Scadenza (km)",
-    "due_hint": "Almeno data o km",
     "notify_days_before": "Avvisa giorni prima",
-    "notify_hint": "Quanti giorni prima ricevere la notifica",
     "notify_km_before": "Avvisa km prima",
-    "notify_km_hint": "Quanti km prima della scadenza ricevere la notifica",
     "recurrence": "Ricorrenza",
     "recurrence_hint": "La prossima scadenza si calcola dalla data e dai km reali del completamento.",
     "recurrence_every": "Ripeti ogni",
@@ -340,7 +419,6 @@
       "years": "Anni"
     },
     "recurrence_km": "Ripeti ogni (km)",
-    "recurrence_km_hint": "Es. 10000 per olio o tagliando. Vuoto = una tantum.",
     "every_months_one": "ogni mese",
     "every_months_other": "ogni {{count}} mesi",
     "every_years_one": "ogni anno",
@@ -408,7 +486,10 @@
       "empty_description": "I promemoria dei tuoi veicoli compaiono qui, dai più urgenti. Aggiungine uno col \"+\".",
       "complete": "Completa"
     },
-    "status": "Stato"
+    "status": "Stato",
+    "notes": "Note",
+    "remind_next": "Ricordami la prossima scadenza",
+    "next_due_date": "Prossima scadenza"
   },
   "expense": {
     "new": "Nuova spesa",
@@ -416,13 +497,13 @@
     "edit": "Modifica spesa",
     "occurred_at": "Data",
     "category": "Categoria",
+    "tax_type": "Tipo di tassa",
+    "insurer": "Compagnia",
     "description": "Descrizione",
     "amount": "Importo",
     "recurring": "Spesa ricorrente",
     "recurring_period": "Periodicità",
-    "recurring_first_charge_hint": "La data indicata sopra è quella del primo addebito.",
-    "recurring_until": "Fino al (facoltativo)",
-    "recurring_until_hint": "Lascia vuoto se la spesa continua finché non la disdici.",
+    "recurring_until": "Fino al",
     "recurring_until_on": "fino al {{date}}",
     "recurring_counted_note": "Questa spesa è conteggiata a ogni addebito già avvenuto, non una volta sola. Modificarla cambia tutti i suoi addebiti.",
     "notes": "Note",
@@ -446,21 +527,6 @@
       "title": "Seleziona un veicolo",
       "description": "Scegli un veicolo per registrare una spesa."
     },
-    "category_options": {
-      "insurance": "Assicurazione",
-      "road_tax": "Bollo",
-      "tax": "Tassa",
-      "parking": "Parcheggio",
-      "toll": "Pedaggio",
-      "fine": "Multa",
-      "accessory": "Accessorio",
-      "financing": "Finanziamento",
-      "subscription": "Abbonamento",
-      "garage": "Garage",
-      "car_wash": "Autolavaggio",
-      "theft_damage": "Furto/Danno",
-      "other": "Altro"
-    },
     "recurring_options": {
       "weekly": "Settimanale",
       "monthly": "Mensile",
@@ -470,6 +536,37 @@
       "biennial": "Biennale"
     },
     "recurring_until_short": "Fino al"
+  },
+  "component": {
+    "name": "Nome",
+    "code": "Modello o codice",
+    "serial_number": "Numero di serie",
+    "shop": "Negozio",
+    "purchased_at": "Data d'acquisto",
+    "price": "Prezzo",
+    "notes": "Note",
+    "selected": "Componenti scelti",
+    "remove": "Togli {{name}}",
+    "add": "Aggiungi componente",
+    "created": "Componente salvato",
+    "updated": "Componente aggiornato",
+    "deleted": "Componente eliminato",
+    "edit": "Modifica componente",
+    "complete_title": "Completa il componente",
+    "complete_description": "«{{name}}» è nuovo: aggiungi modello, negozio o note, oppure lascialo così.",
+    "empty_description": "Aggiungi i pezzi che compri per ritrovare modello e negozio quando servono di nuovo.",
+    "used_in": "Usato nei lavori",
+    "never_used": "Non ancora usato in un lavoro",
+    "delete": {
+      "action": "Elimina componente",
+      "title": "Eliminare il componente?",
+      "description": "Non sarà più suggerito; i lavori in cui è stato usato continuano a mostrarlo."
+    },
+    "select_vehicle_first": {
+      "title": "Seleziona un veicolo",
+      "description": "Scegli un veicolo per aggiungere un componente."
+    },
+    "deleted_name": "{{name}} (eliminato)"
   },
   "refueling": {
     "new": "Nuovo rifornimento",
@@ -506,7 +603,8 @@
       "title": "Seleziona un veicolo",
       "description": "Scegli un veicolo per registrare un rifornimento."
     },
-    "partial": "parziale"
+    "partial": "parziale",
+    "description": "Descrizione"
   },
   "vehicle": {
     "new": "Nuovo veicolo",
@@ -522,7 +620,6 @@
     "type": "Tipo veicolo",
     "fuel_type": "Carburante",
     "secondary_fuel_type": "Carburante secondario",
-    "secondary_fuel_hint": "Solo per veicoli bi-fuel (GPL, metano, ibrido)",
     "initial_km": "Km iniziali",
     "current_km": "Km attuali",
     "notes": "Note",
@@ -639,7 +736,8 @@
       "more_actions": "Altre azioni",
       "charts": "Andamento"
     },
-    "access": "Accesso"
+    "access": "Accesso",
+    "purchase_price": "Prezzo d'acquisto"
   },
   "error_page": {
     "back_home": "Torna alla home",
@@ -730,12 +828,20 @@
       "not_found": "Rifornimento non trovato",
       "fuel_type_not_supported": "Questo veicolo non usa il carburante selezionato"
     },
+    "user_value": {
+      "name_taken": "Esiste già una voce con questo nome",
+      "merge_invalid": "Scegli un'altra voce dello stesso tipo",
+      "not_found": "Voce non trovata"
+    },
     "expense": {
       "vehicle": {
         "required": "Veicolo richiesto"
       },
       "category": {
-        "required": "Seleziona la categoria"
+        "required": "Scrivi la categoria"
+      },
+      "tax_type": {
+        "required": "Scrivi il tipo di tassa"
       },
       "description": {
         "required": "Inserisci una descrizione"
@@ -751,6 +857,13 @@
       "recurring_period_unexpected": "La frequenza vale solo per le spese ricorrenti",
       "recurring_until_before_start": "La data di fine non può precedere il primo addebito",
       "recurring_until_unexpected": "La data di fine vale solo per le spese ricorrenti"
+    },
+    "component": {
+      "name": {
+        "required": "Scrivi il nome del componente"
+      },
+      "name_taken": "Questo veicolo ha già un componente con questo nome",
+      "not_found": "Componente non trovato"
     },
     "reminder": {
       "vehicle": {

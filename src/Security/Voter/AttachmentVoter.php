@@ -7,6 +7,7 @@ namespace App\Security\Voter;
 use App\Entity\Attachment;
 use App\Entity\User;
 use App\Enum\AttachmentEntityType;
+use App\Repository\ComponentRepository;
 use App\Repository\ExpenseRepository;
 use App\Repository\MaintenanceRepository;
 use App\Repository\RefuelingRepository;
@@ -35,6 +36,7 @@ final class AttachmentVoter extends Voter
         private readonly ExpenseRepository $expenseRepo,
         private readonly RefuelingRepository $refuelingRepo,
         private readonly ReminderRepository $reminderRepo,
+        private readonly ComponentRepository $componentRepo,
     ) {
     }
 
@@ -75,6 +77,7 @@ final class AttachmentVoter extends Voter
             AttachmentEntityType::EXPENSE => $this->expenseRepo->findOneInOrganization($id, $org)?->getVehicle(),
             AttachmentEntityType::REFUELING => $this->refuelingRepo->findOneInOrganization($id, $org)?->getVehicle(),
             AttachmentEntityType::REMINDER => $this->reminderRepo->findOneInOrganization($id, $org)?->getVehicle(),
+            AttachmentEntityType::COMPONENT => $this->componentRepo->findOneInOrganization($id, $org)?->getVehicle(),
         };
     }
 }

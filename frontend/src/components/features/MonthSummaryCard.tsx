@@ -2,16 +2,20 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFormat } from '@/hooks/useFormat';
 import type { MonthSpending } from '@/lib/monthSpending';
+import { SPENDING_SERIES } from '@/lib/dashboardCharts';
+import { SPENDING_SERIES_SECTIONS, sectionOf } from './vehicleRecordActions';
 
 /**
  * Il riquadro in cima alla Home: quanto si è speso nel mese corrente, il confronto col mese prima e da dove viene
- * la spesa (carburante, manutenzioni, altre spese), più i km percorsi nel mese.
+ * la spesa (le sezioni con una spesa nel mese; il carburante se non ce n'è nessuna), più i km percorsi nel mese.
  */
 export function MonthSummaryCard({ summary }: { summary: MonthSpending }) {
   const { t } = useTranslation();
   const fmt = useFormat();
   const headingId = useId();
   const delta = summary.previousTotal === null ? null : summary.total - summary.previousTotal;
+  const spent = SPENDING_SERIES.filter((key) => summary.bySeries[key] !== 0);
+  const shown = spent.length > 0 ? spent : (['refuelings'] as const);
 
   return (
     <section aria-labelledby={headingId} className="rounded-xl bg-card px-4 py-3">
@@ -29,9 +33,9 @@ export function MonthSummaryCard({ summary }: { summary: MonthSpending }) {
         </p>
       )}
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 md:grid-cols-4">
-        <Figure label={t('dashboard.charts.category.fuel')} value={fmt.currency(summary.refuelings)} />
-        <Figure label={t('dashboard.charts.series.maintenances')} value={fmt.currency(summary.maintenances)} />
-        <Figure label={t('dashboard.month.other_expenses')} value={fmt.currency(summary.expenses)} />
+        {shown.map((key) => (
+          <Figure key={key} label={t(sectionOf(SPENDING_SERIES_SECTIONS[key]).titleKey)} value={fmt.currency(summary.bySeries[key])} />
+        ))}
         <Figure label={t('dashboard.charts.km_driven')} value={fmt.km(summary.kmDriven)} />
       </dl>
     </section>

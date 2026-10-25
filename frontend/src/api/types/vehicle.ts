@@ -42,6 +42,8 @@ export interface Vehicle {
   fuelType: FuelType;
   secondaryFuelType: FuelType | null;
   initialKm: number;
+  /** Prezzo d'acquisto (decimale), solo informativo. */
+  purchasePrice?: string | null;
   notes: string | null;
   /** Presente in lista e dettaglio: null per i veicoli attivi. */
   archivedAt?: string | null;
@@ -76,6 +78,7 @@ export interface CreateVehicleDto {
   licensePlate?: string | null;
   vin?: string | null;
   initialKm: number;
+  purchasePrice?: string | null;
   notes?: string | null;
 }
 

@@ -127,10 +127,10 @@ final class ReadOnlyShareTest extends ApiTestCase
         yield 'refueling delete' => ['DELETE', '/api/refuelings/{refueling}', []];
 
         yield 'expense create' => ['POST', '/api/expenses', [
-            'vehicleId' => '{vehicle}', 'occurredAt' => '2026-01-10', 'description' => 'x', 'amount' => '10.00',
+            'vehicleId' => '{vehicle}', 'occurredAt' => '2026-01-10', 'category' => 'other', 'description' => 'x', 'amount' => '10.00',
         ]];
         yield 'expense update' => ['PUT', '/api/expenses/{expense}', [
-            'vehicleId' => '{vehicle}', 'occurredAt' => '2026-01-10', 'description' => 'x', 'amount' => '10.00',
+            'vehicleId' => '{vehicle}', 'occurredAt' => '2026-01-10', 'category' => 'other', 'description' => 'x', 'amount' => '10.00',
         ]];
         yield 'expense delete' => ['DELETE', '/api/expenses/{expense}', []];
 
@@ -208,6 +208,7 @@ final class ReadOnlyShareTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $this->vehicle->getId(),
             'occurredAt' => '2026-01-10',
+            'category' => 'parking',
             'description' => 'Parcheggio',
             'amount' => '5.00',
         ], accessToken: $editorToken);
@@ -236,6 +237,7 @@ final class ReadOnlyShareTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $private->getId(),
             'occurredAt' => '2026-01-10',
+            'category' => 'parking',
             'description' => 'x',
             'amount' => '5.00',
         ], accessToken: $this->viewerToken);

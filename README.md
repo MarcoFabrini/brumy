@@ -8,29 +8,38 @@
 
 ## En
 
-Self-hosted vehicle management (PWA): maintenance, fuel logs, expenses, reminders and vehicle sharing with your family. Your data, 100% self-hosted.
+Self-hosted vehicle management (PWA): fuel logs, scheduled and unscheduled work, inspections, taxes, insurance, the parts you buy, reminders and vehicle sharing with your family. Your data, 100% self-hosted.
+
+### Features
+
+- **Every cost in its own section:** refuelings, scheduled work, unscheduled work, inspection, taxes, insurance, other expenses, components and reminders, each with its count on the vehicle page.
+- **Fast entry:** a phone-first "+" with the vehicle already picked; stations, workshops, shops, expense categories, tax types and insurers are remembered and suggested while you type, and you can rename, merge or delete them in your personal lists.
+- **Components:** keep the model, serial number, shop and price of every part you buy, link it to the work where it was fitted and see where it was used.
+- **Reminders:** by date or by mileage, recurring, with email and push notifications; saving an inspection, an insurance or a road tax proposes the next due date and updates the reminder for you.
+- **Charts:** monthly spending and spending per section, distance and consumption, for all your vehicles or one of them; recurring expenses count at every charge.
+- **Family and sharing:** organizations with invited members, vehicles shared read-only, ownership transfer; attachments (photos, PDFs) on every record; light and dark theme; Italian and English.
 
 ### Screenshots
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Brumy dashboard in the light theme: totals, upcoming reminders and monthly charts"><br><sub>Dashboard, light theme</sub></td>
-    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Brumy dashboard in the dark theme"><br><sub>Dashboard, dark theme</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Brumy home in the light theme: spending this month, reminders to deal with, vehicles and monthly spending per section"><br><sub>Home, light theme</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Brumy home in the dark theme"><br><sub>Home, dark theme</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Vehicle detail page with spending, category, distance and consumption charts"><br><sub>Vehicle detail with its charts</sub></td>
+    <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Vehicle page: mileage, consumption, next due date, one row per section with its count, vehicle data and charts"><br><sub>Vehicle page: sections, data and charts</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="screenshots/maintenance.png" alt="Maintenance log of a vehicle with costs and scheduled or unscheduled badges"><br><sub>Maintenance log</sub></td>
-    <td width="50%"><img src="screenshots/reminders.png" alt="Reminder list with overdue, due soon and OK badges"><br><sub>Reminders with urgency badges</sub></td>
+    <td width="50%"><img src="screenshots/work-detail.png" alt="Scheduled work with cost, workshop, the components fitted and notes"><br><sub>A service with its components</sub></td>
+    <td width="50%"><img src="screenshots/reminders.png" alt="Reminders grouped as overdue, due soon and later, by date or by mileage"><br><sub>Reminders</sub></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Brumy dashboard on a phone"><br><sub>Mobile dashboard</sub></td>
-    <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Vehicle charts on a phone"><br><sub>Mobile vehicle charts</sub></td>
-    <td width="33%"><img src="screenshots/mobile-reminders.png" alt="Reminder list on a phone"><br><sub>Mobile reminders</sub></td>
+    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Brumy home on a phone"><br><sub>Home on a phone</sub></td>
+    <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Vehicle page on a phone with its sections"><br><sub>Vehicle sections</sub></td>
+    <td width="33%"><img src="screenshots/mobile-add.png" alt="The + sheet on a phone: what to record, one row per section"><br><sub>The "+" sheet</sub></td>
   </tr>
 </table>
 
@@ -59,12 +68,12 @@ docker compose up -d
 
 The app is available at `http://127.0.0.1:8080`. Check: `curl http://127.0.0.1:8080/api/health`
 
-The **first user** to register becomes the instance admin; after that, registration is closed and other users can only join by invitation (Settings → Members).
+The **first user** to register becomes the instance admin; after that, registration is closed and other users can only join by invitation (Profile → Members).
 
 ### Configuration
 
 - **Email:** set `MAILER_DSN` in `.env` (e.g. `smtp://user:password@smtp.example.com:587`). Without it the default is the `null` transport: nothing is delivered, **including reminder emails**, and each skipped message is logged as a warning.
-- **Web Push:** from Settings → Notifications (admin only).
+- **Web Push:** from Profile → Server push notifications (admin only).
 
 ### HTTPS (reverse proxy)
 
@@ -214,29 +223,38 @@ Parts of this project, including source code, tests and documentation, were writ
 
 ## It
 
-Gestione veicoli self-hosted (PWA): manutenzioni, rifornimenti, spese, scadenze e condivisione in famiglia. Dati tuoi, 100% self-hosted.
+Gestione veicoli self-hosted (PWA): rifornimenti, lavori ordinari e imprevisti, revisione, tasse, assicurazione, i pezzi che compri, promemoria e condivisione in famiglia. Dati tuoi, 100% self-hosted.
+
+### Funzioni
+
+- **Ogni costo nella sua sezione:** rifornimenti, lavori ordinari, lavori imprevisti, revisione, tasse, assicurazione, altre spese, componenti e promemoria, ognuna col suo conteggio nella pagina del veicolo.
+- **Inserimento veloce:** un "+" pensato per lo smartphone, col veicolo già scelto; distributori, officine, negozi, categorie di spesa, tipi di tassa e compagnie vengono ricordati e suggeriti mentre scrivi, e negli elenchi personali li rinomini, li unisci o li elimini.
+- **Componenti:** modello, numero di serie, negozio e prezzo di ogni pezzo che compri, collegato al lavoro in cui è stato montato, con l'elenco dei lavori in cui è stato usato.
+- **Promemoria:** a data o a km, ricorrenti, con notifiche email e push; salvando una revisione, un'assicurazione o il bollo ti viene proposta la prossima scadenza e il promemoria si aggiorna da solo.
+- **Grafici:** spesa mensile e per sezione, km percorsi e consumi, per tutti i veicoli o per uno solo; le spese ricorrenti contano a ogni addebito.
+- **Famiglia e condivisione:** organizzazioni con membri invitati, veicoli condivisi in sola lettura, passaggio di proprietà; allegati (foto, PDF) su ogni record; tema chiaro e scuro; italiano e inglese.
 
 ### Screenshot
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Dashboard di Brumy nel tema chiaro: totali, prossime scadenze e grafici mensili"><br><sub>Dashboard, tema chiaro</sub></td>
-    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Dashboard di Brumy nel tema scuro"><br><sub>Dashboard, tema scuro</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-light.png" alt="Home di Brumy nel tema chiaro: speso questo mese, scadenze da fare, veicoli e spese mensili per sezione"><br><sub>Home, tema chiaro</sub></td>
+    <td width="50%"><img src="screenshots/dashboard-dark.png" alt="Home di Brumy nel tema scuro"><br><sub>Home, tema scuro</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Pagina di dettaglio veicolo con i grafici di spesa, categorie, distanza e consumi"><br><sub>Dettaglio veicolo con i suoi grafici</sub></td>
+    <td colspan="2"><img src="screenshots/vehicle-detail.png" alt="Pagina del veicolo: km, consumi, prossima scadenza, una riga per sezione col suo conteggio, dati del veicolo e grafici"><br><sub>Pagina del veicolo: sezioni, dati e grafici</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="screenshots/maintenance.png" alt="Registro delle manutenzioni di un veicolo con costi e badge programmata o non programmata"><br><sub>Registro manutenzioni</sub></td>
-    <td width="50%"><img src="screenshots/reminders.png" alt="Elenco dei promemoria con badge scaduto, in scadenza e OK"><br><sub>Promemoria con badge di urgenza</sub></td>
+    <td width="50%"><img src="screenshots/work-detail.png" alt="Lavoro ordinario con costo, officina, componenti montati e note"><br><sub>Un tagliando con i suoi componenti</sub></td>
+    <td width="50%"><img src="screenshots/reminders.png" alt="Promemoria divisi in scaduti, in scadenza e più avanti, a data o a km"><br><sub>Promemoria</sub></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Dashboard di Brumy su smartphone"><br><sub>Dashboard su smartphone</sub></td>
-    <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Grafici del veicolo su smartphone"><br><sub>Grafici del veicolo su smartphone</sub></td>
-    <td width="33%"><img src="screenshots/mobile-reminders.png" alt="Elenco dei promemoria su smartphone"><br><sub>Promemoria su smartphone</sub></td>
+    <td width="33%"><img src="screenshots/mobile-dashboard.png" alt="Home di Brumy su smartphone"><br><sub>Home su smartphone</sub></td>
+    <td width="33%"><img src="screenshots/mobile-vehicle.png" alt="Pagina del veicolo su smartphone con le sue sezioni"><br><sub>Sezioni del veicolo</sub></td>
+    <td width="33%"><img src="screenshots/mobile-add.png" alt="Il foglio del + su smartphone: cosa registrare, una riga per sezione"><br><sub>Il foglio del "+"</sub></td>
   </tr>
 </table>
 
@@ -265,12 +283,12 @@ docker compose up -d
 
 L'app è su `http://127.0.0.1:8080`. Verifica: `curl http://127.0.0.1:8080/api/health`
 
-Il **primo utente** che si registra diventa admin dell'istanza; poi la registrazione si chiude e gli altri entrano solo su invito (Impostazioni → Membri).
+Il **primo utente** che si registra diventa admin dell'istanza; poi la registrazione si chiude e gli altri entrano solo su invito (Profilo → Membri).
 
 ### Configurazione
 
 - **Email:** imposta `MAILER_DSN` in `.env` (ad es. `smtp://utente:password@smtp.example.com:587`). Senza, si usa il trasporto `null`: non viene consegnato nulla, **nemmeno le email dei promemoria**, e ogni invio saltato finisce nel log come warning.
-- **Web Push:** da Impostazioni → Notifiche (solo admin).
+- **Web Push:** da Profilo → Notifiche push del server (solo admin).
 
 ### HTTPS (reverse proxy)
 

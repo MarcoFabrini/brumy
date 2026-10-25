@@ -6,11 +6,17 @@ namespace App\Controller\Api;
 
 use App\Dto\Request\MaintenanceRequest;
 use App\Entity\Maintenance;
+use App\Entity\User;
+use App\Enum\MaintenanceCategory;
+use App\Enum\UserValueKind;
 use App\Repository\MaintenanceRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
+use App\Service\Components;
+use App\Service\RecordReminders;
+use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,6 +42,9 @@ final class MaintenanceController extends AbstractController
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
         private readonly SerializerInterface $serializer,
+        private readonly UserValues $values,
+        private readonly Components $components,
+        private readonly RecordReminders $recordReminders,
     ) {
     }
 
@@ -43,6 +52,7 @@ final class MaintenanceController extends AbstractController
         summary: 'List maintenances for a vehicle (paginated)',
         parameters: [
             new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'category', in: 'query', description: 'Section: scheduled, unscheduled or inspection; omitted = all', schema: new OA\Schema(type: 'string', enum: ['scheduled', 'unscheduled', 'inspection'])),
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20, maximum: 100)),
         ],
@@ -69,7 +79,9 @@ final class MaintenanceController extends AbstractController
         $page = min(100_000, max(1, (int) $request->query->get('page', 1)));
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
 
-        $items = $this->repo->findByVehiclePaginated($vehicle, $page, $limit);
+        $category = MaintenanceCategory::tryFrom((string) $request->query->get('category', ''));
+
+        $items = $this->repo->findByVehiclePaginated($vehicle, $page, $limit, $category);
         return $this->jsonGroups($items, ['maintenance:list', 'vehicle:nested']);
     }
 
@@ -77,7 +89,7 @@ final class MaintenanceController extends AbstractController
         summary: 'Maintenance detail',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [
-            new OA\Response(response: 200, description: 'Maintenance', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested']))),
+            new OA\Response(response: 200, description: 'Maintenance', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']))),
             new OA\Response(response: 404, description: 'Not found'),
         ],
     )]
@@ -87,14 +99,14 @@ final class MaintenanceController extends AbstractController
         $m = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $m);
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested']);
+        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']);
     }
 
     #[OA\Post(
         summary: 'Create maintenance entry for a vehicle',
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: MaintenanceRequest::class))),
         responses: [
-            new OA\Response(response: 201, description: 'Created', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested']))),
+            new OA\Response(response: 201, description: 'Created', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']))),
             new OA\Response(response: 404, description: 'Vehicle not found'),
             new OA\Response(response: 422, description: 'validation_failed'),
         ],
@@ -107,22 +119,29 @@ final class MaintenanceController extends AbstractController
             throw $this->createNotFoundException('vehicle.not_found');
         }
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $vehicle);
+        /** @var User $user */
+        $user = $this->getUser();
 
         $m = (new Maintenance())
             ->setOrganization($vehicle->getOrganization())
             ->setVehicle($vehicle)
             ->setPerformedAt(new \DateTimeImmutable($payload->performedAt))
             ->setKm($payload->km)
-            ->setType($payload->type)
-            ->setCategory($payload->category)
+            ->classify($payload->type, $payload->category)
             ->setDescription($payload->description)
             ->setCost($payload->cost)
-            ->setWorkshop($payload->workshop);
+            ->setNotes($payload->notes)
+            ->setWorkshop($this->values->resolve($vehicle, $user, UserValueKind::WORKSHOP, $payload->workshop))
+            ->setShop($this->values->resolve($vehicle, $user, UserValueKind::SHOP, $payload->shop))
+            ->setComponents($this->components->resolve($vehicle, $payload->components));
 
         $this->em->persist($m);
         $this->em->flush();
+        if ($payload->nextDueDate !== null && $payload->nextDueDate !== '') {
+            $this->recordReminders->forMaintenance($m, new \DateTimeImmutable($payload->nextDueDate));
+        }
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested'], 201);
+        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested'], 201);
     }
 
     #[OA\Put(
@@ -130,7 +149,7 @@ final class MaintenanceController extends AbstractController
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: MaintenanceRequest::class))),
         responses: [
-            new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested']))),
+            new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(ref: new Model(type: Maintenance::class, groups: ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']))),
             new OA\Response(response: 404, description: 'Not found'),
         ],
     )]
@@ -139,19 +158,24 @@ final class MaintenanceController extends AbstractController
     {
         $m = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $m);
+        $vehicle = $m->getVehicle();
+        /** @var User $user */
+        $user = $this->getUser();
 
         $m
             ->setPerformedAt(new \DateTimeImmutable($payload->performedAt))
             ->setKm($payload->km)
-            ->setType($payload->type)
-            ->setCategory($payload->category)
+            ->classify($payload->type, $payload->category)
             ->setDescription($payload->description)
             ->setCost($payload->cost)
-            ->setWorkshop($payload->workshop);
+            ->setNotes($payload->notes)
+            ->setWorkshop($this->values->resolve($vehicle, $user, UserValueKind::WORKSHOP, $payload->workshop, $m->getWorkshop()))
+            ->setShop($this->values->resolve($vehicle, $user, UserValueKind::SHOP, $payload->shop, $m->getShop()))
+            ->setComponents($this->components->resolve($vehicle, $payload->components, $m->getComponents()));
 
         $this->em->flush();
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested']);
+        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']);
     }
 
     #[OA\Delete(

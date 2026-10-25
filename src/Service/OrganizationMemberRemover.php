@@ -9,6 +9,7 @@ use App\Entity\OrganizationMember;
 use App\Entity\User;
 use App\Repository\OrganizationInvitationRepository;
 use App\Repository\OrganizationMemberRepository;
+use App\Repository\UserValueRepository;
 use App\Repository\VehicleShareRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -23,7 +24,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * 2. le share residue del membro sull'org cadono, come la membership (se venisse reinvitato non
  *    deve riavere i vecchi accessi né un proprietario "fantasma");
  * 3. gli inviti non ancora accettati che aveva spedito nell'org vengono eliminati (un admin
- *    rimosso non può lasciare in giro inviti spendibili, ad esempio verso una seconda casella).
+ *    rimosso non può lasciare in giro inviti spendibili, ad esempio verso una seconda casella);
+ * 4. le sue voci (distributori, officine, categorie) dell'org che nessun record usa più vengono eliminate.
  */
 final class OrganizationMemberRemover
 {
@@ -33,6 +35,7 @@ final class OrganizationMemberRemover
         private readonly VehicleOwnership $ownership,
         private readonly OrganizationMemberRepository $memberRepo,
         private readonly OrganizationInvitationRepository $invitationRepo,
+        private readonly UserValueRepository $valueRepo,
     ) {
     }
 
@@ -51,8 +54,9 @@ final class OrganizationMemberRemover
 
     /**
      * Sposta la proprietà dei veicoli di $user nell'org a $newOwner e fa cadere le sue share residue
-     * (membership esclusa: la gestisce il chiamante). Senza $newOwner i veicoli non cambiano mano,
-     * ma le share cadono comunque. Va chiamato dentro una transazione del chiamante.
+     * (membership esclusa: la gestisce il chiamante), poi elimina le sue voci dell'org non più usate.
+     * Senza $newOwner i veicoli non cambiano mano, ma le share cadono comunque. Fa flush: va chiamato
+     * dentro una transazione del chiamante.
      * Usato anche dalla cancellazione GDPR, che tiene la membership dell'account anonimizzato.
      */
     public function handOverVehicles(User $user, Organization $org, ?User $newOwner): void
@@ -62,6 +66,10 @@ final class OrganizationMemberRemover
                 $this->ownership->assign($ownerShare->getVehicle(), $newOwner);
             }
         }
+        // I record ricollegati alle voci del nuovo proprietario vanno salvati prima di cercare le voci rimaste
+        // inutilizzate; quelle usate da veicoli rimasti senza nuovo proprietario restano.
+        $this->em->flush();
+        $this->valueRepo->deleteUnusedForUserInOrganization($user, $org);
 
         $this->shareRepo->deleteAllForUserInOrganization($user, $org);
     }

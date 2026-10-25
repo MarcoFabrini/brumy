@@ -56,6 +56,7 @@ const EMPTY_DEFAULTS: VehicleFormData = {
   licensePlate: null,
   vin: null,
   initialKm: 0,
+  purchasePrice: null,
   notes: null,
 };
 
@@ -125,6 +126,19 @@ export function VehicleForm({
         </FormField>
       </div>
 
+      <FormField label={t('vehicle.purchase_price')} error={tErr(errors.purchasePrice?.message)}>
+        {(id) => (
+          <Input
+            id={id}
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            invalid={!!errors.purchasePrice}
+            {...form.register('purchasePrice', { setValueAs: (v) => (v === '' ? null : v) })}
+          />
+        )}
+      </FormField>
+
       <FormField label={t('vehicle.type')} error={tErr(errors.type?.message)} required>
         {(id) => (
           <Controller
@@ -173,7 +187,6 @@ export function VehicleForm({
 
       <FormField
         label={t('vehicle.secondary_fuel_type')}
-        hint={t('vehicle.secondary_fuel_hint')}
         error={tErr(errors.secondaryFuelType?.message)}
       >
         {(id) => (
@@ -223,7 +236,7 @@ export function VehicleForm({
         </FormField>
       </div>
 
-      <FormField label={t('vehicle.notes')} error={tErr(errors.notes?.message)} hint={t('common.optional')}>
+      <FormField label={t('vehicle.notes')} error={tErr(errors.notes?.message)}>
         {(id) => (
           <Textarea
             id={id}

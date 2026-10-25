@@ -93,6 +93,11 @@ class Vehicle
     #[Groups(['vehicle:read'])]
     private ?string $photoPath = null;
 
+    /** Prezzo d'acquisto, solo informativo: non entra nei costi né nei grafici. */
+    #[ORM\Column(name: 'purchase_price', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['vehicle:read', 'vehicle:write'])]
+    private ?string $purchasePrice = null;
+
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['vehicle:read', 'vehicle:write'])]
     private ?string $notes = null;
@@ -157,6 +162,8 @@ class Vehicle
     public function setInitialKm(int $v): self { $this->initialKm = $v; return $this; }
     public function getPhotoPath(): ?string { return $this->photoPath; }
     public function setPhotoPath(?string $v): self { $this->photoPath = $v; return $this; }
+    public function getPurchasePrice(): ?string { return $this->purchasePrice; }
+    public function setPurchasePrice(?string $p): self { $this->purchasePrice = $p; return $this; }
     public function getNotes(): ?string { return $this->notes; }
     public function setNotes(?string $v): self { $this->notes = $v; return $this; }
     public function getArchivedAt(): ?\DateTimeImmutable { return $this->archivedAt; }

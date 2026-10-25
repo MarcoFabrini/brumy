@@ -6,10 +6,12 @@ namespace App\Tests\Functional\Api;
 
 use App\Entity\Attachment;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\VehicleShare;
 use App\Enum\FuelType;
 use App\Enum\OrgRole;
 use App\Enum\ShareRole;
+use App\Enum\UserValueKind;
 use App\Repository\UserRepository;
 use App\Service\Storage\AttachmentStorageInterface;
 use App\Tests\Factory\ExpenseFactory;
@@ -18,6 +20,7 @@ use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\ReminderFactory;
 use App\Tests\Factory\UserFactory;
+use App\Tests\Factory\UserValueFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
@@ -146,6 +149,25 @@ final class DataHygieneTest extends ApiTestCase
         self::assertFalse($this->storedFileExists($attachment['path']));
     }
 
+    public function testDeletingTheOrganizationRemovesValuesInUse(): void
+    {
+        // Le FK dei record verso le voci sono RESTRICT: il cascade dell'org deve comunque passare
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $vehicle = VehicleFactory::createOne(['organization' => $org]);
+        $station = UserValueFactory::createOne(['user' => $user, 'organization' => $org, 'kind' => UserValueKind::STATION]);
+        $workshop = UserValueFactory::createOne(['user' => $user, 'organization' => $org, 'kind' => UserValueKind::WORKSHOP]);
+        RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'station' => $station]);
+        MaintenanceFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'workshop' => $workshop]);
+        ExpenseFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]); // categoria di partenza dell'utente
+
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), accessToken: $token);
+        self::assertResponseStatusCodeSame(204);
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+        self::assertSame(0, $em->getRepository(UserValue::class)->count([]));
+    }
+
     // ---------------- membri e condivisioni ----------------
 
     public function testRemovingAMemberDropsTheirVehicleSharesOfThatOrganization(): void
@@ -208,6 +230,7 @@ final class DataHygieneTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $vehicle->getId(),
             'occurredAt' => '2026-05-01',
+            'category' => 'insurance',
             'description' => 'Assicurazione',
             'amount' => '400.00',
             ...$recurrence,
@@ -233,6 +256,7 @@ final class DataHygieneTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $vehicle->getId(),
             'occurredAt' => '2026-05-01',
+            'category' => 'insurance',
             'description' => 'Assicurazione',
             'amount' => '400.00',
             'recurring' => true,
@@ -250,6 +274,7 @@ final class DataHygieneTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $vehicle->getId(),
             'occurredAt' => '2026-05-01',
+            'category' => 'insurance',
             'description' => 'x',
             'amount' => '1.00',
             'notes' => str_repeat('a', 70_000),

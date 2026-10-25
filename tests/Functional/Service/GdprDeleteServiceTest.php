@@ -11,19 +11,24 @@ use App\Entity\Organization;
 use App\Entity\PasswordResetToken;
 use App\Entity\PushSubscription;
 use App\Entity\RefreshToken;
+use App\Entity\Refueling;
 use App\Entity\User;
+use App\Entity\UserValue;
 use App\Entity\Vehicle;
 use App\Entity\VehicleShare;
 use App\Enum\AuditAction;
 use App\Enum\OrgRole;
 use App\Enum\PushPlatform;
 use App\Enum\ShareRole;
+use App\Enum\UserValueKind;
 use App\Repository\OrganizationMemberRepository;
 use App\Service\Gdpr\GdprDeleteBlockedException;
 use App\Service\Gdpr\GdprDeleteService;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
+use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\UserFactory;
+use App\Tests\Factory\UserValueFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -315,6 +320,27 @@ final class GdprDeleteServiceTest extends KernelTestCase
         self::assertTrue($shares[0]->isAccepted());
         // La membership dell'account anonimo resta (storia di partecipazione)
         self::assertNotNull($memberRepo->findOneBy(['organization' => $org, 'user' => $member->getId()]));
+    }
+
+    public function testAnonymizedMembersValuesFollowTheirVehiclesAndUnusedOnesAreDeleted(): void
+    {
+        $org = OrganizationFactory::createOne();
+        $owner = UserFactory::createOne();
+        $member = UserFactory::createOne();
+        OrganizationMemberFactory::createOne(['user' => $owner, 'organization' => $org, 'role' => OrgRole::OWNER]);
+        OrganizationMemberFactory::createOne(['user' => $member, 'organization' => $org, 'role' => OrgRole::MEMBER]);
+        $car = VehicleFactory::createOne(['organization' => $org]);
+        VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $car, 'user' => $member]);
+        $eni = UserValueFactory::createOne(['user' => $member, 'organization' => $org, 'kind' => UserValueKind::STATION, 'name' => 'Eni']);
+        UserValueFactory::createOne(['user' => $member, 'organization' => $org, 'kind' => UserValueKind::STATION, 'name' => 'Q8']);
+        $refueling = RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $car, 'station' => $eni]);
+
+        $this->service()->anonymize($member);
+
+        $this->em()->clear();
+        self::assertSame([], $this->em()->getRepository(UserValue::class)->findBy(['user' => $member->getId()]));
+        $station = $this->em()->find(Refueling::class, $refueling->getId())?->getStation();
+        self::assertSame([$owner->getId(), 'Eni'], [$station?->getUser()->getId(), $station?->getName()]);
     }
 
     public function testAnonymizeKeepsSoloOrgDeletionNextToTransferOnSharedOne(): void
