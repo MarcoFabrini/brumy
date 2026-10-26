@@ -26,9 +26,10 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * @phpstan-import-type StationRecord from FuelStationRepository
  * @phpstan-import-type PricePair from FuelStationRepository
+ * @phpstan-import-type PriceSeries from FuelStationRepository
  *
  * @phpstan-type StationView array{id: int, label: string, brand: string, address: string, city: string, province: string, distanceKm: float|null, prices: PricePair}
- * @phpstan-type FollowedTrend array{valueId: int, name: string, fuelStationId: int, points: list<array{day: string, price: string}>}
+ * @phpstan-type FollowedTrend array{valueId: int, name: string, fuelStationId: int, self: list<array{day: string, price: string}>, served: list<array{day: string, price: string}>}
  */
 final class FuelPrices
 {
@@ -168,8 +169,8 @@ final class FuelPrices
     }
 
     /**
-     * Andamento del prezzo self di un carburante negli ultimi TREND_DAYS giorni, per ogni distributore seguito
-     * dall'utente nell'organizzazione (anche quelli ancora senza prezzi, con `points` vuoto).
+     * Andamento del prezzo self e servito di un carburante negli ultimi TREND_DAYS giorni, per ogni distributore seguito
+     * dall'utente nell'organizzazione (anche quelli ancora senza prezzi, con le serie vuote).
      *
      * @return list<FollowedTrend>
      */
@@ -188,7 +189,7 @@ final class FuelPrices
             'valueId' => (int) $v->getId(),
             'name' => $v->getName(),
             'fuelStationId' => (int) $v->getFuelStationId(),
-            'points' => $history[(int) $v->getFuelStationId()] ?? [],
+            ...($history[(int) $v->getFuelStationId()] ?? ['self' => [], 'served' => []]),
         ], $followed);
     }
 

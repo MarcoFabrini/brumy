@@ -1119,7 +1119,6 @@
     "change_link": "Change station",
     "unlink": "Unlink",
     "follow": "Follow the price",
-    "follow_hint": "The price is kept every day and shown in the chart, on the home page too.",
     "trend_title": "Price trend",
     "followed_title": "Prices of followed stations",
     "trend_fuel": "Chart fuel",

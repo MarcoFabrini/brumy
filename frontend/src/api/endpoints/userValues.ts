@@ -26,8 +26,9 @@ export async function listUserValues(kind: UserValueKind): Promise<ManagedUserVa
   return z.array(managedUserValueSchema).parse(raw);
 }
 
-export async function createUserValue(kind: UserValueKind, name: string): Promise<ManagedUserValue> {
-  const raw = await authFetch<unknown>(`/api/values/${kind}`, jsonInit('POST', { name }));
+/** Nuova voce; con `fuelStationId` un distributore nasce già collegato a quello ufficiale. */
+export async function createUserValue(kind: UserValueKind, name: string, fuelStationId?: number): Promise<ManagedUserValue> {
+  const raw = await authFetch<unknown>(`/api/values/${kind}`, jsonInit('POST', { name, fuelStationId }));
   return managedUserValueSchema.parse(raw);
 }
 

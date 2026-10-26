@@ -24,12 +24,18 @@ export type FuelStation = z.infer<typeof fuelStationSchema>;
 export const fuelPricesStatusSchema = z.object({ enabled: z.boolean(), extractedOn: z.string().nullable() });
 export type FuelPricesStatus = z.infer<typeof fuelPricesStatusSchema>;
 
-/** Un distributore seguito dall'utente con il prezzo self del carburante, giorno per giorno (dal più vecchio). */
+const trendPointsSchema = z.array(z.object({ day: z.string(), price: z.string() }));
+
+/**
+ * Un distributore seguito dall'utente con il prezzo self e servito del carburante, giorno per giorno (dal più vecchio);
+ * GPL e metano hanno quasi sempre solo il servito.
+ */
 export const followedFuelStationSchema = z.object({
   valueId: z.number().int(),
   name: z.string(),
   fuelStationId: z.number().int(),
-  points: z.array(z.object({ day: z.string(), price: z.string() })),
+  self: trendPointsSchema,
+  served: trendPointsSchema,
 });
 export type FollowedFuelStation = z.infer<typeof followedFuelStationSchema>;
 

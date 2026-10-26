@@ -1,66 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Method App\\Controller\\Api\\AttachmentController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/AttachmentController.php
-
-		-
-			message: '#^Parameter \#2 \$userId of method App\\Controller\\Api\\AuthController\:\:buildUniqueSlug\(\) expects int, int\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Controller/Api/AuthController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\ExpenseController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/ExpenseController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\MaintenanceController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/MaintenanceController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\OrganizationController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/OrganizationController.php
-
-		-
-			message: '#^Parameter \#2 \$userId of method App\\Controller\\Api\\OrganizationController\:\:buildUniqueSlug\(\) expects int, int\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Controller/Api/OrganizationController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\PushSubscriptionController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/PushSubscriptionController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\RefuelingController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/RefuelingController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\ReminderController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/ReminderController.php
-
-		-
-			message: '#^Method App\\Controller\\Api\\VehicleController\:\:jsonGroups\(\) has parameter \$groups with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Controller/Api/VehicleController.php
-
-		-
 			message: '#^Property App\\Entity\\Attachment\:\:\$entityId type mapping mismatch\: database can contain int but property expects string\.$#'
 			identifier: doctrine.columnType
 			count: 1
@@ -71,21 +11,3 @@ parameters:
 			identifier: doctrine.columnType
 			count: 1
 			path: src/Entity/Refueling.php
-
-		-
-			message: '#^Method App\\Entity\\User\:\:getUserIdentifier\(\) should return non\-empty\-string but returns string\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Entity/User.php
-
-		-
-			message: '#^Expression on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.expr
-			count: 1
-			path: src/Service/ActiveOrganizationResolver.php
-
-		-
-			message: '#^Parameter \#1 \$cookies of method App\\Tests\\Functional\\Api\\AuthControllerTest\:\:findCookie\(\) expects list\<Symfony\\Component\\HttpFoundation\\Cookie\>, array\<int, Symfony\\Component\\HttpFoundation\\Cookie\> given\.$#'
-			identifier: argument.type
-			count: 2
-			path: tests/Functional/Api/AuthControllerTest.php

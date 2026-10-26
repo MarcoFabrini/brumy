@@ -30,7 +30,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 /**
  * Allegati (immagini + PDF) polimorfici. Upload via multipart, download
@@ -64,7 +63,6 @@ final class AttachmentController extends AbstractController
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentStorageInterface $storage,
         private readonly AttachmentQuota $quota,
-        private readonly SerializerInterface $serializer,
     ) {
     }
 
@@ -100,7 +98,7 @@ final class AttachmentController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $vehicle);
 
         $items = $this->repo->findByEntity($type, $id, $org);
-        return $this->jsonGroups($items, ['attachment:list']);
+        return $this->json($items, context: ['groups' => ['attachment:list']]);
     }
 
     /**
@@ -211,7 +209,7 @@ final class AttachmentController extends AbstractController
                 throw $e;
             }
 
-            return $this->jsonGroups($attachment, ['attachment:read'], 201);
+            return $this->json($attachment, 201, context: ['groups' => ['attachment:read']]);
         });
 
         return $response ?? $this->problem('upload.busy', 429);
@@ -315,10 +313,5 @@ final class AttachmentController extends AbstractController
     private function safeFilename(string $name): string
     {
         return preg_replace('/[\\\\"\r\n]/', '_', $name) ?? 'file';
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
     }
 }

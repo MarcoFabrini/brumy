@@ -5,15 +5,16 @@ import {
   AXIS_STROKE,
   AXIS_TICK,
   GRID_STROKE,
-  LEGEND_STYLE,
   TOOLTIP_CONTENT_STYLE,
   TOOLTIP_CURSOR,
   TOOLTIP_LABEL_STYLE,
+  toggleLegendProps,
 } from './chartTheme';
 import { SPENDING_SERIES as SERIES, hasSpending, type MonthlySpendingRow } from '@/lib/dashboardCharts';
 import { SPENDING_SERIES_SECTIONS, sectionOf } from './vehicleRecordActions';
 import { useFormat } from '@/hooks/useFormat';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { useHiddenSeries } from '@/hooks/useHiddenSeries';
 
 export interface MonthlySpendingChartProps {
   rows: MonthlySpendingRow[];
@@ -26,6 +27,7 @@ export function MonthlySpendingChart({ rows }: MonthlySpendingChartProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
   const reducedMotion = usePrefersReducedMotion();
+  const hidden = useHiddenSeries();
   // Solo le sezioni con una spesa nella finestra: sette voci di legenda vuote non dicono nulla
   const series = SERIES.filter((key) => rows.some((row) => row[key] !== 0));
 
@@ -58,12 +60,13 @@ export function MonthlySpendingChart({ rows }: MonthlySpendingChartProps) {
             labelStyle={TOOLTIP_LABEL_STYLE}
             formatter={(value) => fmt.currency(Number(value))}
           />
-          <Legend wrapperStyle={LEGEND_STYLE} iconSize={10} />
+          <Legend {...toggleLegendProps(hidden.toggle)} />
           {series.map((key) => (
             <Bar
               key={key}
               dataKey={key}
               name={t(section(key).titleKey)}
+              hide={hidden.isHidden(t(section(key).titleKey))}
               stackId="spending"
               fill={section(key).color}
               maxBarSize={32}

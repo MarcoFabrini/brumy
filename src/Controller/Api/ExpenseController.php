@@ -27,7 +27,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'Expense')]
 #[Route('/api/expenses', name: 'api_expenses_')]
@@ -42,7 +41,6 @@ final class ExpenseController extends AbstractController
         private readonly VehicleRepository $vehicleRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
-        private readonly SerializerInterface $serializer,
         private readonly UserValues $values,
         private readonly RecordReminders $recordReminders,
     ) {
@@ -78,7 +76,7 @@ final class ExpenseController extends AbstractController
 
         $section = ExpenseSection::tryFrom((string) $request->query->get('section', ''));
 
-        return $this->jsonGroups($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $section), ['expense:list', 'vehicle:nested', 'user_value:nested']);
+        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $section), context: ['groups' => ['expense:list', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Get(
@@ -91,7 +89,7 @@ final class ExpenseController extends AbstractController
     {
         $e = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $e);
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested']);
+        return $this->json($e, context: ['groups' => ['expense:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Post(
@@ -129,7 +127,7 @@ final class ExpenseController extends AbstractController
         if ($payload->nextDueDate !== null && $payload->nextDueDate !== '') {
             $this->recordReminders->forExpense($e, new \DateTimeImmutable($payload->nextDueDate));
         }
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested'], 201);
+        return $this->json($e, 201, context: ['groups' => ['expense:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Put(
@@ -155,7 +153,7 @@ final class ExpenseController extends AbstractController
             ->setNotes($payload->notes);
 
         $this->em->flush();
-        return $this->jsonGroups($e, ['expense:read', 'vehicle:nested', 'user_value:nested']);
+        return $this->json($e, context: ['groups' => ['expense:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Delete(
@@ -211,10 +209,5 @@ final class ExpenseController extends AbstractController
             throw $this->createNotFoundException('expense.not_found');
         }
         return $e;
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
     }
 }

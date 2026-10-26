@@ -35,6 +35,7 @@ use App\Service\AfterResponseTasks;
 use App\Service\AppMailer;
 use App\Service\LogRedactor;
 use App\Service\MailBuilder;
+use App\Service\OrganizationSlugs;
 use App\Service\UserAvatar;
 use App\Service\RefreshRejection;
 use App\Service\RefreshTokenService;
@@ -66,7 +67,6 @@ use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[OA\Tag(name: 'Auth')]
@@ -94,7 +94,7 @@ final class AuthController extends AbstractController
         private readonly OrganizationInvitationRepository $invitationRepo,
         private readonly AppMailer $mailer,
         private readonly MailBuilder $mailBuilder,
-        private readonly SluggerInterface $slugger,
+        private readonly OrganizationSlugs $orgSlugs,
         private readonly ValidatorInterface $validator,
         private readonly RateLimiterFactory $loginLimiter,
         private readonly RateLimiterFactory $refreshLimiter,
@@ -194,7 +194,7 @@ final class AuthController extends AbstractController
                         ?? sprintf('%s %s', $payload->firstName, $payload->lastName);
                     $org = (new Organization())
                         ->setName($orgName)
-                        ->setSlug($this->buildUniqueSlug($orgName, $user->getId()));
+                        ->setSlug($this->orgSlugs->unique($orgName, $user));
                     $this->em->persist($org);
 
                     $this->em->persist(
@@ -1193,20 +1193,5 @@ final class AuthController extends AbstractController
     private function loginLimiterKey(Request $request, string $email): string
     {
         return 'login-'.strtolower($email).'-'.$request->getClientIp();
-    }
-
-    private function buildUniqueSlug(string $name, int $userId): string
-    {
-        $base = strtolower((string) $this->slugger->slug($name));
-        if ($base === '') {
-            $base = 'workspace';
-        }
-        $candidate = $base;
-        $suffix = 1;
-        while ($this->orgRepo->findOneBySlug($candidate) !== null) {
-            $candidate = $base.'-'.$userId.'-'.$suffix;
-            $suffix++;
-        }
-        return $candidate;
     }
 }

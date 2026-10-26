@@ -51,7 +51,8 @@ function invalidateAfterManagement(qc: QueryClient) {
 export function useCreateUserValue() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ kind, name }: { kind: UserValueKind; name: string }) => createUserValue(kind, name),
+    mutationFn: ({ kind, name, fuelStationId }: { kind: UserValueKind; name: string; fuelStationId?: number }) =>
+      createUserValue(kind, name, fuelStationId),
     onSuccess: () => invalidateAfterManagement(qc),
   });
 }

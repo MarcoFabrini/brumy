@@ -59,8 +59,8 @@ beforeEach(async () => {
     }
     if (String(path).startsWith('/api/fuel-prices/followed')) {
       return [
-        { valueId: 5, name: 'Q8 sotto casa', fuelStationId: 59183, points: [{ day: '2026-10-25', price: '1.729' }] },
-        { valueId: 8, name: 'Eni lavoro', fuelStationId: 1234, points: [{ day: '2026-10-25', price: '1.699' }] },
+        { valueId: 5, name: 'Q8 sotto casa', fuelStationId: 59183, self: [{ day: '2026-10-25', price: '1.729' }], served: [] },
+        { valueId: 8, name: 'Eni lavoro', fuelStationId: 1234, self: [{ day: '2026-10-25', price: '1.699' }], served: [] },
       ];
     }
     return [];

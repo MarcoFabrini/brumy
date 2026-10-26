@@ -26,7 +26,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'Maintenance')]
 #[Route('/api/maintenances', name: 'api_maintenances_')]
@@ -41,7 +40,6 @@ final class MaintenanceController extends AbstractController
         private readonly VehicleRepository $vehicleRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
-        private readonly SerializerInterface $serializer,
         private readonly UserValues $values,
         private readonly Components $components,
         private readonly RecordReminders $recordReminders,
@@ -82,7 +80,7 @@ final class MaintenanceController extends AbstractController
         $category = MaintenanceCategory::tryFrom((string) $request->query->get('category', ''));
 
         $items = $this->repo->findByVehiclePaginated($vehicle, $page, $limit, $category);
-        return $this->jsonGroups($items, ['maintenance:list', 'vehicle:nested']);
+        return $this->json($items, context: ['groups' => ['maintenance:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(
@@ -99,7 +97,7 @@ final class MaintenanceController extends AbstractController
         $m = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $m);
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']);
+        return $this->json($m, context: ['groups' => ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']]);
     }
 
     #[OA\Post(
@@ -141,7 +139,7 @@ final class MaintenanceController extends AbstractController
             $this->recordReminders->forMaintenance($m, new \DateTimeImmutable($payload->nextDueDate));
         }
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested'], 201);
+        return $this->json($m, 201, context: ['groups' => ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']]);
     }
 
     #[OA\Put(
@@ -175,7 +173,7 @@ final class MaintenanceController extends AbstractController
 
         $this->em->flush();
 
-        return $this->jsonGroups($m, ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']);
+        return $this->json($m, context: ['groups' => ['maintenance:read', 'vehicle:nested', 'user_value:nested', 'component:nested']]);
     }
 
     #[OA\Delete(
@@ -201,13 +199,5 @@ final class MaintenanceController extends AbstractController
             throw $this->createNotFoundException('maintenance.not_found');
         }
         return $m;
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse(
-            $this->serializer->serialize($data, 'json', ['groups' => $groups]),
-            $status, [], json: true,
-        );
     }
 }

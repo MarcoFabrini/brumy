@@ -26,7 +26,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'Refueling')]
 #[Route('/api/refuelings', name: 'api_refuelings_')]
@@ -41,7 +40,6 @@ final class RefuelingController extends AbstractController
         private readonly VehicleRepository $vehicleRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly AttachmentCleaner $attachmentCleaner,
-        private readonly SerializerInterface $serializer,
         private readonly UserValues $values,
         private readonly FuelPrices $fuelPrices,
     ) {
@@ -75,7 +73,7 @@ final class RefuelingController extends AbstractController
         $page = min(100_000, max(1, (int) $request->query->get('page', 1)));
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
 
-        return $this->jsonGroups($this->repo->findByVehiclePaginated($vehicle, $page, $limit), ['refueling:list', 'vehicle:nested']);
+        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit), context: ['groups' => ['refueling:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(
@@ -88,7 +86,7 @@ final class RefuelingController extends AbstractController
     {
         $r = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $r);
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested']);
+        return $this->json($r, context: ['groups' => ['refueling:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Post(
@@ -134,7 +132,7 @@ final class RefuelingController extends AbstractController
         // Refresh per popolare total_cost calcolato dal DB
         $this->em->refresh($r);
 
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested'], 201);
+        return $this->json($r, 201, context: ['groups' => ['refueling:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Put(
@@ -171,7 +169,7 @@ final class RefuelingController extends AbstractController
         $this->em->flush();
         $this->em->refresh($r);
 
-        return $this->jsonGroups($r, ['refueling:read', 'vehicle:nested', 'user_value:nested']);
+        return $this->json($r, context: ['groups' => ['refueling:read', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Delete(
@@ -222,10 +220,6 @@ final class RefuelingController extends AbstractController
         return $r;
     }
 
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
-    }
 
     private static function blankToNull(?string $text): ?string
     {

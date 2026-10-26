@@ -1,4 +1,14 @@
+import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
 import { todayIso } from './format';
+
+/**
+ * Self o servito da usare per il prezzo: quello scelto se il distributore ce l'ha, altrimenti l'altro. GPL e metano si
+ * vendono quasi sempre solo al servito, e col self scelto non comparirebbe nessun prezzo.
+ */
+export function pricedMode(prices: FuelStation['prices'], mode: FuelServiceMode): FuelServiceMode {
+  const other = mode === 'self' ? 'served' : 'self';
+  return !prices[mode] && prices[other] ? other : mode;
+}
 
 /**
  * Il prezzo del giorno vale per un rifornimento di oggi o di ieri (il ministero pubblica i prezzi delle 8 e i gestori

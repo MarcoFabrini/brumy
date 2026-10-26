@@ -25,6 +25,7 @@ use App\Service\MemberNotifier;
 use App\Service\MemberRoleChangeException;
 use App\Service\OrganizationMemberRemover;
 use App\Service\OrganizationMemberRoleChanger;
+use App\Service\OrganizationSlugs;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -36,8 +37,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[OA\Tag(name: 'Organization')]
@@ -53,9 +52,8 @@ final class OrganizationController extends AbstractController
         private readonly OrganizationMemberRepository $memberRepo,
         private readonly OrganizationInvitationRepository $invitationRepo,
         private readonly UserRepository $userRepo,
-        private readonly SerializerInterface $serializer,
         private readonly ValidatorInterface $validator,
-        private readonly SluggerInterface $slugger,
+        private readonly OrganizationSlugs $orgSlugs,
         private readonly AppMailer $mailer,
         private readonly MailBuilder $mailBuilder,
         private readonly LoggerInterface $logger,
@@ -78,7 +76,7 @@ final class OrganizationController extends AbstractController
         $user = $this->getUser();
         $memberships = $this->memberRepo->findAllForUser($user);
         $orgs = array_map(static fn (OrganizationMember $m) => $m->getOrganization(), $memberships);
-        return $this->jsonGroups($orgs, ['org:list']);
+        return $this->json($orgs, context: ['groups' => ['org:list']]);
     }
 
     #[OA\Get(
@@ -95,7 +93,7 @@ final class OrganizationController extends AbstractController
     {
         $org = $this->mustFind($id);
         $this->denyAccessUnlessGranted(OrganizationVoter::VIEW, $org);
-        return $this->jsonGroups($org, ['org:read']);
+        return $this->json($org, context: ['groups' => ['org:read']]);
     }
 
     #[OA\Post(
@@ -119,7 +117,7 @@ final class OrganizationController extends AbstractController
 
         $org = (new Organization())
             ->setName($payload->name)
-            ->setSlug($payload->slug ?? $this->buildUniqueSlug($payload->name, $user->getId()));
+            ->setSlug($payload->slug ?? $this->orgSlugs->unique($payload->name, $user));
 
         $errors = $this->validator->validate($org);
         if (count($errors) > 0) {
@@ -142,7 +140,7 @@ final class OrganizationController extends AbstractController
             return $this->fieldProblem('slug', 'org.slug_taken');
         }
 
-        return $this->jsonGroups($org, ['org:read'], 201);
+        return $this->json($org, 201, context: ['groups' => ['org:read']]);
     }
 
     #[OA\Put(
@@ -176,7 +174,7 @@ final class OrganizationController extends AbstractController
             return $this->fieldProblem('slug', 'org.slug_taken'); // stessa corsa della creazione
         }
 
-        return $this->jsonGroups($org, ['org:read']);
+        return $this->json($org, context: ['groups' => ['org:read']]);
     }
 
     #[OA\Delete(
@@ -216,7 +214,7 @@ final class OrganizationController extends AbstractController
         $this->denyAccessUnlessGranted(OrganizationVoter::MANAGE_MEMBERS, $org);
 
         $members = $this->memberRepo->findBy(['organization' => $org], ['createdAt' => 'ASC']);
-        return $this->jsonGroups($members, ['membership:read', 'user:list']);
+        return $this->json($members, context: ['groups' => ['membership:read', 'user:list']]);
     }
 
     #[OA\Get(
@@ -232,7 +230,7 @@ final class OrganizationController extends AbstractController
         $org = $this->mustFind($id);
         $this->denyAccessUnlessGranted(OrganizationVoter::MANAGE_MEMBERS, $org);
 
-        return $this->jsonGroups($this->invitationRepo->findPendingByOrganization($org), ['invitation:read']);
+        return $this->json($this->invitationRepo->findPendingByOrganization($org), context: ['groups' => ['invitation:read']]);
     }
 
     /**
@@ -307,7 +305,7 @@ final class OrganizationController extends AbstractController
             ]);
         }
 
-        return $this->jsonGroups($invitation, ['invitation:read'], 201);
+        return $this->json($invitation, 201, context: ['groups' => ['invitation:read']]);
     }
 
     #[OA\Delete(
@@ -377,7 +375,7 @@ final class OrganizationController extends AbstractController
             $this->memberNotifier->roleChanged($member, $actor);
         }
 
-        return $this->jsonGroups($member, ['membership:read', 'user:list']);
+        return $this->json($member, context: ['groups' => ['membership:read', 'user:list']]);
     }
 
     #[OA\Delete(
@@ -441,25 +439,5 @@ final class OrganizationController extends AbstractController
             throw $this->createNotFoundException('org.not_found');
         }
         return $org;
-    }
-
-    private function buildUniqueSlug(string $name, int $userId): string
-    {
-        $base = strtolower((string) $this->slugger->slug($name));
-        if ($base === '') {
-            $base = 'workspace';
-        }
-        $candidate = $base;
-        $suffix = 1;
-        while ($this->orgRepo->findOneBySlug($candidate) !== null) {
-            $candidate = $base.'-'.$userId.'-'.$suffix;
-            $suffix++;
-        }
-        return $candidate;
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
     }
 }

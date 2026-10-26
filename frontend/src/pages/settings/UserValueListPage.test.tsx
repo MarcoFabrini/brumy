@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -36,6 +36,17 @@ function mockApi() {
   });
 }
 
+const q8 = {
+  id: 59183,
+  label: 'Q8 · Via Emilia Est 1420, Modena',
+  brand: 'Q8',
+  address: 'Via Emilia Est 1420',
+  city: 'Modena',
+  province: 'MO',
+  distanceKm: null,
+  prices: { self: null, served: null },
+};
+
 const writes = () => mockedAuthFetch.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET');
 
 function renderPage(kind: string) {
@@ -63,6 +74,10 @@ describe('UserValueListPage', () => {
     Element.prototype.setPointerCapture = () => undefined;
     Element.prototype.releasePointerCapture = () => undefined;
     Element.prototype.scrollIntoView = () => undefined;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("mostra le voci di un solo tipo con i conteggi d'uso", async () => {
@@ -163,6 +178,35 @@ describe('UserValueListPage', () => {
       expect(writes()).toContainEqual([
         `/api/values/${kind}`,
         expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Nuova' }) }),
+      ]),
+    );
+  });
+
+  it('un nuovo distributore scelto dall\'elenco ufficiale prende il nome e nasce collegato', async () => {
+    const fallback = mockedAuthFetch.getMockImplementation()!;
+    mockedAuthFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/fuel-prices/status') return { enabled: true, extractedOn: '2026-10-25' };
+      if (String(path).startsWith('/api/fuel-prices/search')) return [q8];
+      return fallback(path, init);
+    });
+    // Niente posizione: il foglio passa subito alla ricerca
+    vi.stubGlobal('navigator', { ...navigator, geolocation: undefined });
+    const u = userEvent.setup();
+    renderPage('station');
+
+    await u.click(await screen.findByRole('button', { name: 'Nuovo distributore' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuovo distributore' });
+    await u.click(await within(dialog).findByRole('button', { name: 'Collega a un distributore' }));
+    await u.type(await screen.findByRole('searchbox'), 'q8 modena');
+    await u.click(await screen.findByRole('button', { name: /Q8 · Via Emilia Est 1420/ }));
+
+    expect(within(dialog).getByLabelText(/Nome/)).toHaveValue('Q8 · Via Emilia Est 1420, Modena');
+    await u.click(within(dialog).getByRole('button', { name: 'Salva' }));
+
+    await waitFor(() =>
+      expect(writes()).toContainEqual([
+        '/api/values/station',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Q8 · Via Emilia Est 1420, Modena', fuelStationId: 59183 }) }),
       ]),
     );
   });

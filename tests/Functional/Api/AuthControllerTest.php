@@ -1437,7 +1437,7 @@ final class AuthControllerTest extends ApiTestCase
     }
 
     /**
-     * @param list<\Symfony\Component\HttpFoundation\Cookie> $cookies
+     * @param array<\Symfony\Component\HttpFoundation\Cookie> $cookies
      */
     private function findCookie(array $cookies, string $name): ?\Symfony\Component\HttpFoundation\Cookie
     {

@@ -18,6 +18,7 @@ import type { FuelType } from '@/api/types/vehicle';
 import { useFuelStationSearch, useNearbyFuelStations } from '@/hooks/useFuelPrices';
 import { useFormat } from '@/hooks/useFormat';
 import { requestPosition, type GeoError, type GeoPosition } from '@/lib/geolocation';
+import { pricedMode } from '@/lib/fuelPrice';
 import { cn } from '@/lib/utils';
 
 export interface FuelStationPickerProps {
@@ -191,7 +192,8 @@ function StationList({ title, stations, loading, empty, mode, showPrice, onChoos
   return (
     <ListSection title={title}>
       {stations.map((station) => {
-        const price = station.prices[mode];
+        const shownMode = pricedMode(station.prices, mode);
+        const price = station.prices[shownMode];
         const details = [
           station.distanceKm !== null ? t('fuel_prices.distance', { km: fmt.decimal(station.distanceKm, 1) }) : null,
           showPrice && price ? t('fuel_prices.communicated_on', { date: fmt.date(price.communicatedAt) }) : null,
@@ -206,10 +208,27 @@ function StationList({ title, stations, loading, empty, mode, showPrice, onChoos
             iconClassName="bg-[#ff9500]"
             label={station.label}
             description={details.join(' · ') || undefined}
-            value={showPrice ? (price ? fmt.fuelPrice(price.price) : t('fuel_prices.no_price')) : undefined}
+            value={showPrice ? <StationPrices prices={station.prices} highlight={shownMode} /> : undefined}
           />
         );
       })}
     </ListSection>
+  );
+}
+
+/** Self e servito uno sopra l'altro, in evidenza quello che va nel modulo; GPL e metano hanno quasi solo il servito. */
+function StationPrices({ prices, highlight }: { prices: FuelStation['prices']; highlight: FuelServiceMode }) {
+  const { t } = useTranslation();
+  const fmt = useFormat();
+  const available = (['self', 'served'] as const).filter((m) => prices[m]);
+  if (available.length === 0) return <>{t('fuel_prices.no_price')}</>;
+  return (
+    <span className="flex flex-col items-end text-sm leading-tight">
+      {available.map((m) => (
+        <span key={m} className={cn(m === highlight && 'font-semibold text-foreground')}>
+          {t(`fuel_prices.mode_${m}`)} {fmt.fuelPrice(prices[m]?.price)}
+        </span>
+      ))}
+    </span>
   );
 }

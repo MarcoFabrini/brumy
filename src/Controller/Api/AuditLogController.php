@@ -13,7 +13,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 /**
  * Audit log read-only API per active organization (#3.6).
@@ -27,7 +26,6 @@ final class AuditLogController extends AbstractController
     public function __construct(
         private readonly AuditLogRepository $repo,
         private readonly ActiveOrganizationResolver $orgResolver,
-        private readonly SerializerInterface $serializer,
     ) {
     }
 
@@ -54,9 +52,6 @@ final class AuditLogController extends AbstractController
 
         $logs = $this->repo->findByOrganization($org, $limit, $offset);
 
-        return new JsonResponse(
-            $this->serializer->serialize($logs, 'json', ['groups' => ['audit:read']]),
-            json: true,
-        );
+        return $this->json($logs, context: ['groups' => ['audit:read']]);
     }
 }

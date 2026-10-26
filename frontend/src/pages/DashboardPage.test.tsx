@@ -179,14 +179,25 @@ describe('DashboardPage', () => {
 
   it('mostra l\'andamento dei prezzi dei distributori seguiti, nel carburante dei veicoli', async () => {
     mockApi([vehicle(1, 'owned')], [], [
-      { valueId: 5, name: 'Q8 sotto casa', fuelStationId: 59183, points: [{ day: '2026-10-25', price: '1.729' }] },
-      { valueId: 8, name: 'Eni lavoro', fuelStationId: 1234, points: [{ day: '2026-10-24', price: '1.699' }] },
+      {
+        valueId: 5,
+        name: 'Q8 sotto casa',
+        fuelStationId: 59183,
+        self: [{ day: '2026-10-25', price: '1.729' }],
+        served: [{ day: '2026-10-25', price: '1.899' }],
+      },
+      // Solo servito, come il GPL e il metano quasi ovunque
+      { valueId: 8, name: 'Eni lavoro', fuelStationId: 1234, self: [], served: [{ day: '2026-10-24', price: '1.699' }] },
     ]);
     renderPage();
 
     const table = await screen.findByRole('table', { name: 'Prezzi dei distributori seguiti' });
-    expect(table).toHaveTextContent('Q8 sotto casa');
-    expect(table).toHaveTextContent('Eni lavoro');
+    expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Giorno',
+      'Q8 sotto casa · Self',
+      'Q8 sotto casa · Servito',
+      'Eni lavoro · Servito',
+    ]);
     expect(mockedAuthFetch).toHaveBeenCalledWith('/api/fuel-prices/followed?fuel=diesel');
     expect(screen.getByRole('combobox', { name: 'Carburante del grafico' })).toHaveTextContent('Diesel');
   });

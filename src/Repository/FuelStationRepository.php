@@ -21,6 +21,7 @@ use Doctrine\Persistence\ManagerRegistry;
  *
  * @phpstan-type StationRecord array{id: int, brand: string, name: string, address: string, city: string, province: string, latitude: float|null, longitude: float|null}
  * @phpstan-type PricePair array{self: array{price: string, communicatedAt: string}|null, served: array{price: string, communicatedAt: string}|null}
+ * @phpstan-type PriceSeries array{self: list<array{day: string, price: string}>, served: list<array{day: string, price: string}>}
  *
  * @extends ServiceEntityRepository<FuelStation>
  */
@@ -192,27 +193,29 @@ class FuelStationRepository extends ServiceEntityRepository
     }
 
     /**
-     * Prezzo self di un carburante, giorno per giorno da $since, per ogni distributore richiesto (solo quelli che ne
-     * hanno almeno uno).
+     * Prezzo self e servito di un carburante, giorno per giorno da $since, per ogni distributore richiesto (solo quelli
+     * che ne hanno almeno uno). GPL e metano si vendono quasi sempre al servito.
      *
      * @param list<int> $stationIds
      *
-     * @return array<int, list<array{day: string, price: string}>>
+     * @return array<int, PriceSeries>
      */
     public function history(array $stationIds, FuelType $fuel, \DateTimeImmutable $since): array
     {
         if ($stationIds === []) {
             return [];
         }
-        /** @var list<array{station_id: int|string, day: string, price: string}> $rows */
+        /** @var list<array{station_id: int|string, is_self: int|string, day: string, price: string}> $rows */
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT station_id, day, price FROM fuel_price_history WHERE fuel = ? AND is_self = 1 AND day >= ? AND station_id IN (?) ORDER BY day',
+            'SELECT station_id, is_self, day, price FROM fuel_price_history WHERE fuel = ? AND day >= ? AND station_id IN (?) ORDER BY day',
             [$fuel->value, $since->format('Y-m-d'), $stationIds],
             [2 => ArrayParameterType::INTEGER],
         );
         $history = [];
         foreach ($rows as $row) {
-            $history[(int) $row['station_id']][] = ['day' => $row['day'], 'price' => $row['price']];
+            $id = (int) $row['station_id'];
+            $history[$id] ??= ['self' => [], 'served' => []];
+            $history[$id][(int) $row['is_self'] === 1 ? 'self' : 'served'][] = ['day' => $row['day'], 'price' => $row['price']];
         }
 
         return $history;

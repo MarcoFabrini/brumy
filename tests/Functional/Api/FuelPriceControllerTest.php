@@ -10,6 +10,7 @@ use App\Enum\ShareRole;
 use App\Enum\UserValueKind;
 use App\Message\ImportFuelPricesMessage;
 use App\Repository\FuelStationRepository;
+use App\Repository\UserValueRepository;
 use App\Service\AppClock;
 use App\Service\FuelPrices\FuelPrices;
 use App\Service\UserValues;
@@ -217,6 +218,31 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertNull($this->jsonBody()['fuelStationId']);
     }
 
+    public function testANewStationEntryCanBeLinkedRightAway(): void
+    {
+        [$user, $org, $token] = $this->createAuthenticatedUser();
+        $this->seed();
+
+        $this->jsonRequest('POST', '/api/values/station', ['name' => 'Q8 · Via Emilia Est 1420, Modena', 'fuelStationId' => 1], $token);
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(1, $this->jsonBody()['fuelStationId']);
+        self::assertSame(1, static::getContainer()->get(UserValueRepository::class)
+            ->findOneInList($user, $org, UserValueKind::STATION, UserValue::keyOf('Q8 · Via Emilia Est 1420, Modena'))?->getFuelStationId());
+
+        $this->jsonRequest('POST', '/api/values/station', ['name' => 'Fantasma', 'fuelStationId' => 99], $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('fuel_prices.station_not_found', $this->jsonBody()['errors'][0]['message']);
+
+        $this->jsonRequest('POST', '/api/values/shop', ['name' => 'Ricambi Bianchi', 'fuelStationId' => 1], $token);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('user_value.not_a_station', $this->jsonBody()['errors'][0]['message']);
+
+        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        self::assertNotContains('Fantasma', array_column($this->rows(), 'name'), 'un collegamento rifiutato non crea la voce');
+        $this->jsonRequest('GET', '/api/values/shop', accessToken: $token);
+        self::assertNotContains('Ricambi Bianchi', array_column($this->rows(), 'name'));
+    }
+
     public function testOnlyStationEntriesCanBeLinked(): void
     {
         [$user, $org, $token] = $this->createAuthenticatedUser();
@@ -328,6 +354,8 @@ final class FuelPriceControllerTest extends ApiTestCase
             ]);
         }
         $connection->insert('fuel_price_history', ['station_id' => 1, 'fuel' => 'diesel', 'is_self' => 0, 'price' => '1.899', 'day' => $today->format('Y-m-d')]);
+        // Il GPL del distributore 2 è solo al servito, come quasi ovunque
+        $connection->insert('fuel_price_history', ['station_id' => 2, 'fuel' => 'lpg', 'is_self' => 0, 'price' => '0.749', 'day' => $today->format('Y-m-d')]);
 
         $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=diesel', accessToken: $token);
 
@@ -335,15 +363,23 @@ final class FuelPriceControllerTest extends ApiTestCase
         $rows = $this->rows();
         // Per nome, solo i seguiti dell'utente; senza prezzi del carburante resta, con la serie vuota
         self::assertSame(['Agip lavoro', 'Q8 sotto casa'], array_column($rows, 'name'));
-        self::assertSame([['day' => $today->modify('-3 days')->format('Y-m-d'), 'price' => '1.690']], $rows[0]['points']);
+        self::assertSame([['day' => $today->modify('-3 days')->format('Y-m-d'), 'price' => '1.690']], $rows[0]['self']);
+        self::assertSame([], $rows[0]['served']);
         self::assertSame([
             ['day' => $today->modify('-29 days')->format('Y-m-d'), 'price' => '1.700'],
             ['day' => $today->format('Y-m-d'), 'price' => '1.720'],
-        ], $rows[1]['points']);
+        ], $rows[1]['self']);
+        self::assertSame([['day' => $today->format('Y-m-d'), 'price' => '1.899']], $rows[1]['served']);
         self::assertSame(1, $rows[1]['fuelStationId']);
 
+        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=lpg', accessToken: $token);
+        $rows = $this->rows();
+        self::assertSame([], $rows[0]['self']);
+        self::assertSame([['day' => $today->format('Y-m-d'), 'price' => '0.749']], $rows[0]['served']);
+
         $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=gasoline', accessToken: $token);
-        self::assertSame([[], []], array_column($this->rows(), 'points'));
+        self::assertSame([[], []], array_column($this->rows(), 'self'));
+        self::assertSame([[], []], array_column($this->rows(), 'served'));
 
         foreach (['', 'hybrid', 'electric', 'kerosene'] as $fuel) {
             $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel='.$fuel, accessToken: $token);

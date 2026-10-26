@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Dto\Request\UserValueCreateRequest;
 use App\Dto\Request\UserValueFollowPriceRequest;
 use App\Dto\Request\UserValueFuelStationRequest;
 use App\Dto\Request\UserValueMergeRequest;
@@ -11,6 +12,7 @@ use App\Dto\Request\UserValueNameRequest;
 use App\Entity\User;
 use App\Entity\UserValue;
 use App\Enum\UserValueKind;
+use App\Repository\FuelStationRepository;
 use App\Repository\UserValueRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
@@ -45,6 +47,7 @@ final class UserValueController extends AbstractController
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly UserValues $values,
         private readonly FuelPrices $fuelPrices,
+        private readonly FuelStationRepository $fuelStations,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -108,7 +111,10 @@ final class UserValueController extends AbstractController
     #[OA\Post(
         summary: 'Add an entry to the authenticated user\'s list',
         parameters: [new OA\Parameter(name: 'kind', in: 'path', required: true, schema: new OA\Schema(type: 'string', enum: ['station', 'workshop', 'shop', 'expense_category', 'tax_type', 'insurer']))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'name', type: 'string', maxLength: 200)], type: 'object')),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [
+            new OA\Property(property: 'name', type: 'string', maxLength: 200),
+            new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true, description: 'Stations only: MIMIT fuel station to link the new entry to'),
+        ], type: 'object')),
         responses: [
             new OA\Response(response: 201, description: 'Created', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'id', type: 'integer'),
@@ -117,11 +123,11 @@ final class UserValueController extends AbstractController
                 new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
                 new OA\Property(property: 'followsPrice', type: 'boolean', description: 'Stations only: its daily price is kept for the price trend'),
             ], type: 'object')),
-            new OA\Response(response: 422, description: 'validation_failed / user_value.name_taken'),
+            new OA\Response(response: 422, description: 'validation_failed / user_value.name_taken / user_value.not_a_station / fuel_prices.station_not_found'),
         ],
     )]
     #[Route('/values/{kind}', name: 'create', methods: ['POST'], requirements: ['kind' => self::KIND])]
-    public function create(UserValueKind $kind, #[MapRequestPayload] UserValueNameRequest $payload): JsonResponse
+    public function create(UserValueKind $kind, #[MapRequestPayload] UserValueCreateRequest $payload): JsonResponse
     {
         $org = $this->orgResolver->resolve();
         $user = $this->currentUser();
@@ -131,7 +137,18 @@ final class UserValueController extends AbstractController
         if ($this->repo->findOneInList($user, $org, $kind, UserValue::keyOf($payload->name)) !== null) {
             return $this->fieldProblem('name', 'user_value.name_taken');
         }
+        // Controllato prima di creare: un collegamento rifiutato non lascia una voce a metà
+        if ($payload->fuelStationId !== null && $kind !== UserValueKind::STATION) {
+            return $this->fieldProblem('fuelStationId', 'user_value.not_a_station');
+        }
+        if ($payload->fuelStationId !== null && !$this->fuelStations->exists($payload->fuelStationId)) {
+            return $this->fieldProblem('fuelStationId', 'fuel_prices.station_not_found');
+        }
         $value = $this->values->findOrCreate($user, $org, $kind, $payload->name);
+        if ($payload->fuelStationId !== null) {
+            $this->fuelPrices->link($value, $payload->fuelStationId);
+            $this->em->flush();
+        }
 
         return new JsonResponse($this->present($value, 0), 201);
     }

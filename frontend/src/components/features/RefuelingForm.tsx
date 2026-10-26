@@ -30,7 +30,7 @@ import { useValueSuggestions } from '@/hooks/useUserValues';
 import { useVehicle } from '@/hooks/useVehicles';
 import { useFormat } from '@/hooks/useFormat';
 import { todayIso } from '@/lib/format';
-import { isRecentForFuelPrice, sameValueName } from '@/lib/fuelPrice';
+import { isRecentForFuelPrice, pricedMode, sameValueName } from '@/lib/fuelPrice';
 import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
 import { fuelPriceKeys, useFuelPricesStatus, useFuelStation } from '@/hooks/useFuelPrices';
 import { FuelModeToggle, FuelStationPicker } from './FuelStationPicker';
@@ -146,7 +146,9 @@ export function RefuelingForm({
   const linkedStationId =
     pickedStationId ?? stations.data?.find((s) => s.fuelStationId && sameValueName(s.name, stationName ?? ''))?.fuelStationId ?? null;
   const priceStation = useFuelStation(pricesEnabled && isRecentForFuelPrice(refueledAt) ? linkedStationId : null, fuelType);
-  const proposal = priceStation.data?.prices[mode] ?? null;
+  const stationPrices = priceStation.data?.prices;
+  const priceMode = stationPrices ? pricedMode(stationPrices, mode) : mode;
+  const proposal = stationPrices?.[priceMode] ?? null;
 
   useEffect(() => {
     if (!proposal) return;
@@ -256,7 +258,7 @@ export function RefuelingForm({
               ? t('fuel_prices.proposed', { date: fmt.date(proposal.communicatedAt) })
               : t('fuel_prices.no_price_for_fuel')}
           </Text>
-          <FuelModeToggle mode={mode} onChange={setMode} compact />
+          <FuelModeToggle mode={priceMode} onChange={setMode} compact />
         </div>
       )}
 

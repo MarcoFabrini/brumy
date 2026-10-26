@@ -36,7 +36,6 @@ use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[OA\Tag(name: 'Vehicle')]
@@ -54,7 +53,6 @@ final class VehicleController extends AbstractController
         private readonly OrganizationMemberRepository $memberRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly VehicleAccessChecker $access,
-        private readonly SerializerInterface $serializer,
         private readonly NormalizerInterface $normalizer,
         private readonly ValidatorInterface $validator,
         private readonly VehicleStatsService $stats,
@@ -387,7 +385,7 @@ final class VehicleController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::SHARE, $vehicle);
 
         // Solo nomi (gruppo user:name): le email dei colleghi le vede solo chi gestisce i membri dell'organizzazione.
-        return $this->jsonGroups($this->shareRepo->findByVehicle($vehicle), ['share:read', 'user:name']);
+        return $this->json($this->shareRepo->findByVehicle($vehicle), context: ['groups' => ['share:read', 'user:name']]);
     }
 
     #[OA\Get(
@@ -486,7 +484,7 @@ final class VehicleController extends AbstractController
         }
         $this->em->flush();
 
-        return $this->jsonGroups($created, ['share:read', 'user:name'], 201);
+        return $this->json($created, 201, context: ['groups' => ['share:read', 'user:name']]);
     }
 
     #[OA\Delete(
@@ -683,15 +681,5 @@ final class VehicleController extends AbstractController
             throw $this->createNotFoundException('vehicle.not_found');
         }
         return $vehicle;
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse(
-            $this->serializer->serialize($data, 'json', ['groups' => $groups]),
-            $status,
-            [],
-            json: true,
-        );
     }
 }

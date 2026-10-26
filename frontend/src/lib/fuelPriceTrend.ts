@@ -1,4 +1,4 @@
-import type { FollowedFuelStation } from '@/api/types/fuelPrice';
+import type { FollowedFuelStation, FuelServiceMode } from '@/api/types/fuelPrice';
 import type { FuelType, Vehicle } from '@/api/types/vehicle';
 
 /** I carburanti base di cui il ministero pubblica i prezzi: le scelte del grafico dell'andamento. */
@@ -26,21 +26,30 @@ export function defaultTrendFuel(vehicles: Pick<Vehicle, 'fuelType' | 'ownership
   return best;
 }
 
+export const SERVICE_MODES = ['self', 'served'] as const satisfies readonly FuelServiceMode[];
+
+/** Una linea del grafico: il prezzo self o servito di un distributore. */
+export function seriesKey(valueId: number, mode: FuelServiceMode): string {
+  return `${valueId}:${mode}`;
+}
+
 export interface TrendRow {
   day: string;
   label: string;
-  /** Prezzo €/l per `valueId`; manca se quel giorno il distributore non ha prezzo. */
-  values: Record<number, number>;
+  /** Prezzo €/l per {@link seriesKey}; manca se quel giorno la serie non ha prezzo. */
+  values: Record<string, number>;
 }
 
-/** Una riga per giorno con un prezzo di almeno un distributore, dal più vecchio. */
+/** Una riga per giorno con un prezzo di almeno una serie, dal più vecchio. */
 export function toTrendRows(stations: FollowedFuelStation[], formatDay: (iso: string) => string): TrendRow[] {
-  const byDay = new Map<string, Record<number, number>>();
+  const byDay = new Map<string, Record<string, number>>();
   for (const station of stations) {
-    for (const point of station.points) {
-      const values = byDay.get(point.day) ?? {};
-      values[station.valueId] = Number.parseFloat(point.price);
-      byDay.set(point.day, values);
+    for (const mode of SERVICE_MODES) {
+      for (const point of station[mode]) {
+        const values = byDay.get(point.day) ?? {};
+        values[seriesKey(station.valueId, mode)] = Number.parseFloat(point.price);
+        byDay.set(point.day, values);
+      }
     }
   }
   return [...byDay.keys()].sort().map((day) => ({ day, label: formatDay(day), values: byDay.get(day) ?? {} }));

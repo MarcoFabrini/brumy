@@ -20,7 +20,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'PushSubscription')]
 #[Route('/api/push-subscriptions', name: 'api_push_subscriptions_')]
@@ -35,7 +34,6 @@ final class PushSubscriptionController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PushSubscriptionRepository $repo,
-        private readonly SerializerInterface $serializer,
         private readonly WebPushSender $pushSender,
     ) {
     }
@@ -60,7 +58,7 @@ final class PushSubscriptionController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
-        return $this->jsonGroups($this->repo->findActiveForUser($user), ['push:list']);
+        return $this->json($this->repo->findActiveForUser($user), context: ['groups' => ['push:list']]);
     }
 
     /**
@@ -100,7 +98,7 @@ final class PushSubscriptionController extends AbstractController
         $this->em->persist($sub);
         $this->em->flush();
 
-        return $this->jsonGroups($sub, ['push:read'], 201);
+        return $this->json($sub, 201, context: ['groups' => ['push:read']]);
     }
 
     /**
@@ -165,10 +163,6 @@ final class PushSubscriptionController extends AbstractController
             ->setAuthSecret($payload->authSecret);
     }
 
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
-    }
 
     private function createBadRequest(string $title): \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
     {

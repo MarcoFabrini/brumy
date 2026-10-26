@@ -5,14 +5,15 @@ import {
   AXIS_STROKE,
   AXIS_TICK,
   GRID_STROKE,
-  LEGEND_STYLE,
   TOOLTIP_CONTENT_STYLE,
   TOOLTIP_LABEL_STYLE,
   chartColor,
+  toggleLegendProps,
 } from './chartTheme';
 import { hasConsumption, type ConsumptionRow } from '@/lib/dashboardCharts';
 import { useFormat } from '@/hooks/useFormat';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { useHiddenSeries } from '@/hooks/useHiddenSeries';
 
 export interface ConsumptionTrendChartProps {
   rows: ConsumptionRow[];
@@ -28,6 +29,7 @@ export function ConsumptionTrendChart({ rows, fuelTypes }: ConsumptionTrendChart
   const { t } = useTranslation();
   const fmt = useFormat();
   const reducedMotion = usePrefersReducedMotion();
+  const series = useHiddenSeries();
   const unit = t('dashboard.charts.unit_km_per_liter');
   const fuelName = (fuel: string) => t(`vehicle.fuel.${fuel}`, { defaultValue: fuel });
   const noValue = t('dashboard.charts.table.no_value');
@@ -65,13 +67,14 @@ export function ConsumptionTrendChart({ rows, fuelTypes }: ConsumptionTrendChart
             labelStyle={TOOLTIP_LABEL_STYLE}
             formatter={(value) => (value == null ? '—' : `${fmt.decimal(Number(value), 2)} ${unit}`)}
           />
-          <Legend wrapperStyle={LEGEND_STYLE} iconSize={10} />
+          <Legend {...toggleLegendProps(series.toggle)} />
           {fuelTypes.map((fuel, i) => (
             <Line
               key={fuel}
               type="monotone"
               dataKey={(row: ConsumptionRow) => row.values[fuel]}
               name={fuelName(fuel)}
+              hide={series.isHidden(fuelName(fuel))}
               stroke={chartColor(i)}
               strokeWidth={2}
               dot={{ r: 3, fill: chartColor(i) }}

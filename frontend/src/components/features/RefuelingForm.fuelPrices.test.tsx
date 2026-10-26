@@ -144,6 +144,39 @@ describe('RefuelingForm — prezzi del carburante', () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ station: 'Q8 · Via Emilia Est 1420, Modena', fuelStationId: 59183, refueledAt: todayIso() });
   });
 
+  it('il GPL solo al servito: nei vicini mostra entrambi i prezzi e propone il servito', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: {
+        getCurrentPosition: (ok: PositionCallback) => ok({ coords: { latitude: 44.6471, longitude: 10.9252 } } as GeolocationPosition),
+      },
+    });
+    const fallback = mockedAuthFetch.getMockImplementation()!;
+    mockedAuthFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/vehicles/7') return { ...(await fallback(path, init)), fuelType: 'lpg' };
+      if (String(path).startsWith('/api/fuel-prices/nearby')) {
+        return [station(700, 'Eni · Via Giardini 300, Modena', null, '0.749', 1.2), station(701, 'Q8 · Via Emilia 5, Modena', '0.719', '0.739', 1.5)];
+      }
+      return fallback(path, init);
+    });
+    const user = userEvent.setup();
+    renderForm({ defaultFuelType: 'lpg' });
+
+    await user.click(await screen.findByRole('button', { name: /Distributori vicini/ }));
+    const eni = await screen.findByRole('button', { name: /Eni · Via Giardini 300/ });
+    expect(eni).toHaveTextContent('Servito 0,749');
+    expect(eni).not.toHaveTextContent('Self');
+    const q8 = screen.getByRole('button', { name: /Q8 · Via Emilia 5/ });
+    expect(q8).toHaveTextContent('Self 0,719');
+    expect(q8).toHaveTextContent('Servito 0,739');
+
+    await user.click(eni);
+
+    expect(mockedAuthFetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/fuel-prices\/nearby\?.*fuel=lpg$/));
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('0.749'));
+    expect(screen.getByRole('button', { name: 'Servito', pressed: true })).toBeInTheDocument();
+  });
+
   it('senza posizione propone la ricerca per nome', async () => {
     vi.stubGlobal('navigator', {
       ...navigator,

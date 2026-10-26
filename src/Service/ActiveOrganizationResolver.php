@@ -81,7 +81,7 @@ final class ActiveOrganizationResolver
         }
         $raw = $token->getCredentials();
         try {
-            return $this->jwtManager->parse($raw) ?? [];
+            return $this->jwtManager->parse($raw);
         } catch (\Throwable) {
             return [];
         }

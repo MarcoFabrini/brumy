@@ -119,16 +119,20 @@ final class FuelPriceController extends AbstractController
     }
 
     #[OA\Get(
-        summary: 'Daily self price of a fuel over the last 30 days, for each station the user follows in the active organization',
+        summary: 'Daily self and served price of a fuel over the last 30 days, for each station the user follows in the active organization',
         parameters: [new OA\Parameter(name: 'fuel', in: 'query', required: true, schema: new OA\Schema(type: 'string', enum: ['gasoline', 'diesel', 'lpg', 'cng']))],
         responses: [
             new OA\Response(response: 200, description: 'Followed stations, by name', content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
                 new OA\Property(property: 'valueId', type: 'integer', description: 'The station entry of the user\'s list'),
                 new OA\Property(property: 'name', type: 'string'),
                 new OA\Property(property: 'fuelStationId', type: 'integer'),
-                new OA\Property(property: 'points', type: 'array', description: 'Oldest first; empty when the station has no price for the fuel', items: new OA\Items(properties: [
+                new OA\Property(property: 'self', type: 'array', description: 'Self-service price, oldest first; empty when the station has none for the fuel', items: new OA\Items(properties: [
                     new OA\Property(property: 'day', type: 'string', format: 'date'),
                     new OA\Property(property: 'price', type: 'string', example: '1.729'),
+                ], type: 'object')),
+                new OA\Property(property: 'served', type: 'array', description: 'Served price, same shape (LPG and CNG are mostly served only)', items: new OA\Items(properties: [
+                    new OA\Property(property: 'day', type: 'string', format: 'date'),
+                    new OA\Property(property: 'price', type: 'string', example: '1.899'),
                 ], type: 'object')),
             ], type: 'object'))),
             new OA\Response(response: 400, description: 'fuel_prices.invalid_query'),

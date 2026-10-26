@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { MapPin } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -16,12 +17,16 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Text,
 } from '@/components/ui';
 import { ApiError } from '@/api/client';
+import type { FuelStation } from '@/api/types/fuelPrice';
 import type { ManagedUserValue, UserValueKind } from '@/api/types/userValue';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogFormActions } from './DialogFormActions';
 import { FuelStationLink } from './FuelStationLink';
+import { FuelStationPicker } from './FuelStationPicker';
+import { useFuelPricesStatus } from '@/hooks/useFuelPrices';
 import { useToast } from '@/hooks/useToast';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useFieldErrorMessage } from '@/hooks/useFieldErrorMessage';
@@ -62,6 +67,8 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
 
   const form = useForm<FormData>({ defaultValues: { name: value?.name ?? '' } });
   const [mergeIntoId, setMergeIntoId] = useState('');
+  // Nuovo distributore scelto dall'elenco ufficiale: nasce già collegato
+  const [picked, setPicked] = useState<FuelStation | null>(null);
   const [confirm, setConfirm] = useState<'merge' | 'delete' | null>(null);
 
   // Il form riparte dalla voce corrente a ogni apertura.
@@ -69,6 +76,7 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
     if (open) {
       form.reset({ name: value?.name ?? '' });
       setMergeIntoId('');
+      setPicked(null);
       setConfirm(null);
     }
     // Solo al cambio di `open`: `value` si aggiorna anche dopo il salvataggio.
@@ -95,7 +103,7 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
       form.setError('name', { message: 'values.name_required' });
       return;
     }
-    if (!value) create.mutate({ kind, name: trimmed }, { onSuccess: done, onError });
+    if (!value) create.mutate({ kind, name: trimmed, fuelStationId: picked?.id }, { onSuccess: done, onError });
     else if (trimmed === value.name) done();
     else rename.mutate({ id: value.id, name: trimmed }, { onSuccess: done, onError });
   }
@@ -110,6 +118,18 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
           </DialogHeader>
 
           <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
+            {!value && kind === 'station' && (
+              <NewStationLink
+                picked={picked}
+                onPick={(station) => {
+                  setPicked(station);
+                  if (station) {
+                    form.setValue('name', station.label, { shouldDirty: true });
+                    form.clearErrors('name');
+                  }
+                }}
+              />
+            )}
             <FormField label={t('values.name')} error={tErr(errors.name?.message)} required>
               {(id) => <Input id={id} maxLength={200} invalid={!!errors.name} {...form.register('name')} />}
             </FormField>
@@ -186,5 +206,38 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
         />
       )}
     </>
+  );
+}
+
+/**
+ * Scelta del distributore ufficiale per una voce nuova: il nome si compila dall'etichetta (si può ancora cambiare)
+ * e la voce si crea già collegata. Niente se l'istanza ha spento i prezzi.
+ */
+function NewStationLink({ picked, onPick }: { picked: FuelStation | null; onPick: (station: FuelStation | null) => void }) {
+  const { t } = useTranslation();
+  const status = useFuelPricesStatus();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  if (status.data?.enabled !== true) return null;
+
+  return (
+    <div className="space-y-2">
+      <Label>{t('fuel_prices.linked_station')}</Label>
+      <Text variant={picked ? undefined : 'muted'} className="text-sm">
+        {picked ? picked.label : t('fuel_prices.not_linked')}
+      </Text>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" className="flex-1" onClick={() => setPickerOpen(true)}>
+          <MapPin aria-hidden="true" className="size-4" />
+          {picked ? t('fuel_prices.change_link') : t('fuel_prices.link')}
+        </Button>
+        {picked && (
+          <Button type="button" variant="ghost" onClick={() => onPick(null)}>
+            {t('fuel_prices.unlink')}
+          </Button>
+        )}
+      </div>
+      <FuelStationPicker open={pickerOpen} onOpenChange={setPickerOpen} onSelect={onPick} />
+    </div>
   );
 }

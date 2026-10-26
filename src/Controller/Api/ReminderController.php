@@ -28,7 +28,6 @@ use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[OA\Tag(name: 'Reminder')]
 #[Route('/api/reminders', name: 'api_reminders_')]
@@ -45,7 +44,6 @@ final class ReminderController extends AbstractController
         private readonly AttachmentCleaner $attachmentCleaner,
         private readonly ReminderCompletion $completion,
         private readonly AppClock $clock,
-        private readonly SerializerInterface $serializer,
         private readonly NormalizerInterface $normalizer,
         private readonly ReminderOverview $overview,
     ) {
@@ -73,7 +71,7 @@ final class ReminderController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $vehicle);
 
         $onlyActive = filter_var($request->query->get('onlyActive', 'true'), FILTER_VALIDATE_BOOLEAN);
-        return $this->jsonGroups($this->repo->findByVehicle($vehicle, $onlyActive), ['reminder:list', 'vehicle:nested']);
+        return $this->json($this->repo->findByVehicle($vehicle, $onlyActive), context: ['groups' => ['reminder:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(
@@ -98,7 +96,7 @@ final class ReminderController extends AbstractController
         // Solo i veicoli propri, anche per owner/admin dell'org: le scadenze altrui (o di un
         // veicolo condiviso in sola lettura) non sono affar suo.
         $reminders = $this->repo->findUpcomingForOwner($org, $user, $days, $limit);
-        return $this->jsonGroups($reminders, ['reminder:list', 'vehicle:nested']);
+        return $this->json($reminders, context: ['groups' => ['reminder:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(
@@ -130,7 +128,7 @@ final class ReminderController extends AbstractController
     {
         $r = $this->mustFind($id);
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $r);
-        return $this->jsonGroups($r, ['reminder:read', 'vehicle:nested']);
+        return $this->json($r, context: ['groups' => ['reminder:read', 'vehicle:nested']]);
     }
 
     #[OA\Post(
@@ -165,7 +163,7 @@ final class ReminderController extends AbstractController
 
         $this->em->persist($r);
         $this->em->flush();
-        return $this->jsonGroups($r, ['reminder:read', 'vehicle:nested'], 201);
+        return $this->json($r, 201, context: ['groups' => ['reminder:read', 'vehicle:nested']]);
     }
 
     #[OA\Put(
@@ -196,7 +194,7 @@ final class ReminderController extends AbstractController
             ->setRecurrenceKm($payload->recurrenceKm);
 
         $this->em->flush();
-        return $this->jsonGroups($r, ['reminder:read', 'vehicle:nested']);
+        return $this->json($r, context: ['groups' => ['reminder:read', 'vehicle:nested']]);
     }
 
     #[OA\Post(
@@ -238,7 +236,7 @@ final class ReminderController extends AbstractController
             return $this->problem('reminder.already_completed', 409);
         }
 
-        return $this->jsonGroups(['completed' => $r, 'next' => $next], ['reminder:read', 'vehicle:nested']);
+        return $this->json(['completed' => $r, 'next' => $next], context: ['groups' => ['reminder:read', 'vehicle:nested']]);
     }
 
     #[OA\Delete(
@@ -262,10 +260,5 @@ final class ReminderController extends AbstractController
             throw $this->createNotFoundException('reminder.not_found');
         }
         return $r;
-    }
-
-    private function jsonGroups(mixed $data, array $groups, int $status = 200): JsonResponse
-    {
-        return new JsonResponse($this->serializer->serialize($data, 'json', ['groups' => $groups]), $status, [], json: true);
     }
 }

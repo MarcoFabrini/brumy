@@ -25,7 +25,6 @@ export function FuelStationLink({ value }: { value: ManagedUserValue }) {
   const follow = useFollowFuelPrice();
   const [pickerOpen, setPickerOpen] = useState(false);
   const followLabelId = useId();
-  const followHintId = useId();
 
   if (status.data?.enabled !== true) return null;
 
@@ -51,18 +50,12 @@ export function FuelStationLink({ value }: { value: ManagedUserValue }) {
       </div>
       {value.fuelStationId && (
         <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="min-w-0">
-            <Label id={followLabelId}>{t('fuel_prices.follow')}</Label>
-            <Text id={followHintId} variant="muted" className="text-sm">
-              {t('fuel_prices.follow_hint')}
-            </Text>
-          </div>
+          <Label id={followLabelId}>{t('fuel_prices.follow')}</Label>
           <Switch
             checked={value.followsPrice}
             disabled={follow.isPending || link.isPending}
             onCheckedChange={(checked) => follow.mutate({ id: value.id, follow: checked }, { onError })}
             aria-labelledby={followLabelId}
-            aria-describedby={followHintId}
           />
         </div>
       )}
