@@ -1,4 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { MapPin } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +30,10 @@ import { useValueSuggestions } from '@/hooks/useUserValues';
 import { useVehicle } from '@/hooks/useVehicles';
 import { useFormat } from '@/hooks/useFormat';
 import { todayIso } from '@/lib/format';
+import { isRecentForFuelPrice, sameValueName } from '@/lib/fuelPrice';
+import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
+import { fuelPriceKeys, useFuelPricesStatus, useFuelStation } from '@/hooks/useFuelPrices';
+import { FuelModeToggle, FuelStationPicker } from './FuelStationPicker';
 import { parseDecimal } from '@/lib/decimal';
 
 export interface RefuelingFormProps {
@@ -67,6 +73,7 @@ export function RefuelingForm({
     fuelType: defaultValues?.fuelType ?? defaultFuelType,
     fullTank: defaultValues?.fullTank ?? true,
     station: defaultValues?.station ?? null,
+    fuelStationId: null,
     description: defaultValues?.description ?? null,
     notes: defaultValues?.notes ?? null,
   };
@@ -123,6 +130,41 @@ export function RefuelingForm({
   }, [vehicleId, form]);
 
   const stations = useValueSuggestions(vehicleId, 'station');
+
+  // Prezzo proposto dal distributore: scelto dai vicini/dalla ricerca (fuelStationId) o voce dell'elenco collegata.
+  // Solo per un rifornimento di oggi o di ieri, e mai sopra un prezzo scritto dall'utente.
+  const queryClient = useQueryClient();
+  const fuelPrices = useFuelPricesStatus();
+  const pricesEnabled = fuelPrices.data?.enabled === true;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [mode, setMode] = useState<FuelServiceMode>('self');
+  /** L'ultimo prezzo messo da qui: finché il campo vale questo, l'utente non l'ha toccato e si può aggiornare. */
+  const proposedPrice = useRef<string | null>(null);
+  const stationName = useWatch({ control: form.control, name: 'station' });
+  const pickedStationId = useWatch({ control: form.control, name: 'fuelStationId' });
+  const refueledAt = useWatch({ control: form.control, name: 'refueledAt' });
+  const linkedStationId =
+    pickedStationId ?? stations.data?.find((s) => s.fuelStationId && sameValueName(s.name, stationName ?? ''))?.fuelStationId ?? null;
+  const priceStation = useFuelStation(pricesEnabled && isRecentForFuelPrice(refueledAt) ? linkedStationId : null, fuelType);
+  const proposal = priceStation.data?.prices[mode] ?? null;
+
+  useEffect(() => {
+    if (!proposal) return;
+    const current = form.getValues('pricePerLiter');
+    if (current === '' || current === proposedPrice.current) {
+      form.setValue('pricePerLiter', proposal.price, { shouldValidate: !!form.formState.errors.pricePerLiter });
+      proposedPrice.current = proposal.price;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal?.price]);
+
+  function pickStation(station: FuelStation) {
+    // Il foglio ha già i prezzi: niente seconda richiesta per lo stesso distributore
+    queryClient.setQueryData(fuelPriceKeys.station(station.id, fuelType), station);
+    form.setValue('station', station.label, { shouldDirty: true });
+    form.setValue('fuelStationId', station.id);
+  }
+
   const errors = form.formState.errors;
   const tErr = (key: string | undefined) =>
     key ? t(`errors.${key}`, { defaultValue: key }) : undefined;
@@ -207,6 +249,17 @@ export function RefuelingForm({
         </FormField>
       </div>
 
+      {priceStation.data && (
+        <div className="flex items-center justify-between gap-3">
+          <Text variant="muted" className="text-xs">
+            {proposal
+              ? t('fuel_prices.proposed', { date: fmt.date(proposal.communicatedAt) })
+              : t('fuel_prices.no_price_for_fuel')}
+          </Text>
+          <FuelModeToggle mode={mode} onChange={setMode} compact />
+        </div>
+      )}
+
       {computedTotal !== null && (
         <Text variant="muted" className="text-right">
           {t('refueling.total_cost')}: <span className="font-semibold text-foreground">{fmt.currency(computedTotal)}</span>
@@ -223,7 +276,11 @@ export function RefuelingForm({
                 ref={field.ref}
                 id={id}
                 value={field.value ?? ''}
-                onChange={(v) => field.onChange(v === '' ? null : v)}
+                onChange={(v) => {
+                  field.onChange(v === '' ? null : v);
+                  // Scritto a mano: non è più il distributore scelto dalla lista dei prezzi
+                  form.setValue('fuelStationId', null);
+                }}
                 onBlur={field.onBlur}
                 suggestions={(stations.data ?? []).map((s) => s.name)}
                 invalid={!!errors.station}
@@ -233,6 +290,23 @@ export function RefuelingForm({
           />
         )}
       </FormField>
+
+      {pricesEnabled && (
+        <>
+          <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setPickerOpen(true)}>
+            <MapPin aria-hidden="true" className="size-4" />
+            {t('fuel_prices.open_picker')}
+          </Button>
+          <FuelStationPicker
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            onSelect={pickStation}
+            fuel={fuelType}
+            mode={mode}
+            onModeChange={setMode}
+          />
+        </>
+      )}
 
       {/* Interruttore iOS in una cella, come i campi: tocca la riga o l'interruttore. */}
       <Controller

@@ -35,6 +35,14 @@ export function formatCurrency(amount: string | number | null | undefined, local
   return numberFormat(locale, { style: 'currency', currency }).format(n);
 }
 
+/** Prezzo al litro con tre decimali, come alla pompa: "1,729 €". */
+export function formatFuelPrice(price: string | number | null | undefined, locale = 'it-IT'): string {
+  if (price === null || price === undefined || price === '') return '—';
+  const n = typeof price === 'string' ? Number.parseFloat(price) : price;
+  if (Number.isNaN(n)) return '—';
+  return numberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(n);
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -52,6 +60,12 @@ export function formatDate(iso: string | null | undefined, locale = 'it-IT'): st
     year: 'numeric',
     ...(ISO_DATE.test(iso) && { timeZone: 'UTC' }),
   }).format(d);
+}
+
+/** Giorno di calendario "2026-10-25" → "25 ott" / "25 Oct" (etichette brevi degli assi). Formattato in UTC come le date. */
+export function formatDay(iso: string, locale = 'it-IT'): string {
+  if (!ISO_DATE.test(iso)) return iso;
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(iso));
 }
 
 /** Locale `Intl` della lingua dell'interfaccia (`i18n.language`): "en…" → en-GB, altrimenti it-IT. */

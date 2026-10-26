@@ -831,7 +831,8 @@
     "user_value": {
       "name_taken": "An entry with this name already exists",
       "merge_invalid": "Choose another entry of the same kind",
-      "not_found": "Entry not found"
+      "not_found": "Entry not found",
+      "not_a_station": "Only a fuel station can be linked"
     },
     "expense": {
       "vehicle": {
@@ -1031,6 +1032,12 @@
       "invalid": "The invitation is expired or invalid",
       "not_for_you": "This invitation is for a different email address",
       "not_found": "Invitation not found"
+    },
+    "fuel_prices": {
+      "disabled": "Fuel prices are turned off on this instance",
+      "invalid_query": "Invalid fuel station search",
+      "station_not_found": "Fuel station not found",
+      "not_linked": "Link the entry to a fuel station first"
     }
   },
   "account": {
@@ -1085,5 +1092,39 @@
     "description": "Refresh to use the latest version of the app.",
     "action": "Refresh",
     "action_alt": "Refresh the app to the new version"
+  },
+  "fuel_prices": {
+    "open_picker": "Nearby stations and prices",
+    "picker_title": "Choose the fuel station",
+    "picker_description": "Prices are the ones station operators report to the Italian Ministry. Your location is used for this search only.",
+    "search_placeholder": "Search by name, address or town",
+    "nearby": "Near you",
+    "nearby_empty": "No fuel station within 10 km: search by name or town.",
+    "search_empty": "No fuel station found.",
+    "location_denied": "Location not allowed: search the station by name or town.",
+    "location_unavailable": "Location not available: search the station by name or town.",
+    "location_timeout": "Location is taking too long: search the station by name or town.",
+    "mode": "Self-service or full service",
+    "mode_self": "Self",
+    "mode_served": "Full service",
+    "distance": "{{km}} km",
+    "communicated_on": "price of {{date}}",
+    "no_price": "No price",
+    "proposed": "Station price, reported on {{date}}",
+    "no_price_for_fuel": "The station has no price for this fuel",
+    "linked_station": "Station for prices",
+    "not_linked": "Not linked: no price is proposed",
+    "station_gone": "Station no longer in the Ministry data",
+    "link": "Link to a fuel station",
+    "change_link": "Change station",
+    "unlink": "Unlink",
+    "follow": "Follow the price",
+    "follow_hint": "The price is kept every day and shown in the chart, on the home page too.",
+    "trend_title": "Price trend",
+    "followed_title": "Prices of followed stations",
+    "trend_fuel": "Chart fuel",
+    "trend_empty": "No {{fuel}} price in the last 30 days.",
+    "trend_day": "Day",
+    "followed_badge": "Followed"
   }
 }

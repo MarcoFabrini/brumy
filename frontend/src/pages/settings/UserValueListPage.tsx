@@ -61,6 +61,7 @@ function KindList({ kind }: { kind: UserValueKind }) {
               onClick={() => edit(v)}
               label={v.name}
               description={t('values.usage', { count: v.usageCount })}
+              value={v.followsPrice ? <span className="text-[0.9375rem]">{t('fuel_prices.followed_badge')}</span> : undefined}
               chevron
             />
           ))

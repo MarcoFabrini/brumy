@@ -15,6 +15,7 @@ use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
+use App\Service\FuelPrices\FuelPrices;
 use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -42,6 +43,7 @@ final class RefuelingController extends AbstractController
         private readonly AttachmentCleaner $attachmentCleaner,
         private readonly SerializerInterface $serializer,
         private readonly UserValues $values,
+        private readonly FuelPrices $fuelPrices,
     ) {
     }
 
@@ -125,6 +127,7 @@ final class RefuelingController extends AbstractController
             ->setDescription(self::blankToNull($payload->description))
             ->setNotes($payload->notes);
 
+        $this->linkFuelStation($r, $payload->fuelStationId);
         $this->em->persist($r);
         $this->em->flush();
 
@@ -163,6 +166,7 @@ final class RefuelingController extends AbstractController
             ->setStation($this->values->resolve($vehicle, $user, UserValueKind::STATION, $payload->station, $r->getStation()))
             ->setDescription(self::blankToNull($payload->description))
             ->setNotes($payload->notes);
+        $this->linkFuelStation($r, $payload->fuelStationId);
 
         $this->em->flush();
         $this->em->refresh($r);
@@ -182,6 +186,18 @@ final class RefuelingController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::EDIT, $r);
         $this->attachmentCleaner->removeRecord($r);
         return new JsonResponse(null, 204);
+    }
+
+    /**
+     * Distributore scelto dai vicini o dalla ricerca: la sua voce nell'elenco si collega a quello ufficiale, così la
+     * prossima volta il prezzo si propone anche da casa. Un id sconosciuto (dati riscaricati nel frattempo) si ignora.
+     */
+    private function linkFuelStation(Refueling $refueling, ?int $fuelStationId): void
+    {
+        $station = $refueling->getStation();
+        if ($fuelStationId !== null && $station !== null && $this->fuelPrices->isEnabled()) {
+            $this->fuelPrices->link($station, $fuelStationId);
+        }
     }
 
     /**

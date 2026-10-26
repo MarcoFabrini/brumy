@@ -5,6 +5,7 @@ import { Car, CheckCircle2, Plus } from 'lucide-react';
 import { Alert, ListRow, ListSection, Skeleton } from '@/components/ui';
 import { EmailVerificationBanner, PageHeader } from '@/components/layout';
 import { MonthSummaryCard, ReminderOverviewSection } from '@/components/features';
+import { FollowedFuelPrices } from '@/components/features/FollowedFuelPrices';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useDashboardCharts } from '@/hooks/useDashboardCharts';
 import { useReminderOverview } from '@/hooks/useReminders';
@@ -31,7 +32,8 @@ const URGENCY_TEXT = {
  * 1. Speso questo mese, col confronto sul mese prima e la ripartizione.
  * 2. Da fare: le scadenze scadute o in scadenza, completabili scorrendo.
  * 3. I veicoli, con km attuali e stato delle scadenze.
- * 4. Un solo grafico, le spese mensili; gli altri stanno nella scheda di ogni veicolo.
+ * 4. Un solo grafico delle spese, quelle mensili; gli altri stanno nella scheda di ogni veicolo.
+ * 5. L'andamento dei prezzi dei distributori seguiti, se se ne segue qualcuno.
  */
 export function DashboardPage() {
   const { t } = useTranslation();
@@ -79,6 +81,7 @@ export function DashboardPage() {
           <HomeSpendingChart data={charts.data} />
         </Suspense>
       )}
+      <FollowedFuelPrices />
     </div>
   );
 }

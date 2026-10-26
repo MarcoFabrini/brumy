@@ -27,6 +27,8 @@ framework:
         routing:
             # Notifiche scadenza veicolo → worker async (tabella messenger_messages)
             App\Message\SendReminderNotificationMessage: async
+            # Import dei prezzi del carburante quando i dati sono vecchi (vedi FuelPrices::requestImportIfStale)
+            App\Message\ImportFuelPricesMessage: async
 
 when@test:
     framework:

@@ -9,6 +9,7 @@ import {
   todayIso,
   daysUntil,
   formatMonth,
+  formatDay,
   intlLocale,
   profileLocale,
 } from './format';
@@ -213,5 +214,13 @@ describe('addMonthsIso', () => {
     expect(addMonthsIso('2026-01-31', 1)).toBe('2026-02-28');
     expect(addMonthsIso('2027-12-15', 12)).toBe('2028-12-15');
     expect(addMonthsIso('', 12)).toBe('');
+  });
+});
+
+describe('formatDay', () => {
+  it('giorno breve per gli assi, senza slittare di fuso', () => {
+    expect(formatDay('2026-10-25', 'it-IT')).toBe('25 ott');
+    expect(formatDay('2026-10-25', 'en-GB')).toBe('25 Oct');
+    expect(formatDay('non-una-data', 'it-IT')).toBe('non-una-data');
   });
 });

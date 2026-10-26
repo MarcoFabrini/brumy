@@ -22,7 +22,7 @@ describe('useUserValues', () => {
   beforeEach(() => mockedAuthFetch.mockReset());
 
   it('useRenameUserValue invalida voci, record, grafici e veicoli', async () => {
-    mockedAuthFetch.mockResolvedValue({ id: 1, name: 'Q8 Via Roma', usageCount: 2 });
+    mockedAuthFetch.mockResolvedValue({ id: 1, name: 'Q8 Via Roma', usageCount: 2, followsPrice: false });
     const { spy, wrapper } = setup();
     const { result } = renderHook(() => useRenameUserValue(), { wrapper });
 

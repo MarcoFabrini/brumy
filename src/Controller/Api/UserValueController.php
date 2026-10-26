@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Dto\Request\UserValueFollowPriceRequest;
+use App\Dto\Request\UserValueFuelStationRequest;
 use App\Dto\Request\UserValueMergeRequest;
 use App\Dto\Request\UserValueNameRequest;
 use App\Entity\User;
@@ -13,8 +15,10 @@ use App\Repository\UserValueRepository;
 use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
+use App\Service\FuelPrices\FuelPrices;
 use App\Service\UserValueNameTakenException;
 use App\Service\UserValues;
+use Doctrine\ORM\EntityManagerInterface;
 use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -40,6 +44,8 @@ final class UserValueController extends AbstractController
         private readonly VehicleRepository $vehicleRepo,
         private readonly ActiveOrganizationResolver $orgResolver,
         private readonly UserValues $values,
+        private readonly FuelPrices $fuelPrices,
+        private readonly EntityManagerInterface $em,
     ) {
     }
 
@@ -54,6 +60,7 @@ final class UserValueController extends AbstractController
                 new OA\Property(property: 'id', type: 'integer'),
                 new OA\Property(property: 'name', type: 'string'),
                 new OA\Property(property: 'starterKey', type: 'string', nullable: true, description: 'Starter entry it comes from (e.g. road_tax), null if created by the user'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true, description: 'Stations only: linked MIMIT fuel station, for its price'),
             ], type: 'object'))),
             new OA\Response(response: 403, description: 'Forbidden'),
             new OA\Response(response: 404, description: 'vehicle.not_found'),
@@ -83,6 +90,8 @@ final class UserValueController extends AbstractController
                 new OA\Property(property: 'id', type: 'integer'),
                 new OA\Property(property: 'name', type: 'string'),
                 new OA\Property(property: 'usageCount', type: 'integer'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
+                new OA\Property(property: 'followsPrice', type: 'boolean', description: 'Stations only: its daily price is kept for the price trend'),
             ], type: 'object'))),
         ],
     )]
@@ -105,6 +114,8 @@ final class UserValueController extends AbstractController
                 new OA\Property(property: 'id', type: 'integer'),
                 new OA\Property(property: 'name', type: 'string'),
                 new OA\Property(property: 'usageCount', type: 'integer'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
+                new OA\Property(property: 'followsPrice', type: 'boolean', description: 'Stations only: its daily price is kept for the price trend'),
             ], type: 'object')),
             new OA\Response(response: 422, description: 'validation_failed / user_value.name_taken'),
         ],
@@ -134,6 +145,8 @@ final class UserValueController extends AbstractController
                 new OA\Property(property: 'id', type: 'integer'),
                 new OA\Property(property: 'name', type: 'string'),
                 new OA\Property(property: 'usageCount', type: 'integer'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
+                new OA\Property(property: 'followsPrice', type: 'boolean', description: 'Stations only: its daily price is kept for the price trend'),
             ], type: 'object')),
             new OA\Response(response: 404, description: 'user_value.not_found'),
             new OA\Response(response: 422, description: 'validation_failed / user_value.name_taken'),
@@ -178,6 +191,69 @@ final class UserValueController extends AbstractController
         return new JsonResponse(null, 204);
     }
 
+    #[OA\Patch(
+        summary: 'Link a station entry to a MIMIT fuel station (null unlinks), so its price is proposed in refuelings',
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true)], type: 'object')),
+        responses: [
+            new OA\Response(response: 200, description: 'Linked', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'id', type: 'integer'),
+                new OA\Property(property: 'name', type: 'string'),
+                new OA\Property(property: 'usageCount', type: 'integer'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
+                new OA\Property(property: 'followsPrice', type: 'boolean', description: 'Stations only: its daily price is kept for the price trend'),
+            ], type: 'object')),
+            new OA\Response(response: 404, description: 'user_value.not_found'),
+            new OA\Response(response: 422, description: 'validation_failed / user_value.not_a_station / fuel_prices.station_not_found'),
+        ],
+    )]
+    #[Route('/values/{id}/fuel-station', name: 'fuel_station', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function linkFuelStation(int $id, #[MapRequestPayload] UserValueFuelStationRequest $payload): JsonResponse
+    {
+        $value = $this->mustFind($id);
+        if ($value->getKind() !== UserValueKind::STATION) {
+            return $this->fieldProblem('fuelStationId', 'user_value.not_a_station');
+        }
+        if (!$this->fuelPrices->link($value, $payload->fuelStationId)) {
+            return $this->fieldProblem('fuelStationId', 'fuel_prices.station_not_found');
+        }
+        $this->em->flush();
+
+        return new JsonResponse($this->present($value, $this->repo->countUsages($value)));
+    }
+
+    #[OA\Patch(
+        summary: 'Follow (or stop following) the price of the fuel station linked to a station entry',
+        description: 'A followed station has its price kept every day, for the price trend charts.',
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['follow'], properties: [new OA\Property(property: 'follow', type: 'boolean')], type: 'object')),
+        responses: [
+            new OA\Response(response: 200, description: 'Updated', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'id', type: 'integer'),
+                new OA\Property(property: 'name', type: 'string'),
+                new OA\Property(property: 'usageCount', type: 'integer'),
+                new OA\Property(property: 'fuelStationId', type: 'integer', nullable: true),
+                new OA\Property(property: 'followsPrice', type: 'boolean'),
+            ], type: 'object')),
+            new OA\Response(response: 404, description: 'user_value.not_found'),
+            new OA\Response(response: 422, description: 'validation_failed / user_value.not_a_station / fuel_prices.not_linked'),
+        ],
+    )]
+    #[Route('/values/{id}/follow-price', name: 'follow_price', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function followPrice(int $id, #[MapRequestPayload] UserValueFollowPriceRequest $payload): JsonResponse
+    {
+        $value = $this->mustFind($id);
+        if ($value->getKind() !== UserValueKind::STATION) {
+            return $this->fieldProblem('follow', 'user_value.not_a_station');
+        }
+        if (!$this->fuelPrices->follow($value, (bool) $payload->follow)) {
+            return $this->fieldProblem('follow', 'fuel_prices.not_linked');
+        }
+        $this->em->flush();
+
+        return new JsonResponse($this->present($value, $this->repo->countUsages($value)));
+    }
+
     #[OA\Delete(
         summary: 'Delete an entry (soft): it leaves the list and the suggestions, records using it keep showing its name',
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
@@ -213,9 +289,9 @@ final class UserValueController extends AbstractController
         return $user;
     }
 
-    /** @return array{id: int, name: string, usageCount: int} */
+    /** @return array{id: int, name: string, usageCount: int, fuelStationId: int|null, followsPrice: bool} */
     private function present(UserValue $value, int $usageCount): array
     {
-        return ['id' => (int) $value->getId(), 'name' => $value->getName(), 'usageCount' => $usageCount];
+        return ['id' => (int) $value->getId(), 'name' => $value->getName(), 'usageCount' => $usageCount, 'fuelStationId' => $value->getFuelStationId(), 'followsPrice' => $value->followsPrice()];
     }
 }

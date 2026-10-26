@@ -14,6 +14,7 @@ Self-hosted vehicle management (PWA): fuel logs, scheduled and unscheduled work,
 
 - **Every cost in its own section:** refuelings, scheduled work, unscheduled work, inspection, taxes, insurance, other expenses, components and reminders, each with its count on the vehicle page.
 - **Fast entry:** a phone-first "+" with the vehicle already picked; stations, workshops, shops, expense categories, tax types and insurers are remembered and suggested while you type, and you can rename, merge or delete them in your personal lists.
+- **Fuel prices (Italy):** when you add a refueling, pick a nearby station or search one by name and its price is filled in, from the Ministry's daily open data; stations in your list remember theirs, so it works from home too. Follow the stations you use and a chart on the home page shows how their prices change, day by day.
 - **Components:** keep the model, serial number, shop and price of every part you buy, link it to the work where it was fitted and see where it was used.
 - **Reminders:** by date or by mileage, recurring, with email and push notifications; saving an inspection, an insurance or a road tax proposes the next due date and updates the reminder for you.
 - **Charts:** monthly spending and spending per section, distance and consumption, for all your vehicles or one of them; recurring expenses count at every charge.
@@ -205,6 +206,7 @@ The JWT keys are **not** in the backups: if `./brumy/jwt` is empty the app gener
 | `APP_TIMEZONE` | `Europe/Rome` | Calendar timezone for reminder due dates ("today"). |
 | `ATTACHMENTS_ORG_QUOTA_MB` | `1024` | Total attachment storage allowed per organization, in MB (`0` = no limit). Uploads beyond it get a 413. Separately, each record (vehicle, maintenance, expense...) holds at most 20 files. |
 | `VEHICLES_ORG_LIMIT` | `0` | Maximum number of vehicles per organization, archived ones included (`0` = no limit). Creating one past the limit gets a 422 `vehicle.limit_reached`; deleting a vehicle frees a slot, archiving it does not. |
+| `FUEL_PRICES_ENABLED` | `true` | Fuel prices in the refueling form, from the Italian Ministry's open data (MIMIT "Osservaprezzi carburanti"): the app downloads stations and prices once a day (~7 MB, job at 8:30). Set `false` outside Italy: no downloads, no price buttons. |
 | `API_DOC_ENABLED` | `false` | Serves the interactive API documentation at `/api/doc` (and the OpenAPI spec at `/api/doc.json`) **without login**. Off by default: both answer 404. Set `API_DOC_ENABLED=true` in `.env` and restart to expose them; keep it off on an instance open to the internet unless you want the API surface public. |
 
 ### Development and contributing
@@ -229,6 +231,7 @@ Gestione veicoli self-hosted (PWA): rifornimenti, lavori ordinari e imprevisti, 
 
 - **Ogni costo nella sua sezione:** rifornimenti, lavori ordinari, lavori imprevisti, revisione, tasse, assicurazione, altre spese, componenti e promemoria, ognuna col suo conteggio nella pagina del veicolo.
 - **Inserimento veloce:** un "+" pensato per lo smartphone, col veicolo già scelto; distributori, officine, negozi, categorie di spesa, tipi di tassa e compagnie vengono ricordati e suggeriti mentre scrivi, e negli elenchi personali li rinomini, li unisci o li elimini.
+- **Prezzi del carburante (Italia):** inserendo un rifornimento scegli un distributore vicino o lo cerchi per nome e il prezzo si compila da solo, dai dati aperti giornalieri del Ministero; i distributori del tuo elenco ricordano il loro, così funziona anche da casa. Segui i distributori che usi e un grafico sulla home mostra come cambiano i loro prezzi, giorno per giorno.
 - **Componenti:** modello, numero di serie, negozio e prezzo di ogni pezzo che compri, collegato al lavoro in cui è stato montato, con l'elenco dei lavori in cui è stato usato.
 - **Promemoria:** a data o a km, ricorrenti, con notifiche email e push; salvando una revisione, un'assicurazione o il bollo ti viene proposta la prossima scadenza e il promemoria si aggiorna da solo.
 - **Grafici:** spesa mensile e per sezione, km percorsi e consumi, per tutti i veicoli o per uno solo; le spese ricorrenti contano a ogni addebito.
@@ -420,6 +423,7 @@ Le chiavi JWT **non** sono nei backup: se `./brumy/jwt` è vuota l'app ne genera
 | `APP_TIMEZONE` | `Europe/Rome` | Fuso di calendario per le scadenze dei promemoria ("oggi"). |
 | `ATTACHMENTS_ORG_QUOTA_MB` | `1024` | Spazio totale degli allegati per organizzazione, in MB (`0` = nessun limite). Oltre il limite l'upload risponde 413. In più, ogni record (veicolo, manutenzione, spesa...) contiene al massimo 20 file. |
 | `VEHICLES_ORG_LIMIT` | `0` | Numero massimo di veicoli per organizzazione, archiviati inclusi (`0` = nessun limite). Crearne uno oltre il limite risponde 422 `vehicle.limit_reached`; eliminare un veicolo libera un posto, archiviarlo no. |
+| `FUEL_PRICES_ENABLED` | `true` | Prezzi del carburante nel modulo del rifornimento, dall'open data del Ministero (MIMIT "Osservaprezzi carburanti"): l'app scarica distributori e prezzi una volta al giorno (~7 MB, job alle 8:30). Fuori dall'Italia impostalo a `false`: niente download e niente pulsanti dei prezzi. |
 | `API_DOC_ENABLED` | `false` | Pubblica la documentazione interattiva dell'API su `/api/doc` (e lo spec OpenAPI su `/api/doc.json`) **senza login**. Spenta di default: entrambe rispondono 404. Imposta `API_DOC_ENABLED=true` in `.env` e riavvia per esporle; su un'istanza aperta a internet lasciala spenta se non vuoi rendere pubblica la superficie dell'API. |
 
 ### Sviluppo e contributi

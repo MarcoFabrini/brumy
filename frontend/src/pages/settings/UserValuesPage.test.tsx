@@ -19,7 +19,7 @@ describe('UserValuesPage', () => {
     mockedAuthFetch.mockReset();
     mockedAuthFetch.mockImplementation(async (path) => {
       const kind = /^\/api\/values\/(\w+)$/.exec(path)?.[1] ?? '';
-      return Array.from({ length: counts[kind] ?? 0 }, (_, i) => ({ id: i + 1, name: `Voce ${i}`, usageCount: 0 }));
+      return Array.from({ length: counts[kind] ?? 0 }, (_, i) => ({ id: i + 1, name: `Voce ${i}`, usageCount: 0, followsPrice: false }));
     });
     await i18n.changeLanguage('it');
   });

@@ -13,6 +13,8 @@ export interface ChartCardProps {
   table: Pick<ChartDataTableProps, 'columns' | 'rows'>;
   /** Contenuto sotto il grafico (es. legenda con importi). */
   footer?: ReactNode;
+  /** Controllo accanto al titolo (es. la scelta del carburante), visibile anche col messaggio vuoto. */
+  action?: ReactNode;
 }
 
 /**
@@ -20,11 +22,12 @@ export interface ChartCardProps {
  * Il grafico (e la legenda sotto) è solo visivo: agli screen reader arriva la tabella dei dati.
  * Niente `accessibilityLayer` di recharts: renderebbe focalizzabile un SVG dentro `aria-hidden`.
  */
-export function ChartCard({ title, emptyMessage, isEmpty, children, table, footer }: ChartCardProps) {
+export function ChartCard({ title, emptyMessage, isEmpty, children, table, footer, action }: ChartCardProps) {
   return (
     <Card className="min-w-0">
-      <CardHeader>
+      <CardHeader className={action ? 'flex-row items-center justify-between gap-3 space-y-0' : undefined}>
         <CardTitle>{title}</CardTitle>
+        {action}
       </CardHeader>
       <CardContent>
         {isEmpty ? (

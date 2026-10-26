@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import {
   createUserValue,
   deleteUserValue,
+  followUserValuePrice,
   listUserValues,
+  linkUserValueFuelStation,
   listValueSuggestions,
   mergeUserValue,
   renameUserValue,
@@ -10,6 +12,7 @@ import {
 import type { UserValueKind } from '@/api/types/userValue';
 import { dashboardKeys } from '@/hooks/useDashboardCharts';
 import { expenseKeys } from '@/hooks/useExpenses';
+import { fuelPriceKeys } from '@/hooks/useFuelPrices';
 import { maintenanceKeys } from '@/hooks/useMaintenances';
 import { refuelingKeys } from '@/hooks/useRefuelings';
 import { userValueKeys } from '@/hooks/userValueKeys';
@@ -39,6 +42,7 @@ function invalidateAfterManagement(qc: QueryClient) {
     expenseKeys.all,
     dashboardKeys.all,
     vehicleKeys.all,
+    fuelPriceKeys.followed(),
   ]) {
     void qc.invalidateQueries({ queryKey: key });
   }
@@ -74,4 +78,27 @@ export function useDeleteUserValue() {
     mutationFn: (id: number) => deleteUserValue(id),
     onSuccess: () => invalidateAfterManagement(qc),
   });
+}
+
+export function useLinkFuelStation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, fuelStationId }: { id: number; fuelStationId: number | null }) => linkUserValueFuelStation(id, fuelStationId),
+    onSuccess: () => invalidateAfterFuelStationChange(qc),
+  });
+}
+
+/** Seguire il prezzo di un distributore collegato: entra (o esce) dal grafico dell'andamento. */
+export function useFollowFuelPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, follow }: { id: number; follow: boolean }) => followUserValuePrice(id, follow),
+    onSuccess: () => invalidateAfterFuelStationChange(qc),
+  });
+}
+
+/** Collegamento e "segui" cambiano la voce e i distributori del grafico dell'andamento. */
+function invalidateAfterFuelStationChange(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: userValueKeys.all });
+  void qc.invalidateQueries({ queryKey: fuelPriceKeys.followed() });
 }

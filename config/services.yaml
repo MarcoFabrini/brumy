@@ -16,6 +16,8 @@ parameters:
     app_attachments_org_quota_mb_default: 1024
     # Tetto di veicoli per organizzazione (archiviati inclusi). 0 = nessun limite. Override: VEHICLES_ORG_LIMIT.
     app_vehicles_org_limit_default: 0
+    # Prezzi del carburante dall'open data MIMIT (solo Italia). Override: FUEL_PRICES_ENABLED=0 per spegnerli.
+    app_fuel_prices_enabled_default: true
 
 services:
     _defaults:

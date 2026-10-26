@@ -21,6 +21,7 @@ import { ApiError } from '@/api/client';
 import type { ManagedUserValue, UserValueKind } from '@/api/types/userValue';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogFormActions } from './DialogFormActions';
+import { FuelStationLink } from './FuelStationLink';
 import { useToast } from '@/hooks/useToast';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useFieldErrorMessage } from '@/hooks/useFieldErrorMessage';
@@ -75,6 +76,8 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
   }, [open]);
 
   const errors = form.formState.errors;
+  // `value` è la voce com'era all'apertura: dalla lista aggiornata si vede subito un collegamento appena fatto
+  const current = values.find((v) => v.id === value?.id) ?? value;
   const targets = values.filter((v) => v.id !== value?.id);
   const target = targets.find((v) => String(v.id) === mergeIntoId);
   const busy = create.isPending || rename.isPending || merge.isPending || remove.isPending;
@@ -115,6 +118,8 @@ export function UserValueDialog({ open, onOpenChange, kind, value, values = [] }
 
           {value && (
             <div className="space-y-4 border-t border-border pt-4">
+              {kind === 'station' && current && <FuelStationLink value={current} />}
+
               {targets.length > 0 && (
                 <div className="space-y-2">
                   <Label id="user-value-merge-label">{t('values.merge')}</Label>

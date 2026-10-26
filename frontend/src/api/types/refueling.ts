@@ -40,6 +40,8 @@ export interface CreateRefuelingDto {
   fuelType: FuelType;
   fullTank: boolean;
   station?: string | null;
+  /** Distributore ufficiale scelto dai vicini o dalla ricerca: la voce del distributore gli si collega. */
+  fuelStationId?: number | null;
   description?: string | null;
   notes?: string | null;
 }

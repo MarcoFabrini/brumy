@@ -94,6 +94,7 @@ services:
       ofelia.job-exec.refresh-cleanup.user: "www-data"
       ofelia.job-exec.messenger-retry.user: "www-data"
       ofelia.job-exec.cache-prune.user: "www-data"
+      ofelia.job-exec.fuel-prices.user: "www-data"
       ofelia.job-exec.reminders.schedule: "0 0 7 * * *"
       ofelia.job-exec.reminders.command: "php bin/console app:reminders:dispatch --no-interaction"
       ofelia.job-exec.backup.schedule: "0 0 3 * * *"
@@ -104,6 +105,9 @@ services:
       # le chiavi usate una volta sola (un login con un'email inventata) resterebbero su disco per sempre.
       ofelia.job-exec.cache-prune.schedule: "0 15 4 * * *"
       ofelia.job-exec.cache-prune.command: "php bin/console cache:pool:prune --no-interaction"
+      # Prezzi del carburante (open data MIMIT, "prezzo alle 8"): spento con FUEL_PRICES_ENABLED=0.
+      ofelia.job-exec.fuel-prices.schedule: "0 30 8 * * *"
+      ofelia.job-exec.fuel-prices.command: "php bin/console app:fuel-prices:import --no-interaction"
       ofelia.job-exec.messenger-retry.schedule: "0 30 * * * *"
       # messenger:failed:retry non va bene qui: senza id dei messaggi rifiuta --no-interaction e non ha --limit.
       # Consumare il transport failed fa lo stesso lavoro (un messaggio che fallisce ancora viene ritentato dalla

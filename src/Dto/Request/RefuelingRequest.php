@@ -33,6 +33,10 @@ final class RefuelingRequest
         #[Assert\Length(max: 200)]
         public ?string $station = null,
 
+        /** Distributore ufficiale (id MIMIT) scelto dai vicini o dalla ricerca: la voce del distributore gli si collega. */
+        #[Assert\Positive]
+        public ?int $fuelStationId = null,
+
         #[Assert\Length(max: 500)]
         public ?string $description = null,
 

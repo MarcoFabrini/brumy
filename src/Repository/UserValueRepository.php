@@ -63,9 +63,10 @@ class UserValueRepository extends ServiceEntityRepository
 
     /**
      * Voci della lista (non eliminate) per i suggerimenti: le più usate prima, a parità la più recente, poi per nome.
-     * `starterKey` dice da quale voce di partenza viene (es. il bollo, per proporne la scadenza), null se fatta a mano.
+     * `starterKey` dice da quale voce di partenza viene (es. il bollo, per proporne la scadenza), null se fatta a mano;
+     * `fuelStationId` il distributore ufficiale collegato (solo distributori), da cui proporre il prezzo.
      *
-     * @return list<array{id: int, name: string, starterKey: string|null}>
+     * @return list<array{id: int, name: string, starterKey: string|null, fuelStationId: int|null}>
      */
     public function findSuggestions(User $user, Organization $org, UserValueKind $kind): array
     {
@@ -73,32 +74,52 @@ class UserValueRepository extends ServiceEntityRepository
         // usort è stabile: a parità di uso e di data resta l'ordine per nome della query
         usort($rows, static fn (array $a, array $b): int => [$b['usageCount'], $b['lastUsed']] <=> [$a['usageCount'], $a['lastUsed']]);
 
-        return array_map(static fn (array $row): array => ['id' => $row['id'], 'name' => $row['name'], 'starterKey' => $row['starterKey']], $rows);
+        return array_map(static fn (array $row): array => ['id' => $row['id'], 'name' => $row['name'], 'starterKey' => $row['starterKey'], 'fuelStationId' => $row['fuelStationId']], $rows);
     }
 
     /**
      * Voci della lista (non eliminate) con il numero di record che le usano (in tutta l'organizzazione), per nome.
      *
-     * @return list<array{id: int, name: string, usageCount: int}>
+     * @return list<array{id: int, name: string, usageCount: int, fuelStationId: int|null, followsPrice: bool}>
      */
     public function findWithUsage(User $user, Organization $org, UserValueKind $kind): array
     {
         return array_map(
-            static fn (array $row): array => ['id' => $row['id'], 'name' => $row['name'], 'usageCount' => $row['usageCount']],
+            static fn (array $row): array => ['id' => $row['id'], 'name' => $row['name'], 'usageCount' => $row['usageCount'], 'fuelStationId' => $row['fuelStationId'], 'followsPrice' => $row['followsPrice']],
             $this->findWithUsageRows($user, $org, $kind),
         );
     }
 
     /**
+     * I distributori dell'elenco (non eliminati) di cui l'utente segue il prezzo, per nome.
+     *
+     * @return list<UserValue>
+     */
+    public function findFollowedStations(User $user, Organization $org): array
+    {
+        /** @var list<UserValue> */
+        return $this->createQueryBuilder('v')
+            ->where('v.user = :user AND v.organization = :org AND v.kind = :kind AND v.deletedAt IS NULL')
+            ->andWhere('v.followsPrice = true AND v.fuelStationId IS NOT NULL')
+            ->setParameter('user', $user)
+            ->setParameter('org', $org)
+            ->setParameter('kind', UserValueKind::STATION)
+            ->orderBy('v.name', 'ASC')
+            ->addOrderBy('v.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Voci per nome con uso e data dell'ultimo uso ('' se mai usata), sommati su tutti i campi che usano il tipo.
      *
-     * @return list<array{id: int, name: string, starterKey: string|null, usageCount: int, lastUsed: string}>
+     * @return list<array{id: int, name: string, starterKey: string|null, fuelStationId: int|null, followsPrice: bool, usageCount: int, lastUsed: string}>
      */
     private function findWithUsageRows(User $user, Organization $org, UserValueKind $kind): array
     {
-        /** @var list<array{id: int|string, name: string, starterKey: string|null}> $values */
+        /** @var list<array{id: int|string, name: string, starterKey: string|null, fuelStationId: int|string|null, followsPrice: bool|int|string}> $values */
         $values = $this->createQueryBuilder('v')
-            ->select('v.id AS id', 'v.name AS name', 'v.starterKey AS starterKey')
+            ->select('v.id AS id', 'v.name AS name', 'v.starterKey AS starterKey', 'v.fuelStationId AS fuelStationId', 'v.followsPrice AS followsPrice')
             ->where('v.user = :user AND v.organization = :org AND v.kind = :kind AND v.deletedAt IS NULL')
             ->setParameter('user', $user)
             ->setParameter('org', $org)
@@ -134,6 +155,8 @@ class UserValueRepository extends ServiceEntityRepository
             'id' => (int) $row['id'],
             'name' => $row['name'],
             'starterKey' => $row['starterKey'],
+            'fuelStationId' => $row['fuelStationId'] === null ? null : (int) $row['fuelStationId'],
+            'followsPrice' => (bool) $row['followsPrice'],
             'usageCount' => $usage[(int) $row['id']]['n'] ?? 0,
             'lastUsed' => $usage[(int) $row['id']]['last'] ?? '',
         ], $values);

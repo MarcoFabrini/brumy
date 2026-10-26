@@ -51,6 +51,21 @@ class UserValue
     #[ORM\Column(name: 'starter_key', length: 30, nullable: true)]
     private ?string $starterKey = null;
 
+    /**
+     * Solo distributori: il distributore ufficiale (id dell'open data MIMIT, vedi {@see FuelStation}) da cui prendere il
+     * prezzo. Intero semplice, senza chiave esterna: la tabella dei distributori si riscrive ogni giorno e un distributore
+     * chiuso sparisce, mentre la voce resta (senza prezzo).
+     */
+    #[ORM\Column(name: 'fuel_station_id', type: 'integer', nullable: true)]
+    private ?int $fuelStationId = null;
+
+    /**
+     * Solo distributori collegati: il suo prezzo si salva ogni giorno ({@see FuelPriceHistory}) e compare nei grafici
+     * dell'andamento. Scollegando la voce si smette di seguirlo.
+     */
+    #[ORM\Column(name: 'follows_price', type: 'boolean', options: ['default' => false])]
+    private bool $followsPrice = false;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable', options: ['default' => 'CURRENT_TIMESTAMP'])]
     private \DateTimeImmutable $createdAt;
 
@@ -94,6 +109,27 @@ class UserValue
         $this->nameKey = null;
     }
 
+    /** Collega (o scollega, con null) la voce a un distributore ufficiale. Solo per i distributori. */
+    public function linkFuelStation(?int $fuelStationId): void
+    {
+        if ($this->kind !== UserValueKind::STATION) {
+            throw new \LogicException('Only stations can be linked to a fuel station.');
+        }
+        $this->fuelStationId = $fuelStationId;
+        if ($fuelStationId === null) {
+            $this->followsPrice = false;
+        }
+    }
+
+    /** Segue (o smette di seguire) il prezzo del distributore collegato. Solo per i distributori collegati. */
+    public function followPrice(bool $follow): void
+    {
+        if ($follow && ($this->kind !== UserValueKind::STATION || $this->fuelStationId === null)) {
+            throw new \LogicException('Only stations linked to a fuel station can follow its price.');
+        }
+        $this->followsPrice = $follow;
+    }
+
     public function isDeleted(): bool
     {
         return $this->deletedAt !== null;
@@ -106,6 +142,8 @@ class UserValue
     public function getName(): string { return $this->name; }
     public function getNameKey(): ?string { return $this->nameKey; }
     public function getStarterKey(): ?string { return $this->starterKey; }
+    public function getFuelStationId(): ?int { return $this->fuelStationId; }
+    public function followsPrice(): bool { return $this->followsPrice; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getDeletedAt(): ?\DateTimeImmutable { return $this->deletedAt; }
 }

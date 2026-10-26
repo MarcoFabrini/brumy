@@ -17,6 +17,35 @@ nelmio_api_doc:
                     type: http
                     scheme: bearer
                     bearerFormat: JWT
+            parameters:
+                FuelPriceFuel:
+                    name: fuel
+                    in: query
+                    required: false
+                    description: 'Refueling fuel type: prices are for its base fuel (hybrid = gasoline); none for electric, hydrogen and the like'
+                    schema: { type: string, enum: [gasoline, diesel, lpg, cng, electric, hybrid, hydrogen, ethanol, biodiesel] }
+            schemas:
+                FuelPricePoint:
+                    type: object
+                    nullable: true
+                    properties:
+                        price: { type: string, example: '1.789', description: 'EUR per liter' }
+                        communicatedAt: { type: string, format: date, description: 'When the station communicated it' }
+                FuelStationView:
+                    type: object
+                    properties:
+                        id: { type: integer, description: 'MIMIT station id (idImpianto)' }
+                        label: { type: string, example: 'Q8 · Via Emilia Est 1420, Modena' }
+                        brand: { type: string }
+                        address: { type: string }
+                        city: { type: string }
+                        province: { type: string }
+                        distanceKm: { type: number, nullable: true, description: 'Only in nearby results' }
+                        prices:
+                            type: object
+                            properties:
+                                self: { $ref: '#/components/schemas/FuelPricePoint' }
+                                served: { $ref: '#/components/schemas/FuelPricePoint' }
         security:
             - Bearer: []
     areas:

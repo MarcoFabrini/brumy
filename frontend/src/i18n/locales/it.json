@@ -831,7 +831,8 @@
     "user_value": {
       "name_taken": "Esiste già una voce con questo nome",
       "merge_invalid": "Scegli un'altra voce dello stesso tipo",
-      "not_found": "Voce non trovata"
+      "not_found": "Voce non trovata",
+      "not_a_station": "Solo un distributore si può collegare"
     },
     "expense": {
       "vehicle": {
@@ -1031,6 +1032,12 @@
       "invalid": "L'invito è scaduto o non valido",
       "not_for_you": "Questo invito è per un altro indirizzo email",
       "not_found": "Invito non trovato"
+    },
+    "fuel_prices": {
+      "disabled": "I prezzi del carburante sono spenti su questa istanza",
+      "invalid_query": "Ricerca del distributore non valida",
+      "station_not_found": "Distributore non trovato",
+      "not_linked": "Collega prima la voce a un distributore"
     }
   },
   "account": {
@@ -1085,5 +1092,39 @@
     "description": "Aggiorna per usare l'ultima versione dell'app.",
     "action": "Aggiorna",
     "action_alt": "Aggiorna l'app alla nuova versione"
+  },
+  "fuel_prices": {
+    "open_picker": "Distributori vicini e prezzi",
+    "picker_title": "Scegli il distributore",
+    "picker_description": "I prezzi sono quelli comunicati dai gestori al Ministero. La posizione serve solo per questa ricerca.",
+    "search_placeholder": "Cerca per nome, indirizzo o città",
+    "nearby": "Vicino a te",
+    "nearby_empty": "Nessun distributore entro 10 km: cercalo per nome o città.",
+    "search_empty": "Nessun distributore trovato.",
+    "location_denied": "Posizione non concessa: cerca il distributore per nome o città.",
+    "location_unavailable": "Posizione non disponibile: cerca il distributore per nome o città.",
+    "location_timeout": "La posizione non arriva: cerca il distributore per nome o città.",
+    "mode": "Self o servito",
+    "mode_self": "Self",
+    "mode_served": "Servito",
+    "distance": "{{km}} km",
+    "communicated_on": "prezzo del {{date}}",
+    "no_price": "Nessun prezzo",
+    "proposed": "Prezzo del distributore, comunicato il {{date}}",
+    "no_price_for_fuel": "Il distributore non ha un prezzo per questo carburante",
+    "linked_station": "Distributore per i prezzi",
+    "not_linked": "Non collegato: il prezzo non viene proposto",
+    "station_gone": "Distributore non più nei dati del Ministero",
+    "link": "Collega a un distributore",
+    "change_link": "Cambia distributore",
+    "unlink": "Scollega",
+    "follow": "Segui il prezzo",
+    "follow_hint": "Il prezzo si salva ogni giorno e lo vedi nel grafico, anche sulla home.",
+    "trend_title": "Andamento del prezzo",
+    "followed_title": "Prezzi dei distributori seguiti",
+    "trend_fuel": "Carburante del grafico",
+    "trend_empty": "Nessun prezzo per {{fuel}} negli ultimi 30 giorni.",
+    "trend_day": "Giorno",
+    "followed_badge": "Seguito"
   }
 }

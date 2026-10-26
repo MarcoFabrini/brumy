@@ -14,15 +14,15 @@ vi.mock('@/api/client', async (importOriginal) => ({
 }));
 const mockedAuthFetch = vi.mocked(authFetch);
 
-const lists: Record<string, { id: number; name: string; usageCount: number }[]> = {
+const lists: Record<string, { id: number; name: string; usageCount: number; followsPrice: boolean }[]> = {
   station: [
-    { id: 7, name: 'Eni', usageCount: 1 },
-    { id: 9, name: 'Q8', usageCount: 0 },
-    { id: 10, name: 'Tamoil', usageCount: 3 },
+    { id: 7, name: 'Eni', usageCount: 1, followsPrice: false },
+    { id: 9, name: 'Q8', usageCount: 0, followsPrice: false },
+    { id: 10, name: 'Tamoil', usageCount: 3, followsPrice: false },
   ],
   workshop: [],
   shop: [],
-  expense_category: [{ id: 21, name: 'Bollo', usageCount: 0 }],
+  expense_category: [{ id: 21, name: 'Bollo', usageCount: 0, followsPrice: false }],
 };
 
 function mockApi() {
@@ -30,8 +30,8 @@ function mockApi() {
     const method = init?.method ?? 'GET';
     const list = /^\/api\/values\/(station|workshop|shop|expense_category)$/.exec(path);
     if (method === 'GET' && list) return lists[list[1]!];
-    if (method === 'POST' && list) return { id: 99, name: 'Nuova', usageCount: 0 };
-    if (method === 'PATCH') return { id: 7, name: 'Eni Station', usageCount: 1 };
+    if (method === 'POST' && list) return { id: 99, name: 'Nuova', usageCount: 0, followsPrice: false };
+    if (method === 'PATCH') return { id: 7, name: 'Eni Station', usageCount: 1, followsPrice: false };
     return undefined;
   });
 }

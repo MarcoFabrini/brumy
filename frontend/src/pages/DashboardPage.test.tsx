@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ReactElement } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/i18n';
@@ -76,9 +76,11 @@ const reminder = (id: number, description: string, urgency: 'ok' | 'soon' | 'ove
   currentKm: 12000,
 });
 
-function mockApi(vehicles: Vehicle[], reminders: ReturnType<typeof reminder>[] = []) {
+function mockApi(vehicles: Vehicle[], reminders: ReturnType<typeof reminder>[] = [], followed: unknown[] = []) {
   mockedAuthFetch.mockImplementation(async (path: string) => {
     if (path === '/api/vehicles') return vehicles;
+    if (path === '/api/fuel-prices/status') return { enabled: true, extractedOn: '2026-10-25' };
+    if (path.startsWith('/api/fuel-prices/followed')) return followed;
     if (/^\/api\/vehicles\/\d+\/stats$/.test(path)) {
       return { consumption: {}, totals: { cost: '0.00', refuelings: 0, maintenances: 0, expenses: 0 }, currentKm: 12000, kmDriven: 0, costPerKm: null };
     }
@@ -173,5 +175,28 @@ describe('DashboardPage', () => {
     const h1 = screen.getAllByRole('heading', { level: 1 });
     expect(h1).toHaveLength(1);
     expect(h1[0]).toHaveTextContent('Dashboard');
+  });
+
+  it('mostra l\'andamento dei prezzi dei distributori seguiti, nel carburante dei veicoli', async () => {
+    mockApi([vehicle(1, 'owned')], [], [
+      { valueId: 5, name: 'Q8 sotto casa', fuelStationId: 59183, points: [{ day: '2026-10-25', price: '1.729' }] },
+      { valueId: 8, name: 'Eni lavoro', fuelStationId: 1234, points: [{ day: '2026-10-24', price: '1.699' }] },
+    ]);
+    renderPage();
+
+    const table = await screen.findByRole('table', { name: 'Prezzi dei distributori seguiti' });
+    expect(table).toHaveTextContent('Q8 sotto casa');
+    expect(table).toHaveTextContent('Eni lavoro');
+    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/fuel-prices/followed?fuel=diesel');
+    expect(screen.getByRole('combobox', { name: 'Carburante del grafico' })).toHaveTextContent('Diesel');
+  });
+
+  it('senza distributori seguiti non mostra il grafico dei prezzi', async () => {
+    mockApi([vehicle(1, 'owned')]);
+    renderPage();
+
+    await screen.findByText('Speso questo mese');
+    await waitFor(() => expect(mockedAuthFetch).toHaveBeenCalledWith('/api/fuel-prices/followed?fuel=diesel'));
+    expect(screen.queryByText('Prezzi dei distributori seguiti')).not.toBeInTheDocument();
   });
 });

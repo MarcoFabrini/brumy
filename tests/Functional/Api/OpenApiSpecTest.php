@@ -90,6 +90,11 @@ final class OpenApiSpecTest extends ApiTestCase
             '/api/organizations/{id}',
             '/api/organizations/{id}/members',
             '/api/organizations/{id}/members/{memberId}',
+            '/api/values/{id}/fuel-station',
+            '/api/fuel-prices/status',
+            '/api/fuel-prices/nearby',
+            '/api/fuel-prices/search',
+            '/api/fuel-prices/stations/{id}',
         ];
 
         $actual = array_keys($this->spec['paths']);

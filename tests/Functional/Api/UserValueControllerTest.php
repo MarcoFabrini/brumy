@@ -81,7 +81,7 @@ final class UserValueControllerTest extends ApiTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame(['Eni', 'Q8', 'Agip'], $this->names());
-        self::assertSame(['id', 'name', 'starterKey'], array_keys($this->rows()[0]));
+        self::assertSame(['id', 'name', 'starterKey', 'fuelStationId'], array_keys($this->rows()[0]));
     }
 
     public function testSuggestionsTieBrokenByMostRecentUseThenName(): void
@@ -304,7 +304,7 @@ final class UserValueControllerTest extends ApiTestCase
         $this->jsonRequest('PATCH', '/api/values/'.$eni->getId(), ['name' => 'Eni Station'], accessToken: $token);
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['id' => $eni->getId(), 'name' => 'Eni Station', 'usageCount' => 1], $this->jsonBody());
+        self::assertSame(['id' => $eni->getId(), 'name' => 'Eni Station', 'usageCount' => 1, 'fuelStationId' => null, 'followsPrice' => false], $this->jsonBody());
     }
 
     public function testRenameCaseVariant(): void
@@ -343,7 +343,7 @@ final class UserValueControllerTest extends ApiTestCase
 
         self::assertResponseStatusCodeSame(204);
         $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
-        self::assertSame([['id' => $b->getId(), 'name' => 'Eni', 'usageCount' => 1]], $this->jsonBody());
+        self::assertSame([['id' => $b->getId(), 'name' => 'Eni', 'usageCount' => 1, 'fuelStationId' => null, 'followsPrice' => false]], $this->jsonBody());
     }
 
     public function testMergeIntoUnknownIs404(): void

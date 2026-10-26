@@ -4,7 +4,9 @@ import {
   formatBytes,
   formatCurrency,
   formatDate,
+  formatDay,
   formatDecimal,
+  formatFuelPrice,
   formatKm,
   formatMonth,
   intlLocale,
@@ -27,8 +29,12 @@ export function useFormat() {
       decimal: (n: number | null | undefined, maxFractionDigits?: number) => formatDecimal(n, maxFractionDigits, locale),
       /** Importi sempre in EUR: cambia solo la formattazione, non la valuta. */
       currency: (amount: string | number | null | undefined) => formatCurrency(amount, locale),
+      /** Prezzo al litro con tre decimali (carburante). */
+      fuelPrice: (price: string | number | null | undefined) => formatFuelPrice(price, locale),
       date: (iso: string | null | undefined) => formatDate(iso, locale),
       month: (yyyyMm: string) => formatMonth(yyyyMm, locale),
+      /** Giorno breve per gli assi dei grafici ("25 ott"). */
+      day: (iso: string) => formatDay(iso, locale),
       bytes: (bytes: number) => formatBytes(bytes, locale),
     }),
     [locale],

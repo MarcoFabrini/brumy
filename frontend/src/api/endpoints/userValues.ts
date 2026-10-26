@@ -43,3 +43,15 @@ export async function mergeUserValue(id: number, intoId: number): Promise<void> 
 export async function deleteUserValue(id: number): Promise<void> {
   await authFetch<void>(`/api/values/${id}`, { method: 'DELETE' });
 }
+
+/** Collega una voce distributore al distributore ufficiale (null la scollega). */
+export async function linkUserValueFuelStation(id: number, fuelStationId: number | null): Promise<ManagedUserValue> {
+  const raw = await authFetch<unknown>(`/api/values/${id}/fuel-station`, jsonInit('PATCH', { fuelStationId }));
+  return managedUserValueSchema.parse(raw);
+}
+
+/** Segue (o smette di seguire) il prezzo del distributore collegato alla voce. */
+export async function followUserValuePrice(id: number, follow: boolean): Promise<ManagedUserValue> {
+  const raw = await authFetch<unknown>(`/api/values/${id}/follow-price`, jsonInit('PATCH', { follow }));
+  return managedUserValueSchema.parse(raw);
+}
