@@ -7,10 +7,10 @@
 export const GESTURE_SLOP = 8;
 /** Il dito deve andare in giù almeno così tanto più che di lato: i gesti diagonali non fanno pull. */
 export const VERTICAL_DOMINANCE = 1.5;
-/** Resistenza: il contenuto segue il dito a metà velocità. */
-export const PULL_RESISTANCE = 0.5;
-/** Distanza visualizzata massima dell'indicatore (px). */
-export const MAX_PULL = 96;
+/** Resistenza iniziale: all'inizio il contenuto segue il dito a questa frazione della sua corsa. */
+export const PULL_RESISTANCE = 0.7;
+/** Asintoto della distanza visualizzata (px): ci si avvicina sempre più piano, senza un arresto netto. */
+export const MAX_PULL = 150;
 /** Distanza visualizzata (dopo la resistenza) da raggiungere perché il rilascio aggiorni (px). */
 export const PULL_THRESHOLD = 64;
 
@@ -24,10 +24,13 @@ export function classifyGesture(dx: number, dy: number, scrollTop: number): Gest
   return 'ignore';
 }
 
-/** Distanza mostrata per uno spostamento del dito di `dy` px: resistenza e tetto. */
+/**
+ * Distanza mostrata per uno spostamento del dito di `dy` px: effetto elastico come su iOS, che parte da
+ * PULL_RESISTANCE e rallenta via via verso MAX_PULL (la soglia arriva a circa 160px di dito).
+ */
 export function pullDistance(dy: number): number {
   if (dy <= 0) return 0;
-  return Math.min(MAX_PULL, dy * PULL_RESISTANCE);
+  return MAX_PULL * (1 - 1 / (1 + (dy * PULL_RESISTANCE) / MAX_PULL));
 }
 
 export function isPastThreshold(distance: number): boolean {

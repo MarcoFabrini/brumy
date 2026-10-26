@@ -1,19 +1,23 @@
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PullToRefresh } from './PullToRefresh';
 import i18n from '@/i18n';
 import * as pwaUpdate from '@/lib/pwaUpdate';
 
-/** Come AppLayout: un <main> scrollabile con l'indicatore dentro. */
+/** Come AppLayout: un <main> scrollabile con il contenuto dentro l'indicatore. */
 function Harness() {
   const ref = useRef<HTMLElement>(null);
   return (
-    <main ref={ref} data-testid="scroller">
-      <PullToRefresh scrollRef={ref} />
-      <p data-testid="content">contenuto</p>
-      <input data-testid="field" />
-    </main>
+    <QueryClientProvider client={new QueryClient()}>
+      <main ref={ref} data-testid="scroller">
+        <PullToRefresh scrollRef={ref}>
+          <p data-testid="content">contenuto</p>
+          <input data-testid="field" />
+        </PullToRefresh>
+      </main>
+    </QueryClientProvider>
   );
 }
 
@@ -35,7 +39,7 @@ describe('PullToRefresh', () => {
 
   beforeEach(async () => {
     await i18n.changeLanguage('it');
-    refresh = vi.spyOn(pwaUpdate, 'refreshApp').mockResolvedValue(undefined);
+    refresh = vi.spyOn(pwaUpdate, 'refreshInPlace').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -51,8 +55,10 @@ describe('PullToRefresh', () => {
     fireEvent.touchMove(scroller, touch(102, 130));
     expect(screen.getByRole('status')).toHaveTextContent('Trascina per aggiornare');
 
-    fireEvent.touchMove(scroller, touch(102, 260));
+    fireEvent.touchMove(scroller, touch(102, 300));
     expect(screen.getByRole('status')).toHaveTextContent('Rilascia per aggiornare');
+    // La pagina scende col dito
+    expect(screen.getByTestId('content').parentElement?.style.transform).toMatch(/^translateY\(\d/);
 
     fireEvent.touchEnd(scroller);
     expect(refresh).toHaveBeenCalledTimes(1);

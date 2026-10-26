@@ -6,8 +6,8 @@
  * torna in primo piano e ogni ora, e quando un nuovo worker prende il controllo si avvisa l'utente
  * (hooks/useUpdatePrompt). Niente reload automatico: potrebbe buttare via un form mezzo compilato.
  *
- * Nessuna interazione con lib/chunkRecovery: questo modulo non ricarica mai da solo, ricarica solo
- * `refreshApp` su azione esplicita dell'utente, e dopo un reload il nuovo worker controlla già la pagina
+ * Nessuna interazione con lib/chunkRecovery: questo modulo non ricarica mai da solo, ricaricano solo
+ * `refreshApp` e `refreshInPlace` su azione esplicita dell'utente, e dopo un reload il nuovo worker controlla già la pagina
  * (nessun `controllerchange`, quindi nessun avviso e nessun secondo reload).
  */
 
@@ -18,7 +18,7 @@ export const REFRESH_TIMEOUT_MS = 6_000;
 // --- Stato "nuova versione disponibile" (letto con useSyncExternalStore) ---
 
 let updateAvailable = false;
-/** Durante `refreshApp` la pagina sta per ricaricarsi: il controllerchange che ne segue non va segnalato. */
+/** Durante un aggiornamento su richiesta la pagina sta per ricaricarsi: il controllerchange che ne segue non va segnalato. */
 let refreshing = false;
 const listeners = new Set<() => void>();
 
@@ -160,27 +160,56 @@ function waitForActivation(worker: ServiceWorker): Promise<void> {
 }
 
 /**
- * Cerca una nuova versione, aspetta (al massimo REFRESH_TIMEOUT_MS) che il nuovo worker sia attivo e
- * ricarica comunque, anche offline o in errore. Senza l'attesa il reload verrebbe servito dalla
- * precache del worker vecchio, cioè con l'index.html vecchio.
+ * Cerca una nuova versione e aspetta (al massimo REFRESH_TIMEOUT_MS) che il nuovo worker sia attivo: solo allora un
+ * reload serve l'index.html nuovo, senza l'attesa arriverebbe dalla precache del worker vecchio. True se l'ha trovata;
+ * offline o in errore risponde false.
  */
+async function installNewVersion(): Promise<boolean> {
+  if (!canUseServiceWorker()) return false;
+  let found = false;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) return false;
+    await settleWithin(
+      (async () => {
+        await registration.update();
+        const worker = registration.installing ?? registration.waiting;
+        if (!worker) return;
+        found = true;
+        // La pagina sta per ricaricarsi: il controllerchange del nuovo worker non è un avviso da mostrare
+        refreshing = true;
+        await waitForActivation(worker);
+      })(),
+      REFRESH_TIMEOUT_MS,
+    );
+  } catch {
+    // Registrazione illeggibile: nessuna versione nuova da prendere
+  }
+  return found;
+}
+
+/** Pulsante "Aggiorna" dell'avviso: prende la versione nuova se c'è e ricarica comunque, anche offline o in errore. */
 export async function refreshApp(reload: () => void = () => window.location.reload()): Promise<void> {
   refreshing = true;
   try {
-    if (canUseServiceWorker()) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) {
-        await settleWithin(
-          (async () => {
-            await registration.update();
-            const worker = registration.installing ?? registration.waiting;
-            if (worker) await waitForActivation(worker);
-          })(),
-          REFRESH_TIMEOUT_MS,
-        );
-      }
-    }
+    await installNewVersion();
   } finally {
     reload();
   }
+}
+
+/**
+ * Pull-to-refresh: se c'è una versione nuova (già segnalata o appena trovata) ricarica, l'unico modo di prenderla;
+ * altrimenti aggiorna solo i dati con `refetch`, senza toccare la pagina: niente schermo bianco né scheletri.
+ */
+export async function refreshInPlace(
+  refetch: () => Promise<unknown>,
+  reload: () => void = () => window.location.reload(),
+): Promise<void> {
+  if (updateAvailable || (await installNewVersion())) {
+    refreshing = true;
+    reload();
+    return;
+  }
+  await refetch();
 }

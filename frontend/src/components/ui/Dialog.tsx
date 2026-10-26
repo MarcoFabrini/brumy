@@ -1,8 +1,9 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react';
+import { forwardRef, useMemo, useRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
+import { cn, mergeRefs } from '@/lib/utils';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 /**
  * Dialog molecule (Radix-based).
@@ -39,12 +40,17 @@ export const DialogOverlay = forwardRef<
       'fixed inset-0 z-50 bg-black/40',
       'data-[state=open]:animate-in data-[state=open]:fade-in-0',
       'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+      // Lo sfondo si scurisce e si schiarisce col passo del foglio, non di colpo
+      'duration-300',
       className,
     )}
     {...props}
   />
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
+
+/** Sotto sm il dialog `mobileFullScreen` è un foglio dal basso (vedi le classi max-sm/sm qui sotto). */
+const SHEET_MEDIA = '(max-width: 639px)';
 
 export const DialogContent = forwardRef<
   ElementRef<typeof DialogPrimitive.Content>,
@@ -55,11 +61,15 @@ export const DialogContent = forwardRef<
   }
 >(({ className, children, hideClose, mobileFullScreen, ...props }, ref) => {
   const { t } = useTranslation();
+  // Dove è un foglio (mobile, <sm) si chiude anche trascinandolo giù: lo chiude il pulsante nascosto, come la X
+  const swipeClose = useRef<HTMLButtonElement>(null);
+  const swipeRef = useSwipeToDismiss(() => swipeClose.current?.click(), { enabled: !!mobileFullScreen, media: SHEET_MEDIA });
+  const contentRef = useMemo(() => mergeRefs(ref, swipeRef), [ref, swipeRef]);
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={ref}
+        ref={contentRef}
         className={cn(
           'fixed z-50 grid gap-4 overflow-y-auto overscroll-contain bg-background shadow-lg',
           'data-[state=open]:animate-in data-[state=open]:fade-in-0',
@@ -70,7 +80,7 @@ export const DialogContent = forwardRef<
                 // maniglia in alto; il contenuto parte dall'alto e scorre dentro il foglio.
                 'inset-x-0 bottom-0 top-[max(env(safe-area-inset-top),0.75rem)] w-full max-w-none content-start rounded-t-[12px] border-0 px-4 pb-safe pt-7',
                 'before:absolute before:left-1/2 before:top-[7px] before:h-[5px] before:w-9 before:-translate-x-1/2 before:rounded-full before:bg-muted-foreground/40 before:content-[""] sm:before:hidden',
-                'data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:duration-300 sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0',
+                'data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:duration-500 data-[state=closed]:duration-300 max-sm:[animation-timing-function:cubic-bezier(0.32,0.72,0,1)] sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0',
                 // tablet/desktop (sm+): card centrata, contenuto in alto
                 'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:max-h-[90vh] sm:content-stretch',
                 'sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border sm:p-6',
@@ -86,6 +96,7 @@ export const DialogContent = forwardRef<
         {...props}
       >
         {children}
+        {mobileFullScreen && <DialogPrimitive.Close ref={swipeClose} hidden tabIndex={-1} aria-hidden="true" />}
         {!hideClose && (
           <DialogPrimitive.Close
             // bersaglio da 44px, centrato dove stava l'icona (28px dall'angolo)

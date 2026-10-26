@@ -34,15 +34,17 @@ describe('classifyGesture', () => {
 });
 
 describe('pullDistance', () => {
-  it('applica resistenza e tetto', () => {
+  it('segue il dito con resistenza crescente, senza mai superare il tetto', () => {
     expect(pullDistance(-10)).toBe(0);
-    expect(pullDistance(40)).toBe(20);
-    expect(pullDistance(10_000)).toBe(MAX_PULL);
+    expect(pullDistance(40)).toBeCloseTo(23.6, 1);
+    expect(pullDistance(200) - pullDistance(160)).toBeLessThan(pullDistance(40) - pullDistance(0));
+    expect(pullDistance(10_000)).toBeLessThan(MAX_PULL);
+    expect(pullDistance(10_000)).toBeGreaterThan(MAX_PULL * 0.95);
   });
 
   it('la soglia si raggiunge solo con un trascinamento deciso', () => {
     expect(isPastThreshold(pullDistance(PULL_THRESHOLD))).toBe(false);
-    expect(isPastThreshold(pullDistance(PULL_THRESHOLD * 2))).toBe(true);
+    expect(isPastThreshold(pullDistance(PULL_THRESHOLD * 3))).toBe(true);
   });
 });
 

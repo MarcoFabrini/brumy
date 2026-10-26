@@ -1,9 +1,10 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react';
+import { forwardRef, useMemo, useRef, type ComponentPropsWithoutRef, type ElementRef, type HTMLAttributes } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
+import { cn, mergeRefs } from '@/lib/utils';
+import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 
 /**
  * Sheet molecule — side drawer (left/right/top/bottom).
@@ -36,6 +37,8 @@ export const SheetOverlay = forwardRef<
       'fixed inset-0 z-50 bg-black/40',
       'data-[state=open]:animate-in data-[state=open]:fade-in-0',
       'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+      // Lo sfondo si scurisce e si schiarisce col passo del foglio, non di colpo
+      'duration-300',
       className,
     )}
     {...props}
@@ -51,7 +54,7 @@ const sheetVariants = cva(
         top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top pt-safe',
         bottom:
           // Foglio iOS: angoli superiori da 12px e maniglia grigia in cima (pseudo-elemento, decorativa).
-          'inset-x-0 bottom-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom pb-safe rounded-t-[12px] pt-7 before:absolute before:left-1/2 before:top-[7px] before:h-[5px] before:w-9 before:-translate-x-1/2 before:rounded-full before:bg-muted-foreground/40 before:content-[""]',
+          'inset-x-0 bottom-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom [animation-timing-function:cubic-bezier(0.32,0.72,0,1)] pb-safe rounded-t-[12px] pt-7 before:absolute before:left-1/2 before:top-[7px] before:h-[5px] before:w-9 before:-translate-x-1/2 before:rounded-full before:bg-muted-foreground/40 before:content-[""]',
         left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
         right:
           'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
@@ -72,11 +75,16 @@ export const SheetContent = forwardRef<
   SheetContentProps
 >(({ side = 'right', className, children, hideClose, ...props }, ref) => {
   const { t } = useTranslation();
+  // Il foglio dal basso si chiude anche trascinandolo giù: lo chiude il pulsante nascosto, come la X
+  const swipeClose = useRef<HTMLButtonElement>(null);
+  const swipeRef = useSwipeToDismiss(() => swipeClose.current?.click(), { enabled: side === 'bottom' });
+  const contentRef = useMemo(() => mergeRefs(ref, swipeRef), [ref, swipeRef]);
   return (
     <SheetPortal>
       <SheetOverlay />
-      <DialogPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+      <DialogPrimitive.Content ref={contentRef} className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
+        {side === 'bottom' && <DialogPrimitive.Close ref={swipeClose} hidden tabIndex={-1} aria-hidden="true" />}
         {!hideClose && (
           <DialogPrimitive.Close
             // bersaglio da 44px, centrato dove stava l'icona (28px dall'angolo)

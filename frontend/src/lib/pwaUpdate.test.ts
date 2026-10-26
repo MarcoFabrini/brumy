@@ -3,6 +3,7 @@ import {
   UPDATE_CHECK_INTERVAL_MS,
   getUpdateAvailable,
   refreshApp,
+  refreshInPlace,
   resetUpdateStateForTests,
   subscribeUpdateAvailable,
   watchForUpdates,
@@ -117,5 +118,29 @@ describe('refreshApp', () => {
     const reload = vi.fn();
     await refreshApp(reload);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('refreshInPlace', () => {
+  afterEach(() => resetUpdateStateForTests());
+
+  it('senza versioni nuove aggiorna solo i dati, senza ricaricare la pagina', async () => {
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    const reload = vi.fn();
+    await refreshInPlace(refetch, reload);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('con una versione nuova già segnalata ricarica invece di aggiornare i dati', async () => {
+    const { env, containerHandlers } = makeEnv(true);
+    watchForUpdates({ update: vi.fn(), waiting: null }, env);
+    containerHandlers.get('controllerchange')?.();
+
+    const refetch = vi.fn();
+    const reload = vi.fn();
+    await refreshInPlace(refetch, reload);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(refetch).not.toHaveBeenCalled();
   });
 });

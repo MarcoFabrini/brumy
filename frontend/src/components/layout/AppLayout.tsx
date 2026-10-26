@@ -27,13 +27,14 @@ export function AppLayout() {
         // appena più largo dello schermo farebbe spostare la pagina di lato mostrando una fascia vuota.
         className="relative flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-nav-clearance pt-safe-content md:px-8 md:pb-8 md:pt-8"
       >
-        <PullToRefresh scrollRef={scrollRef} />
-        {/* Da md il contenuto ha una larghezza di lettura (come le app iPad/Mac), non tutto lo schermo. */}
-        <div className="mx-auto w-full md:max-w-3xl xl:max-w-5xl">
-          <Suspense fallback={<RouteFallback />}>
-            <Outlet />
-          </Suspense>
-        </div>
+        <PullToRefresh scrollRef={scrollRef}>
+          {/* Da md il contenuto ha una larghezza di lettura (come le app iPad/Mac), non tutto lo schermo. */}
+          <div className="mx-auto w-full md:max-w-3xl xl:max-w-5xl">
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
+          </div>
+        </PullToRefresh>
       </main>
       <BottomNav />
     </div>
