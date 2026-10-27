@@ -185,10 +185,11 @@ assert_eq "opcache senza validate_timestamps" "0" "$(in_image 'php -r "echo ini_
 assert_eq "expose_php spento" "" "$(in_image 'php -r "echo ini_get(\"expose_php\");"')"
 assert_eq "upload_max_filesize 11M" "11M" "$(in_image 'php -r "echo ini_get(\"upload_max_filesize\");"')"
 
-# /app deve contenere solo ciò che serve a far girare l'app: qualunque altra voce (tests, .git, frontend, node_modules,
-# docs, file di configurazione locali, cartelle di lavoro...) vuol dire che il Dockerfile o .dockerignore sono cambiati.
-unexpected="$(in_image 'cd /app && for e in $(ls -A); do case "$e" in .env|bin|composer.json|composer.lock|config|migrations|public|src|symfony.lock|templates|var|vendor) ;; *) echo "$e" ;; esac; done')"
-assert_eq "/app contiene solo l'applicazione (nessun tests, .git, frontend, node_modules, docs...)" "" "$unexpected"
+# /app deve contenere solo ciò che serve a far girare l'app: qualunque altra voce (tests, .git, sorgenti del frontend,
+# node_modules, docs, file di configurazione locali, cartelle di lavoro...) vuol dire che il Dockerfile o .dockerignore
+# sono cambiati. Del frontend c'è solo package.json, da cui l'app legge la propria versione (AppUpdates).
+unexpected="$(in_image 'cd /app && for e in $(ls -A); do case "$e" in .env|bin|composer.json|composer.lock|config|migrations|public|src|symfony.lock|templates|var|vendor) ;; frontend) [ "$(ls -A frontend)" = "package.json" ] || echo "frontend/: $(ls -A frontend | tr "\n" " ")" ;; *) echo "$e" ;; esac; done')"
+assert_eq "/app contiene solo l'applicazione (nessun tests, .git, sorgenti del frontend, node_modules, docs...)" "" "$unexpected"
 
 dev_tools="$(in_image 'for p in vendor/phpunit vendor/phpstan/phpstan vendor/bin/phpunit vendor/bin/phpstan public/frontend/node_modules; do [ -e "/app/$p" ] && echo "$p"; done; for b in composer git xdebug; do command -v "$b"; done; true')"
 assert_eq "nessuna dipendenza né strumento di sviluppo (phpunit, phpstan, composer, git, xdebug)" "" "$dev_tools"

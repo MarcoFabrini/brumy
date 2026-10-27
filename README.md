@@ -106,8 +106,13 @@ Then run `docker compose up -d` again. Using another proxy (nginx, Caddy, Cloudf
 
 ```bash
 docker compose exec -u www-data api php bin/console app:backup:create   # backup first
+cp compose.yml compose.yml.bak                                             # keep your current compose
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
 docker compose pull && docker compose up -d
+docker compose restart scheduler                                           # reloads the scheduled jobs
 ```
+
+Download `compose.yml` again at every release: the scheduled jobs (daily fuel prices, update check, cleanups) and the services are defined there, not in the image, so `docker compose pull` alone keeps the old ones. Put your own changes (ports, networks, proxy) in a `compose.override.yml`, which Docker Compose reads automatically and the download never overwrites; `diff compose.yml.bak compose.yml` shows what changed. `docker compose logs scheduler | grep -i registered` lists the jobs the scheduler loaded.
 
 DB migrations run automatically on startup, so an update can change the schema: take a backup first. To stay on a known version set `BRUMY_TAG` in `.env` to a release without the `v` (e.g. `0.1.2`, or `0.1` for its latest patch) instead of the default `latest`, which follows the newest release.
 
@@ -216,6 +221,7 @@ Migrations run on startup, so restoring a dump from an older version and then pu
 | `ATTACHMENTS_ORG_QUOTA_MB` | `1024` | Total attachment storage allowed per organization, in MB (`0` = no limit). Uploads beyond it get a 413. Separately, each record (vehicle, maintenance, expense...) holds at most 20 files. |
 | `VEHICLES_ORG_LIMIT` | `0` | Maximum number of vehicles per organization, archived ones included (`0` = no limit). Creating one past the limit gets a 422 `vehicle.limit_reached`; deleting a vehicle frees a slot, archiving it does not. |
 | `FUEL_PRICES_ENABLED` | `true` | Fuel prices in the refueling form, from the Italian Ministry's open data (MIMIT "Osservaprezzi carburanti"): the app downloads stations and prices once a day (~7 MB, job at 8:30). Set `false` outside Italy: no downloads, no price buttons. |
+| `UPDATE_CHECK_ENABLED` | `true` | Once a day the instance reads the release tags of this repository on GitHub and shows the instance admin, in the profile, when a newer version is out. It only notifies: nothing is downloaded or installed. Set `false` to turn the check off. |
 | `API_DOC_ENABLED` | `false` | Serves the interactive API documentation at `/api/doc` (and the OpenAPI spec at `/api/doc.json`) **without login**. Off by default: both answer 404. Set `API_DOC_ENABLED=true` in `.env` and restart to expose them; keep it off on an instance open to the internet unless you want the API surface public. |
 
 ### Development and contributing
@@ -332,8 +338,13 @@ Poi rilancia `docker compose up -d`. Usi un altro proxy (nginx, Caddy, Cloudflar
 
 ```bash
 docker compose exec -u www-data api php bin/console app:backup:create   # prima un backup
+cp compose.yml compose.yml.bak                                             # copia del compose attuale
+curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
 docker compose pull && docker compose up -d
+docker compose restart scheduler                                           # rilegge i job pianificati
 ```
+
+A ogni release riscarica `compose.yml`: i job pianificati (prezzi del carburante giornalieri, controllo degli aggiornamenti, pulizie) e i servizi sono definiti lì, non nell'immagine, quindi con il solo `docker compose pull` restano quelli vecchi. Le tue modifiche (porte, reti, proxy) mettile in un `compose.override.yml`, che Docker Compose legge da solo e che il download non sovrascrive; `diff compose.yml.bak compose.yml` mostra cosa è cambiato. `docker compose logs scheduler | grep -i registered` elenca i job caricati dallo scheduler.
 
 Le migrazioni DB girano da sole all'avvio, quindi un aggiornamento può cambiare lo schema: fai prima un backup. Per restare su una versione precisa imposta `BRUMY_TAG` in `.env` a una release senza la `v` (es. `0.1.2`, oppure `0.1` per la sua ultima patch) invece del default `latest`, che segue l'ultima release.
 
@@ -442,6 +453,7 @@ Le migrazioni girano all'avvio, quindi si può ripristinare un dump di una versi
 | `ATTACHMENTS_ORG_QUOTA_MB` | `1024` | Spazio totale degli allegati per organizzazione, in MB (`0` = nessun limite). Oltre il limite l'upload risponde 413. In più, ogni record (veicolo, manutenzione, spesa...) contiene al massimo 20 file. |
 | `VEHICLES_ORG_LIMIT` | `0` | Numero massimo di veicoli per organizzazione, archiviati inclusi (`0` = nessun limite). Crearne uno oltre il limite risponde 422 `vehicle.limit_reached`; eliminare un veicolo libera un posto, archiviarlo no. |
 | `FUEL_PRICES_ENABLED` | `true` | Prezzi del carburante nel modulo del rifornimento, dall'open data del Ministero (MIMIT "Osservaprezzi carburanti"): l'app scarica distributori e prezzi una volta al giorno (~7 MB, job alle 8:30). Fuori dall'Italia impostalo a `false`: niente download e niente pulsanti dei prezzi. |
+| `UPDATE_CHECK_ENABLED` | `true` | Una volta al giorno l'istanza legge i tag delle versioni di questo repository su GitHub e mostra all'amministratore, nel profilo, quando ne è uscita una più recente. È solo un avviso: non scarica né installa niente. Imposta `false` per spegnere il controllo. |
 | `API_DOC_ENABLED` | `false` | Pubblica la documentazione interattiva dell'API su `/api/doc` (e lo spec OpenAPI su `/api/doc.json`) **senza login**. Spenta di default: entrambe rispondono 404. Imposta `API_DOC_ENABLED=true` in `.env` e riavvia per esporle; su un'istanza aperta a internet lasciala spenta se non vuoi rendere pubblica la superficie dell'API. |
 
 ### Sviluppo e contributi

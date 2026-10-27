@@ -18,6 +18,8 @@ parameters:
     app_vehicles_org_limit_default: 0
     # Prezzi del carburante dall'open data MIMIT (solo Italia). Override: FUEL_PRICES_ENABLED=0 per spegnerli.
     app_fuel_prices_enabled_default: true
+    # Controllo giornaliero di una nuova versione su GitHub (avviso all'amministratore). Override: UPDATE_CHECK_ENABLED=0.
+    app_update_check_enabled_default: true
 
 services:
     _defaults:

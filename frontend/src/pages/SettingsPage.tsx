@@ -27,6 +27,7 @@ import {
 } from '@/components/ui';
 import { EmailVerificationBanner, PageHeader } from '@/components/layout';
 import {
+  AboutSection,
   ChangePasswordDialog,
   EditOrganizationDialog,
   EditProfileDialog,
@@ -258,6 +259,9 @@ export function SettingsPage() {
 
       {/* ── Notifiche push: sottoscrizione dispositivo (tutti) + VAPID (solo owner) ── */}
       <PushSettingsCard />
+
+      {/* ── Informazioni: versione e, per l'amministratore, l'aggiornamento disponibile ── */}
+      <AboutSection />
 
       {/* ── Logout: riga rossa come in iOS ───────────────────── */}
       <ListSection>

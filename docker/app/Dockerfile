@@ -99,6 +99,8 @@ COPY src/ src/
 COPY templates/ templates/
 COPY symfony.lock .env ./
 COPY --from=frontend-builder /app/dist /app/public/frontend
+# La versione dell'app (AppUpdates) è quella del frontend, aggiornata a ogni rilascio.
+COPY frontend/package.json frontend/package.json
 COPY docker/app/Caddyfile /etc/frankenphp/Caddyfile
 
 RUN mkdir -p var/cache var/log \

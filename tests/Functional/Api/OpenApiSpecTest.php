@@ -65,6 +65,7 @@ final class OpenApiSpecTest extends ApiTestCase
             '/api/auth/2fa/backup-codes',
             '/api/auth/switch-org',
             '/api/auth/me',
+            '/api/about',
             '/api/vehicles',
             '/api/vehicles/{id}',
             '/api/vehicles/{id}/stats',

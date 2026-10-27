@@ -393,7 +393,13 @@
       "role_updated": "Ruolo aggiornato.",
       "invite_description": "Riceve un'email con il link per entrare nell'organizzazione."
     },
-    "large_text": "Testo grande"
+    "large_text": "Testo grande",
+    "about": {
+      "title": "Informazioni",
+      "version": "Versione",
+      "dev": "sviluppo",
+      "update_available": "Aggiornamento disponibile"
+    }
   },
   "security": {
     "title": "Sicurezza",

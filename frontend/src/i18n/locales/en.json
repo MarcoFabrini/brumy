@@ -393,7 +393,13 @@
       "role_updated": "Role updated.",
       "invite_description": "They get an email with the link to join the organization."
     },
-    "large_text": "Large text"
+    "large_text": "Large text",
+    "about": {
+      "title": "About",
+      "version": "Version",
+      "dev": "development",
+      "update_available": "Update available"
+    }
   },
   "security": {
     "title": "Security",

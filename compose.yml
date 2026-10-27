@@ -93,6 +93,7 @@ services:
       ofelia.job-exec.messenger-retry.user: "www-data"
       ofelia.job-exec.cache-prune.user: "www-data"
       ofelia.job-exec.fuel-prices.user: "www-data"
+      ofelia.job-exec.update-check.user: "www-data"
       ofelia.job-exec.reminders.schedule: "0 0 7 * * *"
       ofelia.job-exec.reminders.command: "php bin/console app:reminders:dispatch --no-interaction"
       ofelia.job-exec.backup.schedule: "0 0 3 * * *"
@@ -107,6 +108,9 @@ services:
       # Prezzi del carburante (open data MIMIT, "prezzo alle 8"): spento con FUEL_PRICES_ENABLED=0.
       ofelia.job-exec.fuel-prices.schedule: "0 30 8 * * *"
       ofelia.job-exec.fuel-prices.command: "php bin/console app:fuel-prices:import --no-interaction"
+      # Nuova versione su GitHub (solo un avviso nel profilo dell'amministratore): spento con UPDATE_CHECK_ENABLED=0.
+      ofelia.job-exec.update-check.schedule: "0 45 5 * * *"
+      ofelia.job-exec.update-check.command: "php bin/console app:update:check --no-interaction"
       ofelia.job-exec.messenger-retry.schedule: "0 30 * * * *"
       # messenger:failed:retry non va bene qui: senza id dei messaggi rifiuta --no-interaction e non ha --limit.
       # Consumare il transport failed fa lo stesso lavoro (un messaggio che fallisce ancora viene ritentato dalla
