@@ -18,7 +18,7 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  * record, iscrizioni push, upload) senza freni. Le letture non si limitano: l'app le fa a raffica per
  * disegnare una pagina. Le rotte pubbliche (login, registrazione...) hanno i propri limiter nei controller.
  *
- * Gira dopo il firewall (priorità 8), quando il token JWT è già stato letto, e chiave per utente (non per IP:
+ * Gira dopo il firewall (priorità 8), quando la sessione è già stata letta, e chiave per utente (non per IP:
  * chi sta dietro lo stesso NAT non si blocca a vicenda).
  */
 #[AsEventListener(event: KernelEvents::REQUEST, priority: 4)]

@@ -35,7 +35,18 @@
       "password": "Password",
       "submit": "Entra",
       "no_account": "Non hai un account?",
-      "register": "Registrati"
+      "register": "Registrati",
+      "two_factor": {
+        "title": "Verifica in due passaggi",
+        "description": "Inserisci il codice a 6 cifre dell'app di autenticazione",
+        "code": "Codice",
+        "recovery_description": "Inserisci uno dei codici di recupero che hai salvato",
+        "recovery_code": "Codice di recupero",
+        "use_recovery": "Usa un codice di recupero",
+        "use_app": "Usa l'app di autenticazione",
+        "submit": "Verifica",
+        "cancel": "Annulla e torna all'accesso"
+      }
     },
     "register": {
       "title": "Crea account",
@@ -383,6 +394,43 @@
       "invite_description": "Riceve un'email con il link per entrare nell'organizzazione."
     },
     "large_text": "Testo grande"
+  },
+  "security": {
+    "title": "Sicurezza",
+    "two_factor": {
+      "label": "Verifica in due passaggi",
+      "on": "Attiva",
+      "off": "Non attiva",
+      "setup_title": "Attiva la verifica in due passaggi",
+      "scan": "Inquadra il codice QR con un'app di autenticazione (Google Authenticator, Authy, 1Password…)",
+      "qr_alt": "Codice QR per l'app di autenticazione",
+      "manual_key": "Oppure inserisci questa chiave a mano",
+      "copy_key": "Copia la chiave",
+      "key_copied": "Chiave copiata",
+      "open_app": "Apri nell'app di autenticazione",
+      "confirm_code": "Codice di conferma",
+      "confirm_description": "Inserisci la password e il codice a 6 cifre che mostra l'app",
+      "code": "Codice dell'app o di recupero",
+      "enable": "Attiva",
+      "disable": "Disattiva",
+      "enabled_toast": "Verifica in due passaggi attivata",
+      "disabled_toast": "Verifica in due passaggi disattivata",
+      "disable_title": "Disattiva la verifica in due passaggi",
+      "disable_description": "Inserisci la password e un codice dell'app o un codice di recupero"
+    },
+    "backup_codes": {
+      "title": "Codici di recupero",
+      "description": "Ognuno vale una sola volta. Conservali in un posto sicuro: non li vedrai più",
+      "remaining_one": "{{count}} codice rimasto",
+      "remaining_other": "{{count}} codici rimasti",
+      "copy": "Copia",
+      "copied": "Codici copiati",
+      "download": "Scarica",
+      "file_name": "brumy-codici-di-recupero.txt",
+      "regenerate": "Genera nuovi codici",
+      "regenerate_description": "I codici attuali smetteranno di funzionare",
+      "done": "Li ho salvati"
+    }
   },
   "reminder": {
     "new": "Nuovo promemoria",
@@ -768,15 +816,16 @@
       "invalid_reset_token": "Il link di reset è scaduto o non valido",
       "registration_closed": "La registrazione libera è chiusa su questa istanza: chiedi un invito a chi la amministra",
       "try_again": "Il server è occupato, riprova tra un istante.",
-      "invalid_refresh_token": "Sessione scaduta, accedi di nuovo",
       "invalid_verification_token": "Il link di verifica è scaduto o non valido",
       "no_avatar": "Nessuna foto profilo da rimuovere",
       "not_authenticated": "Accedi per continuare",
       "not_member": "Non fai parte di questa organizzazione",
-      "refresh_token_required": "Sessione scaduta, accedi di nuovo",
       "no_active_organization": "Nessuna organizzazione attiva: accedi di nuovo o scegline una",
       "organization_not_found": "Organizzazione non trovata",
-      "not_member_of_organization": "Non fai più parte di questa organizzazione: accedi di nuovo"
+      "not_member_of_organization": "Non fai più parte di questa organizzazione: accedi di nuovo",
+      "invalid_two_factor_code": "Codice non valido",
+      "two_factor_required": "Inserisci il codice di verifica per completare l'accesso",
+      "csrf_invalid": "Richiesta rifiutata per motivi di sicurezza: ricarica la pagina e riprova"
     },
     "access": {
       "org_admin_required": "Solo gli amministratori dell'organizzazione possono fare questa operazione."
@@ -1004,6 +1053,14 @@
       "invalid_query": "Ricerca del distributore non valida",
       "station_not_found": "Distributore non trovato",
       "not_linked": "Collega prima la voce a un distributore"
+    },
+    "two_factor": {
+      "already_enabled": "La verifica in due passaggi è già attiva",
+      "not_enabled": "La verifica in due passaggi non è attiva",
+      "setup_required": "Configurazione scaduta: ricomincia dall'inizio",
+      "invalid_code": "Codice non valido",
+      "code_format": "Il codice ha 6 cifre",
+      "recovery_code_format": "Il codice di recupero ha 12 caratteri"
     }
   },
   "account": {

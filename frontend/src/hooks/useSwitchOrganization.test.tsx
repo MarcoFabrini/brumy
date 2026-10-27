@@ -30,17 +30,17 @@ function useHarness() {
 describe('useSwitchOrganization', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
-    useAuthStore.setState({ accessToken: 'old-token' });
+    useAuthStore.setState({ activeOrgId: 1 });
     await i18n.changeLanguage('it');
   });
 
-  it('invia organizationId a switch-org, salva il nuovo token e va alla home', async () => {
-    mockedAuthFetch.mockResolvedValue({ access_token: 'new-token' });
+  it('invia organizationId a switch-org, salva la nuova org attiva e va alla home', async () => {
+    mockedAuthFetch.mockResolvedValue({ activeOrganizationId: 5 });
     const { result } = renderHook(useHarness, { wrapper });
 
     act(() => result.current.switchTo(5));
 
-    await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('new-token'));
+    await waitFor(() => expect(useAuthStore.getState().activeOrgId).toBe(5));
     expect(mockedAuthFetch).toHaveBeenCalledWith(
       '/api/auth/switch-org',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 5 }) }),
@@ -49,7 +49,7 @@ describe('useSwitchOrganization', () => {
   });
 
   it('due chiamate nello stesso tick inviano una sola richiesta', async () => {
-    mockedAuthFetch.mockResolvedValue({ access_token: 'new-token' });
+    mockedAuthFetch.mockResolvedValue({ activeOrganizationId: 5 });
     const { result } = renderHook(useHarness, { wrapper });
 
     act(() => {
@@ -61,19 +61,19 @@ describe('useSwitchOrganization', () => {
     expect(mockedAuthFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('in errore tiene token e pagina, e dopo si può riprovare', async () => {
+  it('in errore tiene org e pagina, e dopo si può riprovare', async () => {
     mockedAuthFetch.mockRejectedValueOnce(new ApiError('auth.not_member', 403));
     const { result } = renderHook(useHarness, { wrapper });
 
     act(() => result.current.switchTo(5));
     await waitFor(() => expect(result.current.isPending).toBe(false));
 
-    expect(useAuthStore.getState().accessToken).toBe('old-token');
+    expect(useAuthStore.getState().activeOrgId).toBe(1);
     expect(result.current.pathname).toBe('/vehicles/42');
 
-    mockedAuthFetch.mockResolvedValueOnce({ access_token: 'new-token' });
+    mockedAuthFetch.mockResolvedValueOnce({ activeOrganizationId: 5 });
     act(() => result.current.switchTo(5));
-    await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('new-token'));
+    await waitFor(() => expect(useAuthStore.getState().activeOrgId).toBe(5));
     expect(mockedAuthFetch).toHaveBeenCalledTimes(2);
   });
 });

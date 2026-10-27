@@ -10,7 +10,6 @@ use App\Entity\OrganizationInvitation;
 use App\Entity\Organization;
 use App\Entity\PasswordResetToken;
 use App\Entity\PushSubscription;
-use App\Entity\RefreshToken;
 use App\Entity\Refueling;
 use App\Entity\User;
 use App\Entity\UserValue;
@@ -74,21 +73,26 @@ final class GdprDeleteServiceTest extends KernelTestCase
         self::assertNull($refreshed->getPendingEmail(), "Anche l'indirizzo in attesa è un dato personale");
     }
 
-    public function testAnonymizeRevokesRefreshTokens(): void
+    public function testAnonymizeDeletesRememberMeSeriesResetsTwoFactorAndLastOrganization(): void
     {
-        $user = UserFactory::createOne();
+        $user = UserFactory::createOne(['email' => 'gdpr-remember@test.it']);
         $org = OrganizationFactory::createOne();
         OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $org, 'role' => OrgRole::OWNER]);
-
-        $token = new RefreshToken($user, 'tok_'.bin2hex(random_bytes(8)), new \DateTimeImmutable('+1 day'));
-        $this->em()->persist($token);
+        $connection = $this->em()->getConnection();
+        foreach (['gdpr-remember@test.it' => 'mine', 'someone-else@test.it' => 'theirs'] as $email => $series) {
+            $connection->insert('rememberme_token', ['series' => $series, 'value' => 'v', 'lastUsed' => date('Y-m-d H:i:s'), 'class' => User::class, 'username' => $email]);
+        }
+        $user->beginTotpSetup('cifrato', 'JBSWY3DPEHPK3PXP');
+        $user->enableTotp(new \DateTimeImmutable(), ['hash']);
+        $user->setLastActiveOrganization($org);
         $this->em()->flush();
 
         $summary = $this->service()->anonymize($user);
 
-        self::assertSame(1, $summary['revoked_tokens']);
-        $this->em()->refresh($token);
-        self::assertNotNull($token->getRevokedAt());
+        self::assertSame(1, $summary['deleted_remember_me_tokens']);
+        self::assertSame(['theirs'], $connection->fetchFirstColumn('SELECT series FROM rememberme_token'));
+        $row = $connection->fetchAssociative('SELECT totp_secret, totp_enabled_at, backup_codes, last_active_organization_id FROM users WHERE id = ?', [$summary['anonymized_user_id']]);
+        self::assertSame(['totp_secret' => null, 'totp_enabled_at' => null, 'backup_codes' => '[]', 'last_active_organization_id' => null], $row);
     }
 
     public function testAnonymizeDeletesPushSubscriptions(): void

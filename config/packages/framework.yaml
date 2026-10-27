@@ -2,8 +2,26 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
-    # API stateless: la session HTTP non serve, viene utilizzata solo nei test
-    session: false
+    # Sessione dell'API salvata in MariaDB (PdoSessionHandler, tabella `sessions`). Il cookie vive solo finché il
+    # browser resta aperto: la durata di 7 giorni la dà il remember-me (security.yaml); lato server una sessione
+    # inattiva da 7 giorni viene cancellata dalla GC.
+    session:
+        handler_id: Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler
+        name: brumy_session
+        cookie_path: /api
+        cookie_httponly: true
+        cookie_samesite: lax
+        cookie_secure: '%app.cookie_secure%'
+        cookie_lifetime: 0
+        gc_maxlifetime: 604800
+        gc_probability: 1
+        gc_divisor: 100
+
+    # Protezione CSRF same-origin per tutte le richieste non sicure sotto /api (App\EventListener\ApiCsrfListener):
+    # Sec-Fetch-Site, oppure Origin/Referer uguali all'host della richiesta. Nessun token da mandare.
+    csrf_protection:
+        enabled: true
+        stateless_token_ids: [api]
 
     http_method_override: false
     handle_all_throwables: true
@@ -18,13 +36,9 @@ framework:
     trusted_proxies: '%env(default::TRUSTED_PROXIES)%'
     trusted_headers: ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port', 'x-forwarded-prefix']
 
-    # Rate limiting
+    # Rate limiting (il login usa `login_throttling` del firewall, vedi security.yaml)
     rate_limiter:
-        login:
-            policy: 'fixed_window'
-            limit: 5
-            interval: '1 minute'
-        # Dedicato a forgot-password: separato da login così uno spam non blocca l'altro.
+        # Dedicato a forgot-password: separato dal login così uno spam non blocca l'altro.
         forgot_password:
             policy: 'fixed_window'
             limit: 3
@@ -38,16 +52,12 @@ framework:
             policy: 'sliding_window'
             limit: 60
             interval: '1 minute'
-        refresh:
+        # Codici della verifica in due passaggi, per utente: al login (eventi Scheb, App\EventListener\TwoFactorRateLimitListener)
+        # e negli endpoint che la attivano, disattivano o rigenerano i codici di recupero. Consuma solo sui fallimenti.
+        two_factor:
             policy: 'fixed_window'
-            limit: 30
-            interval: '1 minute'
-        # Solo IP: il limiter di login è per (email, IP) e non frena né lo spraying di una password
-        # su molte email né chi ruota le email.
-        login_ip:
-            policy: 'fixed_window'
-            limit: 20
-            interval: '1 minute'
+            limit: 5
+            interval: '15 minutes'
         # register / reset-password / verify-email / inviti: i token sono a 256 bit (non indovinabili),
         # ma ogni tentativo costa hashing/DB. Per IP.
         token_actions:
@@ -72,11 +82,12 @@ when@test:
         test: true
         # I test girano tutti dallo stesso IP e ripetono le stesse azioni: limiti irraggiungibili.
         rate_limiter:
-            login_ip:
-                limit: 100000
             api:
                 limit: 100000
             token_actions:
                 limit: 100000
+        # Sessioni su file finti (mock_file), niente PdoSessionHandler: il suo DATABASE_URL non ha il suffisso `_test`
+        # che Doctrine aggiunge al nome del database dei test.
         session:
+            handler_id: null
             storage_factory_id: session.storage.factory.mock_file

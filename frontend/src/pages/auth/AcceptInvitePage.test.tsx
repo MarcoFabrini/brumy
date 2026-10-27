@@ -24,6 +24,8 @@ const loggedUser: User = {
   emailVerified: true,
   pendingEmail: null,
   isInstanceAdmin: false,
+  twoFactorEnabled: false,
+  backupCodesRemaining: 0,
   memberships: [],
 };
 
@@ -49,7 +51,7 @@ describe('AcceptInvitePage — utente loggato con l\'email invitata', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user: loggedUser });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user: loggedUser });
   });
 
   it("dopo l'accettazione resta la schermata di successo anche se l'anteprima non è più leggibile", async () => {
@@ -61,8 +63,8 @@ describe('AcceptInvitePage — utente loggato con l\'email invitata', () => {
         return preview;
       }
       if (path === '/api/auth/invitation/accept') return { organizationId: 7 };
-      if (path === '/api/auth/switch-org') return { access_token: 'tok-org-7' };
-      if (path === '/api/auth/me') return loggedUser;
+      if (path === '/api/auth/switch-org') return { activeOrganizationId: 7 };
+      if (path === '/api/auth/me') return { ...loggedUser, activeOrganizationId: 7 };
       throw new Error(`unexpected fetch ${path}`);
     });
     const qc = renderPage();
@@ -83,8 +85,8 @@ describe('AcceptInvitePage — utente loggato con l\'email invitata', () => {
     mockedAuthFetch.mockImplementation(async (path) => {
       if (path === '/api/auth/invitation/tok') return preview;
       if (path === '/api/auth/invitation/accept') return { organizationId: 7 };
-      if (path === '/api/auth/switch-org') return { access_token: 'tok-org-7' };
-      if (path === '/api/auth/me') return loggedUser;
+      if (path === '/api/auth/switch-org') return { activeOrganizationId: 7 };
+      if (path === '/api/auth/me') return { ...loggedUser, activeOrganizationId: 7 };
       throw new Error(`unexpected fetch ${path}`);
     });
     renderPage();
@@ -101,7 +103,7 @@ describe('AcceptInvitePage — utente loggato con l\'email invitata', () => {
         if (++attempts === 1) throw new ApiError('http.500', 500);
         return {};
       }
-      if (path === '/api/auth/me') return loggedUser;
+      if (path === '/api/auth/me') return { ...loggedUser, activeOrganizationId: 7 };
       throw new Error(`unexpected fetch ${path}`);
     });
     const user = userEvent.setup();

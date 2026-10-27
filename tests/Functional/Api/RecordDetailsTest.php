@@ -18,14 +18,14 @@ final class RecordDetailsTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/maintenances', [
             'vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-01', 'km' => 1000, 'type' => 'brakes',
             'description' => 'Pastiglie anteriori', 'notes' => 'Rumore in frenata da una settimana',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Rumore in frenata da una settimana', $this->jsonBody()['notes']);
         $this->jsonRequest('PUT', '/api/maintenances/'.$this->jsonBody()['id'], [
             'vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-01', 'km' => 1000, 'type' => 'brakes',
             'description' => 'Pastiglie anteriori', 'notes' => null,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertNull($this->jsonBody()['notes']);
     }
 
@@ -38,13 +38,13 @@ final class RecordDetailsTest extends ApiTestCase
             'liters' => '40.000', 'pricePerLiter' => '1.8000', 'fuelType' => $vehicle->getFuelType()->value, 'fullTank' => true,
         ];
 
-        $this->jsonRequest('POST', '/api/refuelings', [...$body, 'description' => ' Viaggio a Roma '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/refuelings', [...$body, 'description' => ' Viaggio a Roma '], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Viaggio a Roma', $this->jsonBody()['description']);
-        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId(), session: $token);
         self::assertSame(['Viaggio a Roma'], array_column($this->jsonBody(), 'description'), 'anche nella lista, per la riga');
 
-        $this->jsonRequest('POST', '/api/refuelings', [...$body, 'km' => 51000, 'description' => '  '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/refuelings', [...$body, 'km' => 51000, 'description' => '  '], session: $token);
         self::assertNull($this->jsonBody()['description']);
     }
 
@@ -56,11 +56,11 @@ final class RecordDetailsTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/reminders', [
             'vehicleId' => $vehicle->getId(), 'type' => 'insurance', 'description' => 'Polizza RCA',
             'dueDate' => '2026-12-31', 'recurrenceMonths' => 12, 'notes' => 'Chiedere preventivo al broker',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Chiedere preventivo al broker', $this->jsonBody()['notes']);
 
-        $this->jsonRequest('POST', '/api/reminders/'.$this->jsonBody()['id'].'/complete', accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders/'.$this->jsonBody()['id'].'/complete', session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame('Chiedere preventivo al broker', $this->jsonBody()['next']['notes']);
     }
@@ -72,7 +72,7 @@ final class RecordDetailsTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/vehicles', [
             'name' => 'La Panda', 'brand' => 'Fiat', 'model' => 'Panda', 'year' => 2019,
             'type' => 'car', 'fuelType' => 'gasoline', 'initialKm' => 30000, 'purchasePrice' => '8500.00',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('8500.00', $this->jsonBody()['purchasePrice']);
@@ -80,7 +80,7 @@ final class RecordDetailsTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/vehicles', [
             'name' => 'Errata', 'brand' => 'Fiat', 'model' => 'Panda', 'year' => 2019,
             'type' => 'car', 'fuelType' => 'gasoline', 'initialKm' => 0, 'purchasePrice' => 'tanti',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('purchasePrice', $this->jsonBody()['errors'][0]['field']);
     }

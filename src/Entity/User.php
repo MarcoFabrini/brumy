@@ -6,10 +6,16 @@ namespace App\Entity;
 
 use App\Entity\Concern\TimestampableTrait;
 use App\Repository\UserRepository;
+use App\Security\BackupCode;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Scheb\TwoFactorBundle\Model\BackupCodeInterface;
+use Scheb\TwoFactorBundle\Model\Totp\TotpConfiguration;
+use Scheb\TwoFactorBundle\Model\Totp\TotpConfigurationInterface;
+use Scheb\TwoFactorBundle\Model\Totp\TwoFactorInterface;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -19,7 +25,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'users')]
 #[ORM\HasLifecycleCallbacks]
 #[UniqueEntity(fields: ['email'], message: 'auth.email_taken')]
-class User implements UserInterface, PasswordAuthenticatedUserInterface
+class User implements UserInterface, PasswordAuthenticatedUserInterface, EquatableInterface, TwoFactorInterface, BackupCodeInterface
 {
     use TimestampableTrait;
 
@@ -75,20 +81,44 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeImmutable $emailVerifiedAt = null;
 
     /**
-     * Versione delle credenziali di sessione, copiata nel claim `token_version` di ogni access token: incrementata
-     * a ogni revoca di sessioni; gli access token con una versione diversa vengono rifiutati
-     * ({@see \App\Security\JwtUserProvider}). Mai esposta (nessun gruppo) e mai impostata a mano: cambia solo
-     * con {@see self::incrementTokenVersion()}, sotto il lock di {@see \App\Service\RefreshTokenService}.
-     */
-    #[ORM\Column(name: 'token_version', options: ['default' => 0])]
-    private int $tokenVersion = 0;
-
-    /**
      * Nuovo indirizzo chiesto dal profilo, in attesa che l'utente apra il link mandato lì. Finché non lo conferma
      * l'identificatore (login, inviti, unicità) resta `email`: un indirizzo non dimostrato non diventa mai login.
      */
     #[ORM\Column(name: 'pending_email', length: 180, nullable: true)]
     private ?string $pendingEmail = null;
+
+    /**
+     * Ultima organizzazione scelta come attiva: una sessione nuova (ripresa da remember-me, altro dispositivo) riparte
+     * da qui se l'utente ne è ancora membro accettato ({@see \App\Service\ActiveOrganizationResolver}). Mai esposta.
+     */
+    #[ORM\ManyToOne(targetEntity: Organization::class)]
+    #[ORM\JoinColumn(name: 'last_active_organization_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Organization $lastActiveOrganization = null;
+
+    /**
+     * Segreto TOTP cifrato con {@see \App\Service\SecretCipher}. Presente con `totpEnabledAt` nullo = configurazione
+     * in attesa di conferma. Mai esposto.
+     */
+    #[ORM\Column(name: 'totp_secret', length: 255, nullable: true)]
+    private ?string $totpSecret = null;
+
+    /** Quando la verifica in due passaggi è stata attivata (null = non attiva). */
+    #[ORM\Column(name: 'totp_enabled_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $totpEnabledAt = null;
+
+    /**
+     * Hash SHA-256 dei codici di recupero ancora validi ({@see BackupCode::hash()}); un codice usato sparisce.
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(name: 'backup_codes', type: 'json', options: ['default' => '[]'])]
+    private array $backupCodes = [];
+
+    /**
+     * Segreto TOTP in chiaro, non persistito: lo passa il listener che decifra {@see self::$totpSecret} al caricamento
+     * (l'entity non conosce la cifratura) o il servizio che lo ha appena generato.
+     */
+    private ?string $totpPlainSecret = null;
 
     /**
      * @var Collection<int, OrganizationMember>
@@ -220,22 +250,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getTokenVersion(): int
-    {
-        return $this->tokenVersion;
-    }
-
-    /**
-     * Invalida tutti gli access token emessi finora. Va chiamato solo con la riga `users` riletta sotto lock
-     * (PESSIMISTIC_WRITE) nella stessa transazione del flush: altrimenti due incrementi concorrenti partirebbero
-     * dallo stesso valore e uno andrebbe perso.
-     */
-    public function incrementTokenVersion(): self
-    {
-        ++$this->tokenVersion;
-        return $this;
-    }
-
     public function isAnonymized(): bool
     {
         return str_ends_with($this->email, self::ANONYMIZED_EMAIL_SUFFIX);
@@ -286,8 +300,170 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return array_values(array_unique($roles));
     }
 
-    public function eraseCredentials(): void
+    /**
+     * Uguaglianza per la sessione ({@see \Symfony\Component\Security\Http\Firewall\ContextListener}): stesso id,
+     * stessa email e stessa password. Un cambio password (anche da reset o GDPR) o la conferma di un cambio email
+     * deautenticano ogni altra sessione alla richiesta successiva. I ruoli non contano: derivano dalle membership e
+     * una promozione o un invito accettato non devono buttare fuori l'utente.
+     */
+    public function isEqualTo(UserInterface $user): bool
     {
-        // Niente da pulire (no plaintext credentials in memoria)
+        if (!$user instanceof self || $user->getId() !== $this->id || $user->getUserIdentifier() !== $this->email) {
+            return false;
+        }
+
+        return self::samePassword($this->password, $user->getPassword());
+    }
+
+    /**
+     * Quel che finisce nella sessione: id, email e un'impronta della password (crc32c, come raccomanda Symfony), non
+     * l'hash vero. Il resto si rilegge dal DB a ogni richiesta.
+     *
+     * @return array{id: int|null, email: string, password: string}
+     */
+    public function __serialize(): array
+    {
+        return ['id' => $this->id, 'email' => $this->email, 'password' => hash('crc32c', $this->password)];
+    }
+
+    /** @param array{id: int|null, email: string, password: string} $data */
+    public function __unserialize(array $data): void
+    {
+        $this->id = $data['id'];
+        $this->email = $data['email'];
+        $this->password = $data['password'];
+        $this->memberships = new ArrayCollection();
+    }
+
+    // ----- organizzazione attiva -----
+
+    public function getLastActiveOrganization(): ?Organization
+    {
+        return $this->lastActiveOrganization;
+    }
+
+    public function setLastActiveOrganization(?Organization $organization): self
+    {
+        $this->lastActiveOrganization = $organization;
+        return $this;
+    }
+
+    // ----- verifica in due passaggi (TOTP + codici di recupero) -----
+
+    public function isTotpAuthenticationEnabled(): bool
+    {
+        return $this->totpEnabledAt !== null;
+    }
+
+    public function getTotpAuthenticationUsername(): string
+    {
+        return $this->email;
+    }
+
+    /** 6 cifre, SHA1, 30 s: i parametri che ogni app di autenticazione supporta. */
+    public function getTotpAuthenticationConfiguration(): ?TotpConfigurationInterface
+    {
+        if ($this->totpPlainSecret === null) {
+            return null;
+        }
+
+        return new TotpConfiguration($this->totpPlainSecret, TotpConfiguration::ALGORITHM_SHA1, 30, 6);
+    }
+
+    public function getTotpEnabledAt(): ?\DateTimeImmutable
+    {
+        return $this->totpEnabledAt;
+    }
+
+    public function getEncryptedTotpSecret(): ?string
+    {
+        return $this->totpSecret;
+    }
+
+    /** Segreto decifrato al caricamento (o, se indecifrabile, uno usa-e-getta che non fa valere nessun codice dell'app). */
+    public function useTotpSecret(string $plainSecret): void
+    {
+        $this->totpPlainSecret = $plainSecret;
+    }
+
+    /** Configurazione iniziata e non ancora confermata con un codice. */
+    public function hasPendingTotpSetup(): bool
+    {
+        return $this->totpSecret !== null && $this->totpEnabledAt === null;
+    }
+
+    /** Inizia (o ricomincia) la configurazione con un segreto nuovo, non ancora attivo. */
+    public function beginTotpSetup(string $encryptedSecret, string $plainSecret): void
+    {
+        if ($this->isTotpAuthenticationEnabled()) {
+            throw new \LogicException('Verifica in due passaggi già attiva');
+        }
+        $this->totpSecret = $encryptedSecret;
+        $this->totpPlainSecret = $plainSecret;
+        $this->backupCodes = [];
+    }
+
+    /**
+     * Conferma la configurazione in attesa: da qui il login chiede il codice.
+     *
+     * @param list<string> $backupCodeHashes
+     */
+    public function enableTotp(\DateTimeImmutable $now, array $backupCodeHashes): void
+    {
+        if (!$this->hasPendingTotpSetup()) {
+            throw new \LogicException('Nessuna configurazione in attesa');
+        }
+        $this->totpEnabledAt = $now;
+        $this->backupCodes = $backupCodeHashes;
+    }
+
+    /** Azzera tutto: segreto, attivazione e codici di recupero (disattivazione, reset da comando, GDPR). */
+    public function disableTwoFactor(): void
+    {
+        $this->totpSecret = null;
+        $this->totpPlainSecret = null;
+        $this->totpEnabledAt = null;
+        $this->backupCodes = [];
+    }
+
+    /** @param list<string> $backupCodeHashes i precedenti smettono di valere */
+    public function replaceBackupCodes(array $backupCodeHashes): void
+    {
+        if (!$this->isTotpAuthenticationEnabled()) {
+            throw new \LogicException('Verifica in due passaggi non attiva');
+        }
+        $this->backupCodes = $backupCodeHashes;
+    }
+
+    public function backupCodesRemaining(): int
+    {
+        return \count($this->backupCodes);
+    }
+
+    public function isBackupCode(string $code): bool
+    {
+        $hash = BackupCode::hash($code);
+        foreach ($this->backupCodes as $stored) {
+            if (hash_equals($stored, $hash)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Un codice di recupero vale una volta sola. */
+    public function invalidateBackupCode(string $code): void
+    {
+        $hash = BackupCode::hash($code);
+        $this->backupCodes = array_values(array_filter($this->backupCodes, static fn (string $stored): bool => !hash_equals($stored, $hash)));
+    }
+
+    /** Password uguali, anche quando una delle due è l'impronta crc32c salvata in sessione. */
+    private static function samePassword(string $a, string $b): bool
+    {
+        return hash_equals($a, $b)
+            || (\strlen($a) === 8 && hash_equals($a, hash('crc32c', $b)))
+            || (\strlen($b) === 8 && hash_equals($b, hash('crc32c', $a)));
     }
 }

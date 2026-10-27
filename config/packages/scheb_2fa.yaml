@@ -1,0 +1,19 @@
+# Verifica in due passaggi facoltativa per utente: TOTP (app di autenticazione) + codici di recupero.
+# Configurazione del firewall in security.yaml (`two_factor`), guida "Two-Factor Authentication in an API" di Scheb.
+scheb_two_factor:
+    # Solo un login con password apre la verifica: la ripresa da remember-me (RememberMeToken) non chiede il codice,
+    # perché il cookie nasce solo a verifica completata.
+    security_tokens:
+        - Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken
+        - Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken
+    totp:
+        enabled: true
+        issuer: Brumy
+        # Tolleranza di sfasamento dell'orologio del telefono, in secondi (minore del periodo di 30 s).
+        leeway: 15
+    backup_codes:
+        enabled: true
+    # Un codice TOTP accettato al login non vale una seconda volta finché resta nella sua finestra (30 s di periodo
+    # più la tolleranza): Scheb lo ricorda nella cache applicativa.
+    code_reuse_cache: cache.app
+    code_reuse_cache_duration: 90

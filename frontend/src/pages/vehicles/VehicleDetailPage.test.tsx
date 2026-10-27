@@ -226,6 +226,8 @@ describe('VehicleDetailPage', () => {
       emailVerified: true,
       pendingEmail: null,
       isInstanceAdmin: false,
+      twoFactorEnabled: false,
+      backupCodesRemaining: 0,
       memberships: [{ id: 1, role: 'owner' as const, organization: { id: 1, name: 'Org', slug: 'org' } }],
     };
 

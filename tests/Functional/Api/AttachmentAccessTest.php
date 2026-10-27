@@ -18,7 +18,6 @@ use App\Tests\Factory\UserFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -39,11 +38,11 @@ final class AttachmentAccessTest extends ApiTestCase
 
         [, , $tokenA] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/attachments/'.$id, accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/attachments/'.$id, session: $tokenA);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('attachment.not_found', $this->jsonBody()['title']);
 
-        $this->jsonRequest('DELETE', '/api/attachments/'.$id, accessToken: $tokenA);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$id, session: $tokenA);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('attachment.not_found', $this->jsonBody()['title']);
 
@@ -58,7 +57,7 @@ final class AttachmentAccessTest extends ApiTestCase
         AttachmentFactory::createOne(['organization' => $orgB, 'entityId' => (string) $vehicleB->getId()]);
         [, , $tokenA] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicleB->getId(), accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicleB->getId(), session: $tokenA);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('entity.not_found', $this->jsonBody()['title']);
@@ -75,11 +74,11 @@ final class AttachmentAccessTest extends ApiTestCase
 
         $member = $this->memberOf($org, OrgRole::MEMBER);
 
-        $this->jsonRequest('GET', '/api/attachments/'.$id, accessToken: $member);
+        $this->jsonRequest('GET', '/api/attachments/'.$id, session: $member);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('DELETE', '/api/attachments/'.$id, accessToken: $member);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$id, session: $member);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicle->getId(), accessToken: $member);
+        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicle->getId(), session: $member);
         self::assertResponseStatusCodeSame(403);
 
         self::assertNotNull(static::getContainer()->get(AttachmentRepository::class)->find($id));
@@ -95,11 +94,12 @@ final class AttachmentAccessTest extends ApiTestCase
         [$viewer, , $viewerToken] = $this->createAuthenticatedUserIn($org, OrgRole::MEMBER);
         VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $viewer]); // viewer
 
-        $this->client->request('GET', '/api/attachments/'.$id, server: ['HTTP_AUTHORIZATION' => 'Bearer '.$viewerToken, 'HTTP_X_CLIENT_TYPE' => 'mobile']);
+        $this->useSession($viewerToken);
+        $this->client->request('GET', '/api/attachments/'.$id);
         self::assertResponseIsSuccessful();
         self::assertSame('nosniff', $this->client->getResponse()->headers->get('X-Content-Type-Options'));
 
-        $this->jsonRequest('DELETE', '/api/attachments/'.$id, accessToken: $viewerToken);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$id, session: $viewerToken);
         self::assertResponseStatusCodeSame(403);
         self::assertNotNull(static::getContainer()->get(AttachmentRepository::class)->find($id));
     }
@@ -119,11 +119,11 @@ final class AttachmentAccessTest extends ApiTestCase
         ]);
         $member = $this->memberOf($org, OrgRole::MEMBER); // nessuna share sul veicolo del record
 
-        $this->jsonRequest('GET', '/api/attachments?entityType='.$type.'&entityId='.$record->getId(), accessToken: $member);
+        $this->jsonRequest('GET', '/api/attachments?entityType='.$type.'&entityId='.$record->getId(), session: $member);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), accessToken: $member);
+        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), session: $member);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('DELETE', '/api/attachments/'.$attachment->getId(), accessToken: $member);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$attachment->getId(), session: $member);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -140,7 +140,7 @@ final class AttachmentAccessTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $attachment = AttachmentFactory::createOne(['organization' => $org, 'entityId' => '999999']);
 
-        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -153,7 +153,7 @@ final class AttachmentAccessTest extends ApiTestCase
             'organization' => $org, 'entityId' => (string) $vehicle->getId(), 'storedPath' => 'vehicle/does-not-exist.jpg',
         ]);
 
-        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/attachments/'.$attachment->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('attachment.file_missing', $this->jsonBody()['title']);
@@ -166,7 +166,7 @@ final class AttachmentAccessTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/attachments'.$query, accessToken: $token);
+        $this->jsonRequest('GET', '/api/attachments'.$query, session: $token);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('query.entity_required', $this->jsonBody()['title']);
@@ -186,7 +186,7 @@ final class AttachmentAccessTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/attachments?entityType=maintenance&entityId=999999', accessToken: $token);
+        $this->jsonRequest('GET', '/api/attachments?entityType=maintenance&entityId=999999', session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('entity.not_found', $this->jsonBody()['title']);
@@ -218,12 +218,12 @@ final class AttachmentAccessTest extends ApiTestCase
 
     private function postUpload(string $token, string $type, int $entityId, UploadedFile $file): void
     {
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => $type, 'entityId' => (string) $entityId],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
     }
 
@@ -248,7 +248,7 @@ final class AttachmentAccessTest extends ApiTestCase
         return static::getContainer()->get(AttachmentStorageInterface::class);
     }
 
-    /** Token di un nuovo membro (senza share) dell'organizzazione indicata. */
+    /** Sessione di un nuovo membro (senza share) dell'organizzazione indicata. */
     private function memberOf(Organization $org, OrgRole $role): string
     {
         return $this->createAuthenticatedUserIn($org, $role)[2];
@@ -259,9 +259,6 @@ final class AttachmentAccessTest extends ApiTestCase
     {
         $user = UserFactory::createOne();
         OrganizationMemberFactory::createOne(['user' => $user, 'organization' => $org, 'role' => $role]);
-        $token = static::getContainer()->get(JWTTokenManagerInterface::class)
-            ->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $org->getId()]);
-
-        return [$user, $org, $token];
+        return [$user, $org, $this->sessionFor($user, $org)];
     }
 }

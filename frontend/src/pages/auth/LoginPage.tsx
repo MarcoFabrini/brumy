@@ -1,11 +1,12 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, FormField, Input, Spinner, Text } from '@/components/ui';
 import { AuthLayout } from '@/components/layout';
-import { AuthBrand, AuthLink } from '@/components/features';
+import { AuthBrand, AuthLink, TwoFactorLoginStep } from '@/components/features';
 import { useLogin } from '@/hooks/useLogin';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useFieldErrorMessage } from '@/hooks/useFieldErrorMessage';
 import { useRegistrationOpen } from '@/hooks/useRegistrationOpen';
@@ -15,10 +16,12 @@ import { loginSchema, type LoginFormData } from '@/schemas/auth.schema';
 /**
  * LoginPage — composta da AuthLayout + AuthBrand + form di FormField/Input/Button.
  * Logica delegata a useLogin hook. Errori formattati da useApiErrorMessage.
+ * Con la verifica in due passaggi attiva (store in 'two_factor', anche dopo un reload) mostra il secondo passo.
  */
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const status = useAuthStore((s) => s.status);
   const errorMessage = useApiErrorMessage();
   const { mutate, isPending, error } = useLogin();
   const [params] = useSearchParams();
@@ -38,7 +41,26 @@ export function LoginPage() {
 
   // Lo schema pulisce l'email dagli spazi e blocca i campi vuoti prima di chiamare il server.
   function onSubmit({ email, password }: LoginFormData) {
-    mutate({ email, password }, { onSuccess: () => navigate(dest, { replace: true }) });
+    mutate(
+      { email, password },
+      {
+        onSuccess: ({ twoFactorRequired }) => {
+          if (!twoFactorRequired) navigate(dest, { replace: true });
+        },
+      },
+    );
+  }
+
+  // Verifica completata: il secondo passo sparisce con lo stato 'two_factor', quindi si esce da qui.
+  if (status === 'authenticated') return <Navigate to={dest} replace />;
+
+  if (status === 'two_factor') {
+    return (
+      <AuthLayout>
+        <AuthBrand subtitleKey="auth.login.two_factor.title" />
+        <TwoFactorLoginStep />
+      </AuthLayout>
+    );
   }
 
   return (

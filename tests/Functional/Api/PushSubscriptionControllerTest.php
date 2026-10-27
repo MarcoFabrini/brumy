@@ -17,7 +17,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/push-subscriptions', [
             'platform' => 'web',
             'endpoint' => 'https://fcm.googleapis.com/fcm/send/123',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(400);
     }
@@ -32,7 +32,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
             'endpoint' => $endpoint,
             'p256dh' => 'p256dh-key',
             'authSecret' => 'auth-secret',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -62,7 +62,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
             'p256dh' => 'p256dh-key',
             'authSecret' => 'auth-secret',
             'deviceLabel' => 'Chrome on MacBook',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('web', $this->jsonBody()['platform']);
@@ -79,19 +79,19 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         ];
 
         for ($i = 0; $i < 20; ++$i) {
-            $this->jsonRequest('POST', '/api/push-subscriptions', $payload($i), accessToken: $token);
+            $this->jsonRequest('POST', '/api/push-subscriptions', $payload($i), session: $token);
             self::assertResponseStatusCodeSame(201);
         }
 
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(20), accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(20), session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('push.too_many_subscriptions', $this->jsonBody()['title']);
 
         // Un dispositivo già registrato si può sempre aggiornare (rotazione delle chiavi, etichetta).
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(3), accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload(3), session: $token);
         self::assertResponseStatusCodeSame(201);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $token);
         self::assertCount(20, $this->jsonBody());
     }
 
@@ -106,10 +106,10 @@ final class PushSubscriptionControllerTest extends ApiTestCase
             'authSecret' => 'auth',
         ];
 
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, accessToken: $token);
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, session: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, session: $token);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $token);
         self::assertCount(1, $this->jsonBody(), 'Same endpoint should upsert, not duplicate');
     }
 
@@ -123,9 +123,9 @@ final class PushSubscriptionControllerTest extends ApiTestCase
             'endpoint' => 'https://fcm.googleapis.com/fcm/send/user-a',
             'p256dh' => 'p256dh',
             'authSecret' => 'auth',
-        ], accessToken: $tokenA);
+        ], session: $tokenA);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $tokenB);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $tokenB);
         self::assertCount(0, $this->jsonBody());
     }
 
@@ -133,13 +133,13 @@ final class PushSubscriptionControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
         $payload = $this->webPayload('https://fcm.googleapis.com/fcm/send/to-remove');
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, session: $token);
         self::assertResponseStatusCodeSame(201);
 
-        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $payload, accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $payload, session: $token);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $token);
         self::assertSame([], $this->jsonBody(), 'La subscription del device è stata rimossa');
     }
 
@@ -147,7 +147,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $this->webPayload('https://fcm.googleapis.com/fcm/send/never-registered'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $this->webPayload('https://fcm.googleapis.com/fcm/send/never-registered'), session: $token);
 
         self::assertResponseStatusCodeSame(204);
     }
@@ -157,14 +157,14 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         [, , $tokenA] = $this->createAuthenticatedUser();
         [, , $tokenB] = $this->createAuthenticatedUser();
         $payload = $this->webPayload('https://fcm.googleapis.com/fcm/send/owned-by-a');
-        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, accessToken: $tokenA);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $payload, session: $tokenA);
         self::assertResponseStatusCodeSame(201);
 
         // B conosce l'endpoint di A: la rimozione è per (utente, endpoint), quindi non trova nulla.
-        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $payload, accessToken: $tokenB);
+        $this->jsonRequest('POST', '/api/push-subscriptions/unsubscribe', $payload, session: $tokenB);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $tokenA);
         self::assertCount(1, $this->jsonBody(), 'La subscription di A è intatta');
     }
 
@@ -180,10 +180,10 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $id = $this->subscribe($token, 'https://fcm.googleapis.com/fcm/send/delete-me');
 
-        $this->jsonRequest('DELETE', '/api/push-subscriptions/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/push-subscriptions/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $token);
         self::assertSame([], $this->jsonBody());
     }
 
@@ -193,11 +193,11 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         [, , $tokenB] = $this->createAuthenticatedUser();
         $id = $this->subscribe($tokenA, 'https://fcm.googleapis.com/fcm/send/not-yours');
 
-        $this->jsonRequest('DELETE', '/api/push-subscriptions/'.$id, accessToken: $tokenB);
+        $this->jsonRequest('DELETE', '/api/push-subscriptions/'.$id, session: $tokenB);
 
         self::assertResponseStatusCodeSame(403);
         self::assertSame('http.403', $this->jsonBody()['title']);
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $tokenA);
         self::assertSame([$id], array_column($this->jsonBody(), 'id'), 'La subscription di A esiste ancora');
     }
 
@@ -205,7 +205,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('DELETE', '/api/push-subscriptions/999999', accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/push-subscriptions/999999', session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('push.not_found', $this->jsonBody()['title']);
@@ -216,10 +216,11 @@ final class PushSubscriptionControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $id = $this->subscribe($token, 'https://fcm.googleapis.com/fcm/send/anon-delete');
 
+        $this->client->getCookieJar()->clear(); // richiesta anonima
         $this->jsonRequest('DELETE', '/api/push-subscriptions/'.$id);
         self::assertResponseStatusCodeSame(401);
 
-        $this->jsonRequest('GET', '/api/push-subscriptions', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions', session: $token);
         self::assertCount(1, $this->jsonBody(), 'Senza token non si cancella nulla');
     }
 
@@ -233,7 +234,7 @@ final class PushSubscriptionControllerTest extends ApiTestCase
 
     private function subscribe(string $token, string $endpoint): int
     {
-        $this->jsonRequest('POST', '/api/push-subscriptions', $this->webPayload($endpoint), accessToken: $token);
+        $this->jsonRequest('POST', '/api/push-subscriptions', $this->webPayload($endpoint), session: $token);
         self::assertResponseStatusCodeSame(201);
 
         return (int) $this->jsonBody()['id'];

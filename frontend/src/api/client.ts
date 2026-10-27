@@ -14,122 +14,60 @@ export class ApiError extends Error {
 }
 
 interface AuthFetchOptions extends RequestInit {
-  /** Skip auth refresh attempt on 401 (used internally during refresh) */
-  skipRefresh?: boolean;
+  /**
+   * Richiesta che non presuppone una sessione (login, codice della verifica in due passaggi, logout, registrazione,
+   * rotte pubbliche, `/me` del bootstrap): un 401 è la risposta da mostrare, non una sessione scaduta, e lo store non
+   * cambia.
+   */
+  anonymous?: boolean;
 }
 
 /**
- * Esito del refresh:
- * - 'ok': nuovo access token in store
- * - 'invalid': il server ha rifiutato il refresh token (400/401) → sessione davvero finita
- * - 'unavailable': rete assente o 5xx → la sessione può essere ancora valida, NON fare logout
+ * La sessione viaggia nel cookie HttpOnly `brumy_session`, che il browser manda da solo alla stessa origine: nessun
+ * header di autenticazione. Nemmeno un header CSRF: il backend accetta le scritture solo dalla stessa origine
+ * (`Sec-Fetch-Site`/`Origin`, li mette il browser).
  */
-export type RefreshResult = 'ok' | 'invalid' | 'unavailable';
-
-let refreshPromise: Promise<RefreshResult> | null = null;
-
-/**
- * Pausa prima del secondo tentativo dopo un 400/401. Il refresh token ruota a ogni uso e il backend
- * non ha finestra di tolleranza: con due schede che rinnovano insieme la perdente riceve un rifiuto
- * anche se il cookie è stato ruotato correttamente dall'altra. Dopo una breve attesa il browser
- * manda il cookie nuovo.
- */
-export const REFRESH_RETRY_DELAY_MS = 250;
-
-async function attemptRefresh(): Promise<RefreshResult> {
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'X-Client-Type': 'web', Accept: 'application/json' },
-    });
-    if (res.status === 400 || res.status === 401) return 'invalid';
-    if (!res.ok) return 'unavailable';
-    const data: unknown = await res.json();
-    // La risposta è del nostro server, ma entra come dato non tipizzato: si controlla invece di forzare il tipo.
-    const token = typeof data === 'object' && data !== null && 'access_token' in data ? data.access_token : null;
-    if (typeof token !== 'string' || token === '') return 'unavailable';
-    useAuthStore.getState().setAccessToken(token);
-    return 'ok';
-  } catch {
-    return 'unavailable';
-  }
-}
-
-export async function refreshAccessToken(): Promise<RefreshResult> {
-  // Coalesce simultaneous refresh attempts (nella stessa scheda; tra schede vedi REFRESH_RETRY_DELAY_MS)
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    try {
-      const first = await attemptRefresh();
-      if (first !== 'invalid') return first;
-      await new Promise((resolve) => setTimeout(resolve, REFRESH_RETRY_DELAY_MS));
-      return await attemptRefresh();
-    } finally {
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
-}
-
-function withAuth(opts: AuthFetchOptions): RequestInit {
-  const access = useAuthStore.getState().accessToken;
+function requestInit({ anonymous: _anonymous, ...opts }: AuthFetchOptions): RequestInit {
   const headers = new Headers(opts.headers);
-  headers.set('X-Client-Type', 'web');
   // JSON salvo richiesta diversa (i download di allegati passano `*/*`). Il backend risponde
   // comunque in JSON agli errori sotto /api: l'header dichiara solo cosa si aspetta il client.
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-  if (access) headers.set('Authorization', `Bearer ${access}`);
-  return {
-    ...opts,
-    credentials: 'include',
-    headers,
-  };
+  return { ...opts, credentials: 'same-origin', headers };
+}
+
+async function problemOf(res: Response): Promise<ApiError> {
+  let problem: {
+    title?: string;
+    status?: number;
+    detail?: string;
+    errors?: Array<{ field: string; message: string }>;
+  } = {};
+  try {
+    problem = await res.json();
+  } catch {
+    /* response non-JSON */
+  }
+  return new ApiError(problem.title ?? `http.${res.status}`, res.status, problem.detail, problem.errors);
 }
 
 /**
- * Fetch autenticato con retry su 401 (refresh + retry una volta).
- * Ritorna la Response grezza; lancia ApiError su non-2xx.
+ * Fetch con la sessione del browser. Ritorna la Response grezza; lancia ApiError su non-2xx.
+ * Un 401 su una chiamata non anonima chiude la sessione nello store: `auth.two_factor_required` porta al
+ * secondo passaggio del login, ogni altro 401 al login (`auth.session_expired`).
  */
 async function authFetchResponse(path: string, opts: AuthFetchOptions): Promise<Response> {
-  let res = await fetch(`${API_BASE}${path}`, withAuth(opts));
+  const res = await fetch(`${API_BASE}${path}`, requestInit(opts));
+  if (res.ok) return res;
 
-  if (res.status === 401 && !opts.skipRefresh) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed === 'ok') {
-      res = await fetch(`${API_BASE}${path}`, withAuth(opts));
-    } else if (refreshed === 'invalid') {
-      useAuthStore.getState().logout();
-      throw new ApiError('auth.session_expired', 401);
-    } else {
-      // Rete/5xx sul refresh: la sessione resta, la richiesta fallisce e si potrà riprovare.
-      throw new ApiError('network.unavailable', 503);
-    }
+  const error = await problemOf(res);
+  if (res.status !== 401 || opts.anonymous) throw error;
+
+  if (error.title === 'auth.two_factor_required') {
+    useAuthStore.getState().setTwoFactorPending();
+    throw error;
   }
-
-  if (!res.ok) {
-    let problem: {
-      title?: string;
-      status?: number;
-      detail?: string;
-      errors?: Array<{ field: string; message: string }>;
-    } = {};
-    try {
-      problem = await res.json();
-    } catch {
-      /* response non-JSON */
-    }
-    throw new ApiError(
-      problem.title ?? `http.${res.status}`,
-      res.status,
-      problem.detail,
-      problem.errors,
-    );
-  }
-
-  return res;
+  useAuthStore.getState().setUnauthenticated();
+  throw new ApiError('auth.session_expired', 401);
 }
 
 /**
@@ -146,8 +84,8 @@ export async function authFetch<T = unknown>(
 }
 
 /**
- * Fetch autenticato che ritorna un Blob — usato per download allegati, dove
- * `<img src>` non può inviare l'header Bearer. Stessa auth/retry di authFetch.
+ * Fetch autenticato che ritorna un Blob — usato per i download degli allegati e dell'avatar, mostrati da object URL.
+ * Stessa gestione della sessione di authFetch.
  */
 export async function authFetchBlob(path: string, opts: AuthFetchOptions = {}): Promise<Blob> {
   const res = await authFetchResponse(path, {

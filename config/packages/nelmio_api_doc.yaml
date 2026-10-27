@@ -4,8 +4,12 @@ nelmio_api_doc:
             title: Brumy API
             description: |
                 REST JSON API for Brumy vehicle fleet management.
-                Auth: JWT dual-channel (HttpOnly cookie web / Bearer mobile via `X-Client-Type` header).
-                Multi-tenant: every business resource scoped to active `organization_id` claim.
+                Auth: Symfony session in the HttpOnly cookie `brumy_session` (POST /api/auth/login), kept for 7 days by
+                the `brumy_remember` cookie; optional two-step verification (TOTP or recovery code) at POST /api/auth/2fa/check.
+                Every unsafe request (POST/PUT/PATCH/DELETE) must be same-origin: `Sec-Fetch-Site: same-origin`, or
+                `Origin`/`Referer` equal to the API host (403 auth.csrf_invalid otherwise).
+                Multi-tenant: every business resource is scoped to the active organization of the session
+                (POST /api/auth/switch-org).
             version: 1.0.0
         # URL relativo: "Try it out" e gli esempi puntano all'origine che serve la documentazione
         servers:
@@ -13,10 +17,10 @@ nelmio_api_doc:
               description: This instance
         components:
             securitySchemes:
-                Bearer:
-                    type: http
-                    scheme: bearer
-                    bearerFormat: JWT
+                SessionCookie:
+                    type: apiKey
+                    in: cookie
+                    name: brumy_session
             parameters:
                 FuelPriceFuel:
                     name: fuel
@@ -47,7 +51,7 @@ nelmio_api_doc:
                                 self: { $ref: '#/components/schemas/FuelPricePoint' }
                                 served: { $ref: '#/components/schemas/FuelPricePoint' }
         security:
-            - Bearer: []
+            - SessionCookie: []
     areas:
         default:
             path_patterns:

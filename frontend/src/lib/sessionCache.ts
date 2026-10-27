@@ -1,23 +1,19 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { activeOrgIdFromToken } from '@/lib/jwt';
 
-type Session = { user: { id: number } | null; accessToken: string | null };
+type Session = { user: { id: number } | null; activeOrgId: number | null };
 
 /**
  * True se la cache delle query non appartiene più alla sessione corrente:
  * - l'utente è uscito o è cambiato (cache di un altro utente mai visibile);
- * - l'organizzazione attiva dell'access token passa da un valore a un ALTRO valore (switch-org, un
- *   refresh in un'altra scheda che ha adottato un'altra org, qualsiasi sostituzione del token): i
- *   dati in cache sono dell'org precedente. Da/verso null no: è il token che si assesta (login,
- *   bootstrap), non un cambio di organizzazione.
+ * - l'organizzazione attiva passa da un valore a un ALTRO valore (switch-org, accettazione di un invito): i dati in
+ *   cache sono dell'org precedente. Da/verso null no: è la sessione che si apre o si chiude (login, bootstrap,
+ *   logout), già coperta dal cambio di utente.
  */
 export function sessionCacheIsStale(next: Session, prev: Session): boolean {
   if (prev.user && (!next.user || next.user.id !== prev.user.id)) return true;
 
-  const prevOrg = activeOrgIdFromToken(prev.accessToken);
-  const nextOrg = activeOrgIdFromToken(next.accessToken);
-  return prevOrg !== null && nextOrg !== null && prevOrg !== nextOrg;
+  return prev.activeOrgId !== null && next.activeOrgId !== null && prev.activeOrgId !== next.activeOrgId;
 }
 
 /**

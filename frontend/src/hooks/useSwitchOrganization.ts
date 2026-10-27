@@ -7,8 +7,8 @@ import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 /**
- * Cambia l'organizzazione attiva. Il nuovo access token porta un `active_org_id` diverso: la cache
- * delle query viene svuotata da `clearQueryCacheOnSessionChange` (lib/sessionCache), non qui.
+ * Cambia l'organizzazione attiva della sessione. Con il nuovo `activeOrgId` nello store la cache delle query viene
+ * svuotata da `clearQueryCacheOnSessionChange` (lib/sessionCache), non qui.
  * Poi si va alla home: gli id nell'URL corrente appartengono all'organizzazione precedente.
  * In errore resta l'organizzazione attuale e compare un toast.
  *
@@ -23,8 +23,8 @@ export function useSwitchOrganization() {
 
   const mutation = useMutation({
     mutationFn: switchOrganization,
-    onSuccess: (accessToken) => {
-      useAuthStore.getState().setAccessToken(accessToken);
+    onSuccess: (activeOrgId) => {
+      useAuthStore.getState().setActiveOrgId(activeOrgId);
       navigate('/');
     },
     onError: (error) => toast({ title: errorMessage(error), variant: 'error' }),

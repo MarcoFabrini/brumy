@@ -18,7 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * GDPR Art. 17 — right to erasure (#5.5).
  *
- * Anonymize user (overwrite PII) + revoke refresh tokens + delete push subs.
+ * Anonymize user (overwrite PII) + end sessions and remember-me cookies + reset two-step verification + delete push subs.
  * NB: vehicles e dati derivati restano in DB perché appartengono all'org
  * (potrebbero esserci altri membri).
  *

@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { registrationKey } from '@/hooks/useRegistrationOpen';
 import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
+import { enterSession } from '@/lib/authSession';
 import { profileLocale } from '@/lib/format';
-import { useAuthStore, type User } from '@/stores/useAuthStore';
 
 interface RegisterPayload {
   email: string;
@@ -13,30 +13,22 @@ interface RegisterPayload {
   locale?: 'it' | 'en';
 }
 
-interface AuthResponse {
-  access_token: string;
-  user: Omit<User, 'memberships'>;
-}
-
 /**
- * useRegister — mutation register + auto-login (cookie già impostato da backend).
+ * useRegister — registrazione del primo utente: il backend apre già la sessione (cookie), qui si carica `/me`.
  */
 export function useRegister() {
-  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: RegisterPayload) => {
-      const data = await authFetch<AuthResponse>('/api/auth/register', {
+      await authFetch<unknown>('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Il profilo nasce nella lingua dell'interfaccia: così syncLanguage non la riporta in italiano.
         body: JSON.stringify({ locale: profileLocale(i18n.language), ...payload }),
-        skipRefresh: true,
+        anonymous: true,
       });
-      useAuthStore.getState().setAccessToken(data.access_token);
-      const me = await authFetch<User>('/api/auth/me');
-      setAuthenticated(data.access_token, me);
+      const me = await enterSession();
       // Da ora l'istanza ha un utente: registrazione libera chiusa.
       queryClient.setQueryData(registrationKey, { open: false });
       return me;

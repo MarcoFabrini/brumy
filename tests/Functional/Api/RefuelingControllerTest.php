@@ -21,7 +21,7 @@ final class RefuelingControllerTest extends ApiTestCase
     public function testListRequiresVehicleId(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('GET', '/api/refuelings', accessToken: $token);
+        $this->jsonRequest('GET', '/api/refuelings', session: $token);
         self::assertResponseStatusCodeSame(400);
     }
 
@@ -38,7 +38,7 @@ final class RefuelingControllerTest extends ApiTestCase
             'pricePerLiter' => '1.8000',
             'fuelType' => 'diesel',
             'fullTank' => true,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         // total_cost è una GENERATED column del DB: 40 × 1.8 = 72.00
@@ -61,7 +61,7 @@ final class RefuelingControllerTest extends ApiTestCase
             'liters' => '40.000',
             'pricePerLiter' => '1.8000',
             ...$overrides,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -85,7 +85,7 @@ final class RefuelingControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         RefuelingFactory::createMany(15, ['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId().'&limit=5', accessToken: $token);
+        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId().'&limit=5', session: $token);
         self::assertResponseIsSuccessful();
         self::assertCount(5, $this->jsonBody());
     }
@@ -104,7 +104,7 @@ final class RefuelingControllerTest extends ApiTestCase
             'refueledAt' => '2026-05-01', 'km' => 60000,
             'liters' => '50.000', 'pricePerLiter' => '2.0000',
             'fuelType' => 'diesel', 'fullTank' => true,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('100.00', $this->jsonBody()['totalCost']);
@@ -117,7 +117,7 @@ final class RefuelingControllerTest extends ApiTestCase
         $r = RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
         $id = $r->getId();
 
-        $this->jsonRequest('DELETE', '/api/refuelings/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/refuelings/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
     }
 
@@ -132,7 +132,7 @@ final class RefuelingControllerTest extends ApiTestCase
             'refueledAt' => '2026-05-01', 'km' => 100,
             'liters' => '20.000', 'pricePerLiter' => '1.5000',
             'fuelType' => 'gasoline', 'fullTank' => true,
-        ], accessToken: $tokenA);
+        ], session: $tokenA);
 
         self::assertResponseStatusCodeSame(404);
     }
@@ -146,12 +146,12 @@ final class RefuelingControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $owner]);
 
-        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), ' Q8  Via Roma '), accessToken: $token);
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), ' Q8  Via Roma '), session: $token);
         self::assertResponseStatusCodeSame(201);
         $station = $this->jsonBody()['station'];
         self::assertSame('Q8 Via Roma', $station['name']);
 
-        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), 'q8 via roma'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), 'q8 via roma'), session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame($station['id'], $this->jsonBody()['station']['id']);
 
@@ -166,7 +166,7 @@ final class RefuelingControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), '  '), accessToken: $token);
+        $this->jsonRequest('POST', '/api/refuelings', $this->refuelingBody($vehicle->getId(), '  '), session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertNull($this->jsonBody()['station']);

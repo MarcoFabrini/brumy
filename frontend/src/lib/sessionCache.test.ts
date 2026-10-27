@@ -1,39 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { testUser } from '@/test/authFixtures';
 import { clearQueryCacheOnSessionChange, sessionCacheIsStale } from './sessionCache';
 
-const jwt = (orgId: number | null) =>
-  `h.${btoa(JSON.stringify(orgId === null ? {} : { active_org_id: orgId })).replace(/=+$/, '')}.s`;
-
-const user = (id: number): User => ({
-  id,
-  email: `u${id}@test.it`,
-  firstName: 'A',
-  lastName: 'B',
-  locale: 'it',
-  hasAvatar: false,
-  emailVerified: true,
-  pendingEmail: null,
-  isInstanceAdmin: false,
-  memberships: [],
-});
+const user = (id: number) => testUser({ id, email: `u${id}@test.it`, memberships: [] });
 
 describe('sessionCacheIsStale', () => {
-  const session = (id: number | null, orgId: number | null) => ({
+  const session = (id: number | null, activeOrgId: number | null) => ({
     user: id === null ? null : { id },
-    accessToken: id === null ? null : jwt(orgId),
+    activeOrgId: id === null ? null : activeOrgId,
   });
 
   it('è stale quando l\'org attiva passa da un valore a un altro', () => {
     expect(sessionCacheIsStale(session(1, 2), session(1, 1))).toBe(true);
   });
 
-  it('non è stale con la stessa org (rotazione del token)', () => {
+  it('non è stale con la stessa org', () => {
     expect(sessionCacheIsStale(session(1, 1), session(1, 1))).toBe(false);
   });
 
-  it('non è stale quando l\'org passa da/verso null (il token si assesta)', () => {
+  it('non è stale quando l\'org passa da/verso null (la sessione si apre o non ha org)', () => {
     expect(sessionCacheIsStale(session(1, 1), session(1, null))).toBe(false);
     expect(sessionCacheIsStale(session(1, null), session(1, 1))).toBe(false);
   });
@@ -54,29 +41,30 @@ describe('clearQueryCacheOnSessionChange', () => {
 
   beforeEach(() => {
     clear.mockReset();
-    useAuthStore.setState({ status: 'authenticated', accessToken: jwt(1), user: user(1) });
+    useAuthStore.setState({ status: 'authenticated', user: user(1), activeOrgId: 1 });
     unsubscribe = clearQueryCacheOnSessionChange({ clear });
   });
 
   afterEach(() => {
     unsubscribe();
-    useAuthStore.setState({ status: 'loading', accessToken: null, user: null });
+    useAuthStore.setState({ status: 'loading', user: null, activeOrgId: null });
   });
 
-  it('svuota la cache quando un token con un\'altra org sostituisce il precedente (altra scheda, switch)', () => {
-    useAuthStore.getState().setAccessToken(jwt(2));
+  it('svuota la cache quando l\'org attiva cambia (switch-org, invito accettato)', () => {
+    useAuthStore.getState().setActiveOrgId(2);
     expect(clear).toHaveBeenCalledTimes(1);
   });
 
-  it('non la svuota alla rotazione del token sulla stessa org', () => {
-    useAuthStore.getState().setAccessToken(jwt(1));
+  it('non la svuota quando l\'org resta la stessa', () => {
+    useAuthStore.getState().setActiveOrgId(1);
+    useAuthStore.getState().setUser(user(1));
     expect(clear).not.toHaveBeenCalled();
   });
 
   it('non la svuota quando l\'org passa da null a un valore', () => {
-    useAuthStore.setState({ accessToken: jwt(null) });
+    useAuthStore.setState({ activeOrgId: null });
     clear.mockReset();
-    useAuthStore.getState().setAccessToken(jwt(3));
+    useAuthStore.getState().setActiveOrgId(3);
     expect(clear).not.toHaveBeenCalled();
   });
 
@@ -84,7 +72,7 @@ describe('clearQueryCacheOnSessionChange', () => {
     useAuthStore.getState().logout();
     expect(clear).toHaveBeenCalledTimes(1);
 
-    useAuthStore.getState().setAuthenticated(jwt(1), user(1));
+    useAuthStore.getState().setAuthenticated(user(1), 1);
     useAuthStore.getState().setUser(user(2));
     expect(clear).toHaveBeenCalledTimes(2);
   });
@@ -95,14 +83,14 @@ describe('clearQueryCacheOnSessionChange', () => {
     unsubscribe = clearQueryCacheOnSessionChange(qc);
     qc.setQueryData(['vehicles'], [{ id: 1 }]);
 
-    useAuthStore.getState().setAccessToken(jwt(9));
+    useAuthStore.getState().setActiveOrgId(9);
 
     expect(qc.getQueryData(['vehicles'])).toBeUndefined();
   });
 
   it('dopo unsubscribe non reagisce più', () => {
     unsubscribe();
-    useAuthStore.getState().setAccessToken(jwt(5));
+    useAuthStore.getState().setActiveOrgId(5);
     expect(clear).not.toHaveBeenCalled();
   });
 });

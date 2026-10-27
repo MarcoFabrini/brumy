@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\Organization;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -53,6 +54,23 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->getOneOrNullResult();
 
         return $firstId !== null && (int) $firstId['id'] === $user->getId();
+    }
+
+    /**
+     * Ricorda l'org scelta come attiva senza flush dell'intera unit of work (il resolver gira anche a metà di una
+     * richiesta che sta modificando altre entity).
+     */
+    public function rememberActiveOrganization(User $user, Organization $organization): void
+    {
+        $this->createQueryBuilder('u')
+            ->update()
+            ->set('u.lastActiveOrganization', ':org')
+            ->where('u.id = :id')
+            ->setParameter('org', $organization)
+            ->setParameter('id', $user->getId())
+            ->getQuery()
+            ->execute();
+        $user->setLastActiveOrganization($organization);
     }
 
     public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void

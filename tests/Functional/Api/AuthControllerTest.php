@@ -19,8 +19,6 @@ use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
-use App\Service\RefreshTokenService;
 use App\Tests\Factory\UserFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,8 +42,15 @@ final class AuthControllerTest extends ApiTestCase
 
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
         self::assertSame('newuser@test.it', $body['user']['email']);
+        self::assertSame(['user'], array_keys($body), 'Nessun token nel corpo: la sessione è nel cookie');
+        self::assertNotNull($this->responseCookie(self::SESSION_COOKIE));
+        self::assertNotNull($this->responseCookie(self::REMEMBER_ME_COOKIE));
+
+        // La registrazione apre la sessione: /me dallo stesso client risponde.
+        $this->jsonRequest('GET', '/api/auth/me');
+        self::assertResponseIsSuccessful();
+        self::assertSame('newuser@test.it', $this->jsonBody()['email']);
 
         $userRepo = static::getContainer()->get(UserRepository::class);
         $user = $userRepo->findOneByEmail('newuser@test.it');
@@ -123,140 +128,20 @@ final class AuthControllerTest extends ApiTestCase
         self::assertResponseStatusCodeSame(422);
     }
 
-    // -------------------- LOGIN --------------------
-
-    public function testLoginWebReturnsCookieAndAccessTokenInBody(): void
-    {
-        UserFactory::createOne(['email' => 'web@test.it']);
-
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'web@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'web');
-
-        self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
-        self::assertArrayNotHasKey('refresh_token', $body, 'Web client deve ricevere il refresh come cookie, non nel body');
-
-        $cookies = $this->client->getResponse()->headers->getCookies();
-        $refresh = $this->findCookie($cookies, RefreshTokenService::COOKIE_NAME);
-        self::assertNotNull($refresh);
-        self::assertTrue($refresh->isHttpOnly());
-    }
-
-    public function testRefreshTokenIsStoredHashedNotInClear(): void
-    {
-        UserFactory::createOne(['email' => 'hash@test.it']);
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'hash@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'mobile');
-        $plain = $this->jsonBody()['refresh_token'];
-
-        $em = static::getContainer()->get(EntityManagerInterface::class);
-        $stored = $em->getConnection()->fetchFirstColumn('SELECT token FROM refresh_tokens');
-
-        self::assertNotContains($plain, $stored, 'Il token in chiaro non deve stare nel DB');
-        self::assertContains(hash('sha256', $plain), $stored);
-
-        // ...e funziona ancora per il refresh
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $plain], clientType: 'mobile');
-        self::assertResponseIsSuccessful();
-    }
-
-    public function testLoginMobileReturnsBothTokensInBodyNoCookie(): void
-    {
-        UserFactory::createOne(['email' => 'mobile@test.it']);
-
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'mobile@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'mobile');
-
-        self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
-        self::assertArrayHasKey('refresh_token', $body);
-
-        $cookies = $this->client->getResponse()->headers->getCookies();
-        self::assertNull(
-            $this->findCookie($cookies, RefreshTokenService::COOKIE_NAME),
-            'Mobile client NON deve ricevere il refresh come cookie',
-        );
-    }
-
-    public function testLoginWithWrongPasswordReturns401(): void
-    {
-        UserFactory::createOne(['email' => 'wrong@test.it']);
-
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'wrong@test.it',
-            'password' => 'wrong-pw',
-        ]);
-
-        self::assertResponseStatusCodeSame(401);
-        self::assertSame('auth.invalid_credentials', $this->jsonBody()['title']);
-    }
-
-    public function testLoginWithUnknownEmailReturns401(): void
-    {
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'unknown@test.it',
-            'password' => 'whatever',
-        ]);
-
-        self::assertResponseStatusCodeSame(401);
-    }
-
-    public function testLoginWithOverlongPasswordAnswersTheSameForKnownAndUnknownEmail(): void
-    {
-        UserFactory::createOne(['email' => 'known@test.it']);
-        $overlong = str_repeat('a', 5000);
-
-        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'known@test.it', 'password' => $overlong]);
-        $knownStatus = $this->client->getResponse()->getStatusCode();
-        $knownBody = $this->jsonBody();
-
-        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'ghost@test.it', 'password' => $overlong]);
-        $unknownStatus = $this->client->getResponse()->getStatusCode();
-        $unknownBody = $this->jsonBody();
-
-        // Prima del tetto sulla lunghezza: 401 per l'email registrata e 500 per la sconosciuta (oracolo di esistenza).
-        self::assertSame(422, $knownStatus);
-        self::assertSame($knownStatus, $unknownStatus);
-        self::assertSame($knownBody['errors'] ?? null, $unknownBody['errors'] ?? null);
-    }
-
-    /** @return iterable<string, array{string}> */
-    public static function malformedLogoutBodies(): iterable
-    {
-        yield 'refresh_token non stringa' => ['{"refresh_token":["x"]}'];
-        yield 'refresh_token numerico' => ['{"refresh_token":123}'];
-        yield 'corpo scalare' => ['"solo-una-stringa"'];
-        yield 'corpo lista' => ['[1,2]'];
-    }
-
-    #[DataProvider('malformedLogoutBodies')]
-    public function testLogoutIgnoresMalformedBodiesWithoutServerError(string $rawBody): void
-    {
-        $this->client->request('POST', '/api/auth/logout', server: ['CONTENT_TYPE' => 'application/json'], content: $rawBody);
-
-        self::assertResponseStatusCodeSame(204);
-    }
+    // Login, logout, throttling, CSRF e remember-me: SessionAuthenticationTest.
 
     public function testAvatarDownloadCarriesNosniff(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/auth/avatar',
             files: ['file' => $this->makeUploadedFile('me.png', $this->pngBytes(), 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
         self::assertResponseIsSuccessful();
 
-        $this->client->request('GET', '/api/auth/avatar', server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token]);
+        $this->client->request('GET', '/api/auth/avatar');
 
         self::assertResponseIsSuccessful();
         self::assertSame('nosniff', $this->client->getResponse()->headers->get('X-Content-Type-Options'));
@@ -266,24 +151,6 @@ final class AuthControllerTest extends ApiTestCase
         self::assertStringNotContainsString('public', $cacheControl);
     }
 
-    /**
-     * Con l'IP già bloccato un login con un'email nuova non crea lo stato del limiter per (email, IP): ogni chiave
-     * nuova sarebbe un file di cache in più, mai ripulito. Audit run-2,
-     * finding `src/Controller/Api/AuthController.php:login-limiter-key-before-ip-gate-unpruned-filesystem-cache`.
-     */
-    public function testABlockedIpDoesNotCreateLimiterStateForNewEmails(): void
-    {
-        $this->keepRateLimiterCountersForTheWholeTest();
-        $ipLimiter = static::getContainer()->get('limiter.login_ip')->create('127.0.0.1');
-        $ipLimiter->consume($ipLimiter->consume(0)->getRemainingTokens());
-
-        $this->jsonRequest('POST', '/api/auth/login', ['email' => 'mai-vista@test.it', 'password' => 'qualsiasi-123']);
-        self::assertResponseStatusCodeSame(429);
-
-        $emailLimiter = static::getContainer()->get('limiter.login')->create('login-mai-vista@test.it-127.0.0.1');
-        self::assertSame(5, $emailLimiter->consume(0)->getRemainingTokens(), 'Nessun tentativo registrato per la nuova email');
-    }
-
     public function testChangePasswordRejectsAnOverlongCurrentPassword(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
@@ -291,92 +158,35 @@ final class AuthControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => str_repeat('a', 5000),
             'newPassword' => 'nuovapw12345',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
-    }
-
-    // -------------------- REFRESH --------------------
-
-    public function testRefreshMobileViaBodyRotatesToken(): void
-    {
-        UserFactory::createOne(['email' => 'rotate@test.it']);
-
-        // Step 1: login mobile per ottenere refresh nel body
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'rotate@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'mobile');
-        self::assertResponseIsSuccessful();
-        $oldRefresh = $this->jsonBody()['refresh_token'];
-
-        // Step 2: refresh con quel token
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $oldRefresh], clientType: 'mobile');
-
-        self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
-        self::assertArrayHasKey('refresh_token', $body);
-        self::assertNotSame($oldRefresh, $body['refresh_token'], 'Il refresh token deve essere ruotato');
-
-        // Step 3: il vecchio token è stato revocato — non funziona più
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $oldRefresh], clientType: 'mobile');
-        self::assertResponseStatusCodeSame(401);
-    }
-
-    public function testRefreshWithoutAnyTokenReturns400(): void
-    {
-        $this->jsonRequest('POST', '/api/auth/refresh', []);
-        self::assertResponseStatusCodeSame(400);
-        self::assertSame('auth.refresh_token_required', $this->jsonBody()['title']);
-    }
-
-    public function testRefreshWithInvalidTokenReturns401(): void
-    {
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => 'totally-fake-token']);
-        self::assertResponseStatusCodeSame(401);
-    }
-
-    // -------------------- LOGOUT --------------------
-
-    public function testLogoutRevokesRefreshTokenAndClearsCookie(): void
-    {
-        UserFactory::createOne(['email' => 'logout@test.it']);
-
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'logout@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'mobile');
-        $refresh = $this->jsonBody()['refresh_token'];
-
-        $this->jsonRequest('POST', '/api/auth/logout', ['refresh_token' => $refresh]);
-        self::assertResponseStatusCodeSame(204);
-
-        // Il refresh non funziona più
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $refresh], clientType: 'mobile');
-        self::assertResponseStatusCodeSame(401);
     }
 
     // -------------------- ME --------------------
 
     public function testMeReturnsUserWithMemberships(): void
     {
-        [$user, $org, $accessToken] = $this->createAuthenticatedUser();
+        [$user, $org, $session] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/auth/me', accessToken: $accessToken);
+        $this->jsonRequest('GET', '/api/auth/me', session: $session);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
         self::assertSame($user->getId(), $body['id']);
+        self::assertSame($org->getId(), $body['activeOrganizationId']);
+        self::assertFalse($body['twoFactorEnabled']);
+        self::assertSame(0, $body['backupCodesRemaining']);
         self::assertCount(1, $body['memberships']);
         self::assertSame($org->getId(), $body['memberships'][0]['organization']['id']);
         self::assertSame('owner', $body['memberships'][0]['role']);
     }
 
-    public function testMeWithoutTokenReturns401(): void
+    public function testMeWithoutSessionReturns401(): void
     {
         $this->jsonRequest('GET', '/api/auth/me');
         self::assertResponseStatusCodeSame(401);
+        self::assertSame('http.401', $this->jsonBody()['title']);
     }
 
     // -------------------- UPDATE PROFILE --------------------
@@ -396,11 +206,11 @@ final class AuthControllerTest extends ApiTestCase
             'lastName' => 'Bianchi',
             'locale' => 'en',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
+        self::assertSame(['user'], array_keys($body));
         self::assertSame($oldEmail, $body['user']['email']);
         self::assertSame('nuovo@test.it', $body['user']['pendingEmail']);
         self::assertEmailCount(1);
@@ -442,12 +252,12 @@ final class AuthControllerTest extends ApiTestCase
         UserFactory::createOne(['email' => 'altro@test.it']);
         $profile = ['firstName' => 'A', 'lastName' => 'B', 'locale' => 'it', 'currentPassword' => UserFactory::DEFAULT_PASSWORD];
 
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'altro@test.it'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'altro@test.it'] + $profile, session: $token);
         self::assertResponseStatusCodeSame(200);
         $taken = $this->jsonBody();
         self::assertEmailCount(0);
 
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'libero@test.it'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'libero@test.it'] + $profile, session: $token);
         self::assertResponseStatusCodeSame(200);
         $free = $this->jsonBody();
 
@@ -466,7 +276,7 @@ final class AuthControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/profile', [
             'email' => 'conteso@test.it', 'firstName' => 'A', 'lastName' => 'B', 'locale' => 'it',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseIsSuccessful();
         UserFactory::createOne(['email' => 'conteso@test.it']);
 
@@ -492,21 +302,21 @@ final class AuthControllerTest extends ApiTestCase
         $email = $user->getEmail();
         $profile = ['firstName' => 'A', 'lastName' => 'B', 'locale' => 'it', 'currentPassword' => UserFactory::DEFAULT_PASSWORD];
 
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'uno@test.it'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'uno@test.it'] + $profile, session: $token);
         self::assertResponseIsSuccessful();
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'due@test.it'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'due@test.it'] + $profile, session: $token);
         self::assertResponseIsSuccessful();
-        $this->jsonRequest('POST', '/api/auth/resend-verification', accessToken: $token);
+        $this->jsonRequest('POST', '/api/auth/resend-verification', session: $token);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('POST', '/api/auth/resend-verification', accessToken: $token);
+        $this->jsonRequest('POST', '/api/auth/resend-verification', session: $token);
         self::assertResponseStatusCodeSame(429);
         self::assertSame('auth.too_many_attempts', $this->jsonBody()['title']);
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'tre@test.it'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => 'tre@test.it'] + $profile, session: $token);
         self::assertResponseStatusCodeSame(429);
 
         // Cambiare solo il nome non consuma il budget delle email.
-        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => $email, 'firstName' => 'Nuovo'] + $profile, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', ['email' => $email, 'firstName' => 'Nuovo'] + $profile, session: $token);
         self::assertResponseIsSuccessful();
     }
 
@@ -519,7 +329,7 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => 'A',
             'lastName' => 'B',
             'locale' => 'it',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(400);
 
         $this->jsonRequest('PUT', '/api/auth/profile', [
@@ -528,7 +338,7 @@ final class AuthControllerTest extends ApiTestCase
             'lastName' => 'B',
             'locale' => 'it',
             'currentPassword' => 'sbagliata',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(400);
 
         $fresh = static::getContainer()->get(UserRepository::class)->find($user->getId());
@@ -550,7 +360,7 @@ final class AuthControllerTest extends ApiTestCase
             'lastName' => 'B',
             'locale' => 'it',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseIsSuccessful();
         $this->openLastVerificationLink();
         self::assertResponseIsSuccessful();
@@ -580,7 +390,7 @@ final class AuthControllerTest extends ApiTestCase
             'lastName' => 'B',
             'locale' => 'it',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertTrue($this->jsonBody()['user']['emailVerified']);
@@ -596,7 +406,7 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => 'Stesso',
             'lastName' => 'Utente',
             'locale' => 'it',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('Stesso', $this->jsonBody()['user']['firstName']);
@@ -611,7 +421,7 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => '',
             'lastName' => '',
             'locale' => 'it',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -638,10 +448,9 @@ final class AuthControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
             'newPassword' => 'nuovapw123',
-        ], accessToken: $token);
+        ], session: $token);
 
-        self::assertResponseIsSuccessful();
-        self::assertArrayHasKey('access_token', $this->jsonBody());
+        self::assertResponseStatusCodeSame(204);
 
         // La nuova password funziona
         $this->jsonRequest('POST', '/api/auth/login', ['email' => $email, 'password' => 'nuovapw123']);
@@ -652,7 +461,7 @@ final class AuthControllerTest extends ApiTestCase
         self::assertResponseStatusCodeSame(401);
     }
 
-    public function testChangePasswordKeepsTheActiveOrganization(): void
+    public function testChangePasswordKeepsTheSessionAndItsActiveOrganization(): void
     {
         [$user, $orgA] = $this->createAuthenticatedUser();
         $orgA->setName('Alpha');
@@ -662,44 +471,38 @@ final class AuthControllerTest extends ApiTestCase
         $inB = VehicleFactory::createOne(['organization' => $orgB, 'name' => 'Auto di Zeta']);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $inB, 'user' => $user]);
 
-        // Sessione reale: il login cade sulla prima org (Alpha), poi si passa a Zeta e la si ricorda sul refresh
+        // Sessione reale: il login cade sulla prima org (Alpha), poi si passa a Zeta
         $this->jsonRequest('POST', '/api/auth/login', ['email' => $user->getEmail(), 'password' => UserFactory::DEFAULT_PASSWORD]);
-        $login = $this->jsonBody();
-        self::assertSame($orgA->getId(), $this->activeOrgIdOf($login['access_token']));
-        $this->jsonRequest('POST', '/api/auth/switch-org', [
-            'organizationId' => $orgB->getId(),
-            'refreshToken' => $login['refresh_token'],
-        ], accessToken: $login['access_token']);
-        $switched = $this->jsonBody()['access_token'];
-        self::assertSame($orgB->getId(), $this->activeOrgIdOf($switched));
+        $sessionAfterLogin = $this->responseCookie(self::SESSION_COOKIE);
+        $this->jsonRequest('GET', '/api/auth/me');
+        self::assertSame($orgA->getId(), $this->jsonBody()['activeOrganizationId']);
+        $this->jsonRequest('POST', '/api/auth/switch-org', ['organizationId' => $orgB->getId()]);
+        self::assertResponseIsSuccessful();
 
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
             'newPassword' => 'nuovapw123',
-        ], accessToken: $switched);
+        ]);
 
-        self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertSame($orgB->getId(), $this->activeOrgIdOf($body['access_token']), 'Il cambio password non deve riportare alla prima org');
+        self::assertResponseStatusCodeSame(204);
+        $newSession = $this->responseCookie(self::SESSION_COOKIE);
+        self::assertNotNull($newSession, 'Id di sessione rigenerato');
+        self::assertNotSame($sessionAfterLogin, $newSession);
+        self::assertNotNull($this->responseCookie(self::REMEMBER_ME_COOKIE), 'Cookie remember-me nuovo, firmato con la password nuova');
 
-        // L'app resta operativa nell'org scelta, anche dopo un refresh con il nuovo refresh token
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $body['access_token']);
+        // L'app resta operativa nell'org scelta, con la stessa sessione
+        $this->jsonRequest('GET', '/api/auth/me');
+        self::assertSame($orgB->getId(), $this->jsonBody()['activeOrganizationId'], 'Il cambio password non deve riportare alla prima org');
+        $this->jsonRequest('GET', '/api/vehicles');
         self::assertSame(['Auto di Zeta'], array_column($this->jsonBody(), 'name'));
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $body['refresh_token']]);
-        self::assertSame($orgB->getId(), $this->activeOrgIdOf($this->jsonBody()['access_token']));
     }
 
-    public function testEmailChangeKeepsTheActiveOrganization(): void
+    public function testEmailChangeRequestKeepsTheSessionAndItsActiveOrganization(): void
     {
         [$user, $orgA] = $this->createAuthenticatedUser();
-        $orgA->setName('Alpha');
-        static::getContainer()->get(EntityManagerInterface::class)->flush();
         $orgB = OrganizationFactory::createOne(['name' => 'Zeta']);
         OrganizationMemberFactory::createOne(['organization' => $orgB, 'user' => $user, 'role' => OrgRole::OWNER]);
-        $token = static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $orgB->getId(),
-        ]);
+        $session = $this->sessionFor($user, $orgB);
 
         $this->jsonRequest('PUT', '/api/auth/profile', [
             'firstName' => 'Mario',
@@ -707,19 +510,12 @@ final class AuthControllerTest extends ApiTestCase
             'email' => 'nuova-mail@test.it',
             'locale' => 'it',
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-        ], accessToken: $token);
-
+        ], session: $session);
         self::assertResponseIsSuccessful();
-        self::assertSame($orgB->getId(), $this->activeOrgIdOf($this->jsonBody()['access_token']));
-    }
 
-    /** Claim `active_org_id` del JWT (decodifica del payload, senza verificare la firma). */
-    private function activeOrgIdOf(string $jwt): mixed
-    {
-        $parts = explode('.', $jwt);
-        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true, flags: \JSON_THROW_ON_ERROR);
-
-        return $payload['active_org_id'] ?? null;
+        $this->jsonRequest('GET', '/api/auth/me', session: $session);
+        self::assertResponseIsSuccessful();
+        self::assertSame($orgB->getId(), $this->jsonBody()['activeOrganizationId']);
     }
 
     public function testChangePasswordWithWrongCurrentReturns400(): void
@@ -729,35 +525,10 @@ final class AuthControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => 'sbagliata',
             'newPassword' => 'nuovapw123',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('auth.invalid_current_password', $this->jsonBody()['title']);
-    }
-
-    public function testChangePasswordRevokesExistingRefreshTokens(): void
-    {
-        UserFactory::createOne(['email' => 'revoke-pw@test.it']);
-
-        // Login mobile: ottiene access + refresh reali
-        $this->jsonRequest('POST', '/api/auth/login', [
-            'email' => 'revoke-pw@test.it',
-            'password' => UserFactory::DEFAULT_PASSWORD,
-        ], clientType: 'mobile');
-        self::assertResponseIsSuccessful();
-        $login = $this->jsonBody();
-        $oldRefresh = $login['refresh_token'];
-
-        // Cambio password usando l'access token del login
-        $this->jsonRequest('PUT', '/api/auth/password', [
-            'currentPassword' => UserFactory::DEFAULT_PASSWORD,
-            'newPassword' => 'nuovapw123',
-        ], accessToken: $login['access_token'], clientType: 'mobile');
-        self::assertResponseIsSuccessful();
-
-        // Il vecchio refresh è stato revocato
-        $this->jsonRequest('POST', '/api/auth/refresh', ['refreshToken' => $oldRefresh], clientType: 'mobile');
-        self::assertResponseStatusCodeSame(401);
     }
 
     public function testChangePasswordValidatesNewPassword(): void
@@ -767,7 +538,7 @@ final class AuthControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
             'newPassword' => 'short',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -788,17 +559,17 @@ final class AuthControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/auth/avatar',
             files: ['file' => $this->makeUploadedFile('me.png', $this->pngBytes(), 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseIsSuccessful();
         self::assertTrue($this->jsonBody()['hasAvatar']);
 
-        $this->jsonRequest('GET', '/api/auth/me', accessToken: $token);
+        $this->jsonRequest('GET', '/api/auth/me', session: $token);
         self::assertTrue($this->jsonBody()['hasAvatar']);
     }
 
@@ -806,11 +577,11 @@ final class AuthControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/auth/avatar',
             files: ['file' => $this->makeUploadedFile('doc.pdf', '%PDF-1.4 fake', 'application/pdf')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(415);
@@ -823,11 +594,11 @@ final class AuthControllerTest extends ApiTestCase
 
         // PNG valido gonfiato oltre 2MB con padding
         $bytes = $this->pngBytes().str_repeat("\0", 2 * 1024 * 1024 + 1);
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/auth/avatar',
             files: ['file' => $this->makeUploadedFile('big.png', $bytes, 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(413);
@@ -838,15 +609,15 @@ final class AuthControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/auth/avatar',
             files: ['file' => $this->makeUploadedFile('me.png', $this->pngBytes(), 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
         self::assertResponseIsSuccessful();
 
-        $this->jsonRequest('GET', '/api/auth/avatar', accessToken: $token);
+        $this->jsonRequest('GET', '/api/auth/avatar', session: $token);
         self::assertResponseIsSuccessful();
         // I file avatar sono salvati senza estensione: il Content-Type deve essere
         // dedotto dal contenuto (regressione: prima usciva text/html di default).
@@ -862,7 +633,7 @@ final class AuthControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/auth/avatar', accessToken: $token);
+        $this->jsonRequest('GET', '/api/auth/avatar', session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('auth.no_avatar', $this->jsonBody()['title']);
     }
@@ -870,9 +641,9 @@ final class AuthControllerTest extends ApiTestCase
     public function testReuploadAvatarReplacesPreviousFile(): void
     {
         [$user, , $token] = $this->createAuthenticatedUser();
-        $server = ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'];
+        $this->useSession($token);
 
-        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')], server: $server);
+        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')]);
         self::assertResponseIsSuccessful();
 
         $userRepo = static::getContainer()->get(UserRepository::class);
@@ -881,7 +652,7 @@ final class AuthControllerTest extends ApiTestCase
         self::assertNotNull($firstPath);
         self::assertTrue($storage->exists($firstPath));
 
-        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('b.jpg', $this->jpegBytes(), 'image/jpeg')], server: $server);
+        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('b.jpg', $this->jpegBytes(), 'image/jpeg')]);
         self::assertResponseIsSuccessful();
 
         static::getContainer()->get(EntityManagerInterface::class)->clear();
@@ -895,9 +666,9 @@ final class AuthControllerTest extends ApiTestCase
     public function testDeleteAvatarRemovesFileAndFlag(): void
     {
         [$user, , $token] = $this->createAuthenticatedUser();
-        $server = ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'];
+        $this->useSession($token);
 
-        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')], server: $server);
+        $this->client->request('POST', '/api/auth/avatar', files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')]);
         self::assertResponseIsSuccessful();
 
         $userRepo = static::getContainer()->get(UserRepository::class);
@@ -905,14 +676,14 @@ final class AuthControllerTest extends ApiTestCase
         $path = $userRepo->find($user->getId())?->getAvatarPath();
         self::assertNotNull($path);
 
-        $this->jsonRequest('DELETE', '/api/auth/avatar', accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/auth/avatar', session: $token);
         self::assertResponseStatusCodeSame(204);
 
         static::getContainer()->get(EntityManagerInterface::class)->clear();
         self::assertNull($userRepo->find($user->getId())?->getAvatarPath());
         self::assertFalse($storage->exists($path));
 
-        $this->jsonRequest('GET', '/api/auth/me', accessToken: $token);
+        $this->jsonRequest('GET', '/api/auth/me', session: $token);
         self::assertFalse($this->jsonBody()['hasAvatar']);
     }
 
@@ -1134,9 +905,8 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => 'Re',
             'lastName' => 'Send',
         ]);
-        $accessToken = $this->jsonBody()['access_token'];
 
-        $this->jsonRequest('POST', '/api/auth/resend-verification', [], accessToken: $accessToken);
+        $this->jsonRequest('POST', '/api/auth/resend-verification', []);
         self::assertResponseStatusCodeSame(204);
         self::assertEmailCount(1); // l'email del resend (collector per-richiesta)
 
@@ -1180,9 +950,8 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => 'Joi',
             'lastName' => 'Ner',
         ]);
-        $token = $this->jsonBody()['access_token'];
 
-        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $token);
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw]);
         self::assertResponseStatusCodeSame(200);
         self::assertSame($org->getId(), $this->jsonBody()['organizationId']);
 
@@ -1204,9 +973,8 @@ final class AuthControllerTest extends ApiTestCase
             'firstName' => 'Other',
             'lastName' => 'User',
         ]);
-        $token = $this->jsonBody()['access_token'];
 
-        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $token);
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw]);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -1216,7 +984,7 @@ final class AuthControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/auth/invitation/accept', [
             'token' => bin2hex(random_bytes(32)),
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(400);
     }
 
@@ -1341,7 +1109,7 @@ final class AuthControllerTest extends ApiTestCase
 
         // Accettazione da utente già registrato
         $late = UserFactory::createOne(['email' => 'late@test.it']);
-        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $this->tokenFor($late));
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], session: $this->sessionFor($late));
         self::assertResponseStatusCodeSame(400);
         self::assertSame('invitation.invalid', $this->jsonBody()['title']);
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -1358,7 +1126,7 @@ final class AuthControllerTest extends ApiTestCase
             self::assertSame("fine$i@test.it", $this->jsonBody()['email']);
 
             $existing = UserFactory::createOne(['email' => "fine$i@test.it"]);
-            $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $this->tokenFor($existing));
+            $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], session: $this->sessionFor($existing));
             self::assertResponseStatusCodeSame(200);
             self::assertSame($org->getId(), $this->jsonBody()['organizationId']);
         }
@@ -1370,10 +1138,6 @@ final class AuthControllerTest extends ApiTestCase
         self::assertResponseStatusCodeSame(201);
     }
 
-    private function tokenFor(User $user): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, ['user_id' => $user->getId()]);
-    }
 
     // -------------------- helpers --------------------
 
@@ -1434,18 +1198,5 @@ final class AuthControllerTest extends ApiTestCase
         $em->flush();
 
         return $raw;
-    }
-
-    /**
-     * @param array<\Symfony\Component\HttpFoundation\Cookie> $cookies
-     */
-    private function findCookie(array $cookies, string $name): ?\Symfony\Component\HttpFoundation\Cookie
-    {
-        foreach ($cookies as $cookie) {
-            if ($cookie->getName() === $name) {
-                return $cookie;
-            }
-        }
-        return null;
     }
 }

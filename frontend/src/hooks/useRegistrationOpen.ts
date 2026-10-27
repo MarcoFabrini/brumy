@@ -12,7 +12,7 @@ export const registrationKey = ['auth', 'registration'] as const;
 export function useRegistrationOpen() {
   return useQuery({
     queryKey: registrationKey,
-    queryFn: () => authFetch<{ open: boolean }>('/api/auth/registration', { skipRefresh: true }),
+    queryFn: () => authFetch<{ open: boolean }>('/api/auth/registration', { anonymous: true }),
     staleTime: 0,
     gcTime: 0,
     retry: false,

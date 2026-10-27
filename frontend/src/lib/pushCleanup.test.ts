@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { unsubscribeThisDevice } from './pushCleanup';
 
-// Qui authFetch è quello vero: si simula solo la rete (fetch), per verificare il refresh a token scaduto.
+// Qui authFetch è quello vero: si simula solo la rete (fetch).
 const fetchMock = vi.fn<typeof fetch>();
 const unsubscribe = vi.fn<() => Promise<boolean>>();
 
@@ -25,7 +25,7 @@ describe('unsubscribeThisDevice', () => {
     fetchMock.mockReset();
     unsubscribe.mockReset().mockResolvedValue(true);
     vi.stubGlobal('fetch', fetchMock);
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'scaduto', user: null });
+    useAuthStore.setState({ status: 'authenticated', user: null, activeOrgId: null });
   });
 
   afterEach(() => {
@@ -34,21 +34,17 @@ describe('unsubscribeThisDevice', () => {
     delete navigator.serviceWorker;
   });
 
-  it('con access token scaduto: refresh, nuova chiamata a /unsubscribe e sottoscrizione del browser chiusa', async () => {
+  it('con la sessione ancora aperta disiscrive sul server e chiude la sottoscrizione del browser', async () => {
     installServiceWorker();
-    fetchMock
-      .mockResolvedValueOnce(json(401, { code: 401, message: 'Expired JWT Token' }))
-      .mockResolvedValueOnce(json(200, { access_token: 'nuovo' }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     await unsubscribeThisDevice();
 
-    expect(urls()).toEqual([
-      '/api/push-subscriptions/unsubscribe',
-      '/api/auth/refresh',
-      '/api/push-subscriptions/unsubscribe',
-    ]);
-    expect(new Headers(fetchMock.mock.calls[2]?.[1]?.headers).get('Authorization')).toBe('Bearer nuovo');
+    expect(urls()).toEqual(['/api/push-subscriptions/unsubscribe']);
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.credentials).toBe('same-origin');
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+    expect(JSON.parse(String(init?.body))).toEqual({ platform: 'web', endpoint: 'https://push.example/abc' });
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 

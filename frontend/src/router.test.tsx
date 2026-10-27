@@ -23,6 +23,8 @@ const user: User = {
   emailVerified: true,
   pendingEmail: null,
   isInstanceAdmin: false,
+  twoFactorEnabled: false,
+  backupCodesRemaining: 0,
   memberships: [{ id: 1, role: 'member', organization: { id: 1, name: 'Officina', slug: 'officina' } }],
 };
 
@@ -37,8 +39,8 @@ function renderAt(path: string) {
   return router;
 }
 
-const signedOut = () => useAuthStore.setState({ status: 'unauthenticated', accessToken: null, user: null });
-const signedIn = () => useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
+const signedOut = () => useAuthStore.setState({ status: 'unauthenticated', activeOrgId: null, user: null });
+const signedIn = () => useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user });
 
 // Le pagine in lazy si risolvono una volta sola per modulo (cache di React.lazy): il test che mostra
 // il fallback deve essere il primo a visitare quella pagina.

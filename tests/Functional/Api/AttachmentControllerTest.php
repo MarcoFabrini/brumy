@@ -32,12 +32,12 @@ final class AttachmentControllerTest extends ApiTestCase
 
         $file = $this->makeUploadedFile('photo.png', $this->pngBytes(), 'image/png');
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(201);
@@ -58,12 +58,12 @@ final class AttachmentControllerTest extends ApiTestCase
 
         $file = $this->makeUploadedFile('fattura.pdf', "%PDF-1.4\n%fake pdf\n", 'application/pdf');
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'maintenance', 'entityId' => (string) $maintenance->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(201);
@@ -75,11 +75,11 @@ final class AttachmentControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(400);
@@ -93,12 +93,12 @@ final class AttachmentControllerTest extends ApiTestCase
 
         $file = $this->makeUploadedFile('script.sh', "#!/bin/bash\necho hello\n", 'application/x-sh');
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(415);
@@ -111,11 +111,11 @@ final class AttachmentControllerTest extends ApiTestCase
 
         $file = $this->makeUploadedFile('x.png', $this->pngBytes(), 'image/png');
 
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(400);
@@ -130,12 +130,12 @@ final class AttachmentControllerTest extends ApiTestCase
 
         $file = $this->makeUploadedFile('hack.png', $this->pngBytes(), 'image/png');
 
+        $this->useSession($tokenA);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicleB->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$tokenA, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
 
         self::assertResponseStatusCodeSame(404);
@@ -149,17 +149,17 @@ final class AttachmentControllerTest extends ApiTestCase
         // Upload 2 file
         for ($i = 1; $i <= 2; $i++) {
             $file = $this->makeUploadedFile("img$i.png", $this->pngBytes(), 'image/png');
+            $this->useSession($token);
             $this->client->request(
                 'POST',
                 '/api/attachments',
                 parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
                 files: ['file' => $file],
-                server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
             );
             self::assertResponseStatusCodeSame(201);
         }
 
-        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/attachments?entityType=vehicle&entityId='.$vehicle->getId(), session: $token);
         self::assertResponseIsSuccessful();
         self::assertCount(2, $this->jsonBody());
     }
@@ -170,16 +170,17 @@ final class AttachmentControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
         $file = $this->makeUploadedFile('photo.jpg', $this->jpegBytes(), 'image/jpeg');
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
         $id = $this->jsonBody()['id'];
 
-        $this->client->request('GET', '/api/attachments/'.$id, server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile']);
+        $this->useSession($token);
+        $this->client->request('GET', '/api/attachments/'.$id);
 
         self::assertResponseIsSuccessful();
         $resp = $this->client->getResponse();
@@ -201,21 +202,20 @@ final class AttachmentControllerTest extends ApiTestCase
             ? RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $vehicle])
             : ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
 
-        $server = ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'];
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => $type, 'entityId' => (string) $entity->getId()],
             files: ['file' => $this->makeUploadedFile('photo.jpg', $this->jpegBytes(), 'image/jpeg')],
-            server: $server,
         );
         self::assertResponseStatusCodeSame(201);
         $id = $this->jsonBody()['id'];
 
-        $this->client->request('GET', '/api/attachments/'.$id, server: $server);
+        $this->client->request('GET', '/api/attachments/'.$id);
         self::assertResponseIsSuccessful();
 
-        $this->jsonRequest('DELETE', '/api/attachments/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
     }
 
@@ -234,16 +234,16 @@ final class AttachmentControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
         $file = $this->makeUploadedFile('x.png', $this->pngBytes(), 'image/png');
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $vehicle->getId()],
             files: ['file' => $file],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('DELETE', '/api/attachments/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
 
         $repo = static::getContainer()->get(AttachmentRepository::class);
@@ -263,7 +263,7 @@ final class AttachmentControllerTest extends ApiTestCase
         $this->jsonRequest(
             'GET',
             '/api/attachments?entityType=vehicle&entityId='.$vehicle->getId(),
-            accessToken: $token,
+            session: $token,
         );
 
         self::assertResponseIsSuccessful();
@@ -277,12 +277,12 @@ final class AttachmentControllerTest extends ApiTestCase
 
     private function uploadTo(string $token, string $entityType, int|string|null $entityId, string $name = 'photo.png'): void
     {
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => $entityType, 'entityId' => (string) $entityId],
             files: ['file' => $this->makeUploadedFile($name, $this->pngBytes(), 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
     }
 

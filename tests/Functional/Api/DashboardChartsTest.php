@@ -268,7 +268,7 @@ final class DashboardChartsTest extends ApiTestCase
         $this->refueling($vehicle, $this->day(-2), 33000, '10.000', '1.0000');
 
         $charts = $this->charts($token, '?months=24');
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
         $stats = $this->jsonBody();
 
         self::assertSame(3000, $stats['kmDriven']);
@@ -564,7 +564,7 @@ final class DashboardChartsTest extends ApiTestCase
         $this->refueling($own, $this->day(0), 1125, '10.000', '1.0000');
         $this->foreignData($this->sharedVehicle($member, $org, ShareRole::VIEWER));
 
-        $body = $this->charts($this->tokenFor($member, $org), '?months=2');
+        $body = $this->charts($this->sessionFor($member, $org), '?months=2');
 
         $this->assertOnlyOwnData($body);
     }
@@ -618,7 +618,7 @@ final class DashboardChartsTest extends ApiTestCase
      */
     private function charts(string $token, string $query = ''): array
     {
-        $this->jsonRequest('GET', '/api/dashboard/charts'.$query, accessToken: $token);
+        $this->jsonRequest('GET', '/api/dashboard/charts'.$query, session: $token);
         self::assertResponseIsSuccessful();
 
         return $this->jsonBody();

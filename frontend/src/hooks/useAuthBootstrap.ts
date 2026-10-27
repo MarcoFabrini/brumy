@@ -1,46 +1,34 @@
 import { useCallback, useEffect } from 'react';
-import { authFetch, refreshAccessToken } from '@/api/client';
-import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { ApiError } from '@/api/client';
+import { getMe } from '@/api/endpoints/auth';
+import { splitMe } from '@/lib/authSession';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 /**
- * useAuthBootstrap — al mount tenta refresh sessione via cookie HttpOnly.
+ * useAuthBootstrap — al mount chiede `GET /api/auth/me` per sapere chi è collegato. Lo store è in memoria, ma la
+ * sessione è nel cookie HttpOnly (e il remember-me la riapre dopo un riavvio del browser): un reload non fa uscire.
  *
- * Risolve il bug "refresh page = logout": il Zustand store è in-memory,
- * quindi un page reload azzera l'access token. Ma il refresh_token cookie
- * sopravvive. Questo hook prova /api/auth/refresh; se valido ricarica /me
- * e ripristina la sessione.
+ * - 200 → sessione aperta;
+ * - 401 `auth.two_factor_required` → password già data, manca il codice: il login mostra il secondo passo;
+ * - altri 401 → nessuna sessione;
+ * - rete assente o 5xx → 'unreachable': la sessione può essere ancora valida, l'utente può riprovare.
  *
- * Solo un rifiuto esplicito del server (400/401) vale come "no sessione". Se il server è
- * irraggiungibile (offline, riavvio, 5xx) lo stato diventa 'unreachable' e l'utente può riprovare
- * senza perdere la sessione.
- *
- * Usa `refreshAccessToken` (coalescente): in StrictMode il doppio mount non manda due refresh
- * concorrenti, che col refresh rotante farebbero fallire il secondo.
+ * In StrictMode il doppio mount fa due `/me`: sono letture, nessun problema; il primo esito viene scartato.
  */
 export function useAuthBootstrap() {
   const status = useAuthStore((s) => s.status);
 
   const bootstrap = useCallback(async (isCancelled: () => boolean) => {
-    const result = await refreshAccessToken();
-    if (isCancelled()) return;
-    if (result === 'invalid') {
-      useAuthStore.getState().setUnauthenticated();
-      return;
-    }
-    if (result === 'unavailable') {
-      useAuthStore.getState().setUnreachable();
-      return;
-    }
+    const store = useAuthStore.getState();
     try {
-      const me = await authFetch<User>('/api/auth/me');
+      const { user, activeOrgId } = splitMe(await getMe({ anonymous: true }));
       if (isCancelled()) return;
-      const token = useAuthStore.getState().accessToken;
-      if (token) useAuthStore.getState().setAuthenticated(token, me);
+      store.setAuthenticated(user, activeOrgId);
     } catch (err) {
       if (isCancelled()) return;
-      const status = (err as { status?: number }).status;
-      if (status === 401) useAuthStore.getState().setUnauthenticated();
-      else useAuthStore.getState().setUnreachable();
+      if (!(err instanceof ApiError) || err.status !== 401) store.setUnreachable();
+      else if (err.title === 'auth.two_factor_required') store.setTwoFactorPending();
+      else store.setUnauthenticated();
     }
   }, []);
 

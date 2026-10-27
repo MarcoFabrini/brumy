@@ -20,7 +20,6 @@ use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 final class VehicleControllerTest extends ApiTestCase
 {
@@ -29,7 +28,7 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         VehicleFactory::createMany(3, ['organization' => $org]);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertCount(3, $this->jsonBody());
@@ -41,7 +40,7 @@ final class VehicleControllerTest extends ApiTestCase
         VehicleFactory::createOne(['organization' => $org]);
         VehicleFactory::createOne(['organization' => $org, 'archivedAt' => new \DateTimeImmutable()]);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles', session: $token);
         self::assertCount(1, $this->jsonBody());
     }
 
@@ -54,7 +53,7 @@ final class VehicleControllerTest extends ApiTestCase
             VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $v, 'user' => $owner]);
         }
 
-        $this->jsonRequest('GET', '/api/vehicles?archived=1', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles?archived=1', session: $token);
 
         self::assertResponseIsSuccessful();
         /** @var list<array<string, mixed>> $list */
@@ -65,7 +64,7 @@ final class VehicleControllerTest extends ApiTestCase
         self::assertTrue($list[0]['permissions']['canDelete'], 'Serve per mostrare Ripristina');
 
         // Il default non cambia: solo gli attivi, con archivedAt null
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles', session: $token);
         /** @var list<array<string, mixed>> $default */
         $default = $this->jsonBody();
         self::assertSame(['Attiva'], array_column($default, 'name'));
@@ -73,7 +72,7 @@ final class VehicleControllerTest extends ApiTestCase
         self::assertNull($default[0]['archivedAt']);
 
         // Valori diversi da vero non attivano il filtro
-        $this->jsonRequest('GET', '/api/vehicles?archived=0', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles?archived=0', session: $token);
         self::assertSame(['Attiva'], array_column($this->jsonBody(), 'name'));
     }
 
@@ -95,12 +94,12 @@ final class VehicleControllerTest extends ApiTestCase
         VehicleFactory::createOne(['name' => 'Archiviata di un\'altra org', 'archivedAt' => $past]);
 
         // Member senza share: nessuna archiviata
-        $this->jsonRequest('GET', '/api/vehicles?archived=1', accessToken: $this->tokenForOrg($stranger, $org));
+        $this->jsonRequest('GET', '/api/vehicles?archived=1', session: $this->sessionFor($stranger, $org));
         self::assertResponseIsSuccessful();
         self::assertSame([], $this->jsonBody());
 
         // Share in sola lettura: vede la sua, marcata shared
-        $this->jsonRequest('GET', '/api/vehicles?archived=1', accessToken: $this->tokenForOrg($reader, $org));
+        $this->jsonRequest('GET', '/api/vehicles?archived=1', session: $this->sessionFor($reader, $org));
         /** @var list<array<string, mixed>> $readerList */
         $readerList = $this->jsonBody();
         self::assertSame(['Archiviata condivisa'], array_column($readerList, 'name'));
@@ -108,7 +107,7 @@ final class VehicleControllerTest extends ApiTestCase
         self::assertFalse($readerList[0]['permissions']['canDelete']);
 
         // Owner dell'org: tutte le archiviate della sua org, e nessuna di un'altra
-        $this->jsonRequest('GET', '/api/vehicles?archived=1', accessToken: $ownerToken);
+        $this->jsonRequest('GET', '/api/vehicles?archived=1', session: $ownerToken);
         $names = array_column($this->jsonBody(), 'name');
         sort($names);
         self::assertSame(['Archiviata condivisa', 'Archiviata del titolare', 'Archiviata nascosta'], $names);
@@ -119,7 +118,7 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org, 'name' => 'La Golf']);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('La Golf', $this->jsonBody()['name']);
@@ -128,7 +127,7 @@ final class VehicleControllerTest extends ApiTestCase
     public function testGetNonExistentReturns404(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('GET', '/api/vehicles/999999', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/999999', session: $token);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -144,7 +143,7 @@ final class VehicleControllerTest extends ApiTestCase
             'type' => 'car',
             'fuelType' => 'gasoline',
             'initialKm' => 30000,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('La Panda', $this->jsonBody()['name']);
@@ -167,7 +166,7 @@ final class VehicleControllerTest extends ApiTestCase
         VehicleFactory::createMany(2, ['organization' => $org]);
         VehicleFactory::createOne(['organization' => $org, 'archivedAt' => new \DateTimeImmutable()]);
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload(), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload(), session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame(
@@ -186,10 +185,10 @@ final class VehicleControllerTest extends ApiTestCase
         VehicleFactory::createMany(5, ['organization' => OrganizationFactory::createOne()]);
         VehicleFactory::createMany(2, ['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload('Il terzo'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload('Il terzo'), session: $token);
         self::assertResponseStatusCodeSame(201, 'Il terzo veicolo è l\'ultimo ammesso');
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload('Il quarto'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->newVehiclePayload('Il quarto'), session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('vehicle.limit_reached', $this->jsonBody()['title']);
     }
@@ -200,7 +199,7 @@ final class VehicleControllerTest extends ApiTestCase
         VehicleFactory::createMany(2, ['organization' => $org]);
         $archived = VehicleFactory::createOne(['organization' => $org, 'archivedAt' => new \DateTimeImmutable()]);
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$archived->getId().'/unarchive', accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$archived->getId().'/unarchive', session: $token);
 
         self::assertResponseIsSuccessful();
     }
@@ -216,7 +215,7 @@ final class VehicleControllerTest extends ApiTestCase
             'year' => 1500,  // before 1900 → invalid
             'type' => 'car',
             'fuelType' => 'gasoline',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -227,22 +226,22 @@ final class VehicleControllerTest extends ApiTestCase
         $payload = ['name' => 'Km', 'brand' => 'Fiat', 'model' => 'Panda', 'year' => 2019, 'type' => 'car', 'fuelType' => 'gasoline'];
 
         // Prima 3.000.000.000 superava l'INT della colonna e finiva in un 500
-        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 3_000_000_000], accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 3_000_000_000], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
         self::assertSame([['field' => 'initialKm', 'message' => 'common.km_too_large']], $this->jsonBody()['errors']);
 
-        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 10_000_000], accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 10_000_000], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'initialKm', 'message' => 'common.km_too_large']], $this->jsonBody()['errors']);
 
         // I negativi mantengono la propria chiave
-        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => -1], accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => -1], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'initialKm', 'message' => 'common.too_small']], $this->jsonBody()['errors']);
 
         // Il massimo consentito passa
-        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 9_999_999], accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $payload + ['initialKm' => 9_999_999], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame(9_999_999, $this->jsonBody()['initialKm']);
     }
@@ -259,7 +258,7 @@ final class VehicleControllerTest extends ApiTestCase
             'year' => 2023,
             'type' => 'car',
             'fuelType' => 'hybrid',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('new name', $this->jsonBody()['name']);
@@ -296,14 +295,14 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$vehicle, $token] = $this->biFuelVehicleWithRefuelings();
 
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
         self::assertSame([['field' => 'secondaryFuelType', 'message' => 'vehicle.fuel_type_in_use']], $this->jsonBody()['errors']);
 
         // Nulla è stato modificato
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $token);
         self::assertSame('lpg', $this->jsonBody()['secondaryFuelType']);
     }
 
@@ -311,7 +310,7 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$vehicle, $token] = $this->biFuelVehicleWithRefuelings();
 
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('diesel', 'lpg'), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('diesel', 'lpg'), session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'fuelType', 'message' => 'vehicle.fuel_type_in_use']], $this->jsonBody()['errors']);
@@ -324,7 +323,7 @@ final class VehicleControllerTest extends ApiTestCase
         // Solo benzina rifornita: il GPL non è mai stato usato
         RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'fuelType' => FuelType::GASOLINE]);
 
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertNull($this->jsonBody()['secondaryFuelType']);
@@ -335,7 +334,7 @@ final class VehicleControllerTest extends ApiTestCase
         [$vehicle, $token] = $this->biFuelVehicleWithRefuelings();
 
         // Scambio primario/secondario: nessun carburante tolto
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('lpg', 'gasoline'), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('lpg', 'gasoline'), session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame('lpg', $this->jsonBody()['fuelType']);
 
@@ -343,7 +342,7 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token2] = $this->createAuthenticatedUser();
         $mono = VehicleFactory::createOne(['organization' => $org, 'fuelType' => FuelType::DIESEL, 'secondaryFuelType' => null]);
         RefuelingFactory::createOne(['organization' => $org, 'vehicle' => $mono, 'fuelType' => FuelType::DIESEL]);
-        $this->jsonRequest('PUT', '/api/vehicles/'.$mono->getId(), $this->updatePayload('diesel', 'lpg'), accessToken: $token2);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$mono->getId(), $this->updatePayload('diesel', 'lpg'), session: $token2);
         self::assertResponseIsSuccessful();
         self::assertSame('lpg', $this->jsonBody()['secondaryFuelType']);
     }
@@ -352,7 +351,7 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$vehicle, $token] = $this->biFuelVehicleWithRefuelings();
 
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), ['name' => 'Rinominata'] + $this->updatePayload('gasoline', 'lpg'), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), ['name' => 'Rinominata'] + $this->updatePayload('gasoline', 'lpg'), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('Rinominata', $this->jsonBody()['name']);
@@ -363,12 +362,12 @@ final class VehicleControllerTest extends ApiTestCase
         [$vehicle, $token] = $this->biFuelVehicleWithRefuelings(archived: true);
 
         // Una modifica che non tocca i carburanti resta consentita sull'archiviato
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), ['name' => 'Archiviata rinominata'] + $this->updatePayload('gasoline', 'lpg'), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), ['name' => 'Archiviata rinominata'] + $this->updatePayload('gasoline', 'lpg'), session: $token);
         self::assertResponseIsSuccessful();
         self::assertNotNull($this->jsonBody()['archivedAt']);
 
         // Togliere un carburante usato resta vietato anche su un archiviato
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->updatePayload('gasoline', null), session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('vehicle.fuel_type_in_use', $this->jsonBody()['errors'][0]['message']);
     }
@@ -379,7 +378,7 @@ final class VehicleControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $id = $vehicle->getId();  // salva l'id prima della delete (il proxy lo dimentica)
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
 
         $repo = static::getContainer()->get(VehicleRepository::class);
@@ -391,7 +390,7 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/archive', accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/archive', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertNotNull($this->jsonBody()['archivedAt']);
@@ -409,7 +408,7 @@ final class VehicleControllerTest extends ApiTestCase
     /** @return list<array<string, mixed>> */
     private function shares(Vehicle $vehicle, string $token): array
     {
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/shares', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/shares', session: $token);
 
         return array_values($this->jsonBody());
     }
@@ -423,7 +422,7 @@ final class VehicleControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', [
             'userIds' => [$invitee->getId()],
             'role' => ShareRole::EDITOR->value, // ignorato: gli share sono sempre in sola lettura
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
@@ -444,7 +443,7 @@ final class VehicleControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', [
             'userIds' => [$anna->getId(), $carlo->getId()],
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertCount(2, $this->jsonBody());
@@ -458,11 +457,11 @@ final class VehicleControllerTest extends ApiTestCase
         $anna = $this->memberOf($org, 'Anna', 'Bianchi');
         $payload = ['userIds' => [$anna->getId()]];
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', $payload, accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', $payload, session: $token);
         self::assertResponseStatusCodeSame(201);
 
         // Secondo invio (doppio click, richiesta ripetuta): nessun errore, nessun duplicato.
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', $payload, accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', $payload, session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame([], $this->jsonBody(), 'Niente di nuovo da creare');
         self::assertCount(1, $this->shares($vehicle, $token));
@@ -477,11 +476,11 @@ final class VehicleControllerTest extends ApiTestCase
         $outsider = UserFactory::createOne();
         $url = '/api/vehicles/'.$vehicle->getId().'/shares';
 
-        $this->jsonRequest('POST', $url, ['userIds' => [$outsider->getId()]], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['userIds' => [$outsider->getId()]], session: $token);
         $outsiderStatus = $this->client->getResponse()->getStatusCode();
         $outsiderBody = $this->jsonBody();
 
-        $this->jsonRequest('POST', $url, ['userIds' => [99999999]], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['userIds' => [99999999]], session: $token);
 
         self::assertSame(422, $outsiderStatus);
         self::assertSame('share.not_org_member', $outsiderBody['title']);
@@ -499,7 +498,7 @@ final class VehicleControllerTest extends ApiTestCase
         $url = '/api/vehicles/'.$vehicle->getId().'/shares';
 
         foreach ([$admin->getId(), $me->getId(), $pending->getId()] as $id) {
-            $this->jsonRequest('POST', $url, ['userIds' => [$id]], accessToken: $token);
+            $this->jsonRequest('POST', $url, ['userIds' => [$id]], session: $token);
             self::assertResponseStatusCodeSame(422);
             self::assertSame('share.not_org_member', $this->jsonBody()['title']);
         }
@@ -514,7 +513,7 @@ final class VehicleControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', [
             'userIds' => [$anna->getId(), 99999999],
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([], $this->shares($vehicle, $token), 'Nessuno share parziale');
@@ -527,7 +526,7 @@ final class VehicleControllerTest extends ApiTestCase
         $url = '/api/vehicles/'.$vehicle->getId().'/shares';
 
         foreach ([[], ['userIds' => []], ['userIds' => ['anna@test.it']], ['userIds' => [0]], ['userEmail' => 'anna@test.it']] as $body) {
-            $this->jsonRequest('POST', $url, $body, accessToken: $token);
+            $this->jsonRequest('POST', $url, $body, session: $token);
             self::assertResponseStatusCodeSame(422);
         }
     }
@@ -545,7 +544,7 @@ final class VehicleControllerTest extends ApiTestCase
         OrganizationMemberFactory::createOne(['organization' => $org, 'user' => $pending, 'acceptedAt' => null]);
         UserFactory::createOne();                                        // estraneo all'org
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/share-candidates', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/share-candidates', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(
@@ -564,15 +563,15 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
         $peer = $this->memberOf($org, 'Luca', 'Verdi');
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), session: $token);
         self::assertResponseStatusCodeSame(201);
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$id.'/shares', ['userIds' => [$peer->getId()]], accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$id.'/shares', ['userIds' => [$peer->getId()]], session: $token);
         self::assertResponseStatusCodeSame(201);
         $created = array_values($this->jsonBody());
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', session: $token);
         self::assertResponseIsSuccessful();
         $listed = array_values($this->jsonBody());
         self::assertNotEmpty($listed);
@@ -593,11 +592,11 @@ final class VehicleControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
         $other = $this->memberOf($org, 'Luca', 'Verdi');
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), session: $token);
         self::assertResponseStatusCodeSame(201);
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/share-candidates', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/share-candidates', session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame([$other->getId()], array_column($this->jsonBody(), 'id'));
     }
@@ -611,14 +610,15 @@ final class VehicleControllerTest extends ApiTestCase
         $url = '/api/vehicles/'.$vehicle->getId().'/share-candidates';
 
         // Chi ha solo lo share in lettura non può vedere né gestire le condivisioni.
-        $this->jsonRequest('GET', $url, accessToken: $this->tokenForOrg($viewer, $org));
+        $this->jsonRequest('GET', $url, session: $this->sessionFor($viewer, $org));
         self::assertResponseStatusCodeSame(403);
 
         // Un'altra organizzazione non vede nemmeno che il veicolo esiste.
         [, , $foreignToken] = $this->createAuthenticatedUser();
-        $this->jsonRequest('GET', $url, accessToken: $foreignToken);
+        $this->jsonRequest('GET', $url, session: $foreignToken);
         self::assertResponseStatusCodeSame(404);
 
+        $this->client->getCookieJar()->clear(); // richiesta anonima
         $this->jsonRequest('GET', $url);
         self::assertResponseStatusCodeSame(401);
     }
@@ -627,13 +627,13 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$admin, , $token] = $this->createAuthenticatedUser(OrgRole::ADMIN);
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame('owned', $this->jsonBody()['ownership']);
         $id = $this->jsonBody()['id'];
 
         // Anche owner/admin dell'org: la proprietà decide totali, grafici e notifiche del veicolo.
-        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', session: $token);
         $shares = $this->jsonBody();
         self::assertCount(1, $shares);
         $ownerShare = reset($shares);
@@ -646,7 +646,7 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$admin, $org, $adminToken] = $this->createAuthenticatedUser(OrgRole::ADMIN);
         $member = $this->memberOf($org, 'Mario', 'Rossi');
-        $memberToken = $this->tokenForOrg($member, $org);
+        $memberToken = $this->sessionFor($member, $org);
 
         $adminCar = VehicleFactory::createOne(['organization' => $org, 'name' => 'Auto admin']);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $adminCar, 'user' => $admin]);
@@ -655,21 +655,21 @@ final class VehicleControllerTest extends ApiTestCase
         // L'admin condivide la sua auto col membro: per lui è in sola lettura.
         VehicleShareFactory::createOne(['vehicle' => $adminCar, 'user' => $member]);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $adminToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $adminToken);
         self::assertResponseIsSuccessful();
         $byName = array_column($this->jsonBody(), null, 'name');
         self::assertSame('owned', $byName['Auto admin']['ownership']);
         self::assertSame('organization', $byName['Auto membro']['ownership'], 'L\'admin la vede, ma non è sua');
         self::assertTrue($byName['Auto membro']['permissions']['canEdit']);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $memberToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $memberToken);
         $byName = array_column($this->jsonBody(), null, 'name');
         self::assertSame('owned', $byName['Auto membro']['ownership']);
         self::assertSame(['canEdit' => true, 'canDelete' => true, 'canShare' => true], $byName['Auto membro']['permissions']);
         self::assertSame('shared', $byName['Auto admin']['ownership']);
         self::assertSame(['canEdit' => false, 'canDelete' => false, 'canShare' => false], $byName['Auto admin']['permissions']);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$adminCar->getId(), accessToken: $memberToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$adminCar->getId(), session: $memberToken);
         self::assertSame('shared', $this->jsonBody()['ownership']);
     }
 
@@ -677,11 +677,11 @@ final class VehicleControllerTest extends ApiTestCase
     {
         [$member, , $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
 
-        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles', $this->vehiclePayload(), session: $token);
         self::assertResponseStatusCodeSame(201);
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$id.'/shares', session: $token);
         $shares = $this->jsonBody();
         self::assertCount(1, $shares);
         $ownerShare = reset($shares);
@@ -689,7 +689,7 @@ final class VehicleControllerTest extends ApiTestCase
         self::assertSame('admin', $ownerShare['role']);
         self::assertSame($member->getId(), $ownerShare['user']['id']);
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$id.'/shares/'.$ownerShare['id'], accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$id.'/shares/'.$ownerShare['id'], session: $token);
         self::assertResponseStatusCodeSame(409);
         self::assertSame('share.cannot_remove_owner', $this->jsonBody()['title']);
     }
@@ -709,21 +709,21 @@ final class VehicleControllerTest extends ApiTestCase
             'user' => $viewer,
             'role' => ShareRole::VIEWER,
         ]);
-        $viewerToken = $this->tokenForOrg($viewer, $org);
+        $viewerToken = $this->sessionFor($viewer, $org);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $viewerToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $viewerToken);
         self::assertResponseIsSuccessful();
         self::assertSame(
             ['canEdit' => false, 'canDelete' => false, 'canShare' => false],
             $this->jsonBody()['permissions'],
         );
 
-        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->vehiclePayload(), accessToken: $viewerToken);
+        $this->jsonRequest('PUT', '/api/vehicles/'.$vehicle->getId(), $this->vehiclePayload(), session: $viewerToken);
         self::assertResponseStatusCodeSame(403);
 
         $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/shares', [
             'userIds' => [$viewer->getId()],
-        ], accessToken: $viewerToken);
+        ], session: $viewerToken);
         self::assertResponseStatusCodeSame(403, 'Chi riceve uno share non può ricondividere');
     }
 
@@ -747,7 +747,7 @@ final class VehicleControllerTest extends ApiTestCase
             'type' => 'car',
             'fuelType' => 'gasoline',
             'secondaryFuelType' => 'lpg',  // bi-fuel benzina + GPL
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
@@ -767,7 +767,7 @@ final class VehicleControllerTest extends ApiTestCase
             'type' => 'car',
             'fuelType' => 'gasoline',
             'secondaryFuelType' => 'electric',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('electric', $this->jsonBody()['secondaryFuelType']);
@@ -783,7 +783,7 @@ final class VehicleControllerTest extends ApiTestCase
             'type' => 'car',
             'fuelType' => 'gasoline',
             'secondaryFuelType' => 'gasoline',  // duplicato → 422
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -798,7 +798,7 @@ final class VehicleControllerTest extends ApiTestCase
             'type' => 'car',
             'fuelType' => 'diesel',
             // secondaryFuelType non passato → null
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertNull($this->jsonBody()['secondaryFuelType']);
@@ -821,12 +821,4 @@ final class VehicleControllerTest extends ApiTestCase
         ];
     }
 
-    /** JWT con `active_org_id` = $org (per un utente aggiunto a un'org non sua). */
-    private function tokenForOrg(User $user, Organization $org): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $org->getId(),
-        ]);
-    }
 }

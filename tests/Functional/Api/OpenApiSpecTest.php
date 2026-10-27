@@ -11,7 +11,7 @@ use App\Tests\Support\ApiTestCase;
  *
  * Verifica che `/api/doc.json` esponga uno spec OpenAPI 3.0 valido con:
  * - tutti gli endpoint /api/* annotati (no regressioni quando si aggiunge route senza OA\*)
- * - security scheme Bearer presente
+ * - security scheme a cookie di sessione (`SessionCookie`) presente
  * - schemas generati per entity principali
  *
  * Test minimo deliberato — full validation richiede `nelmio/openapi-validator`
@@ -42,13 +42,12 @@ final class OpenApiSpecTest extends ApiTestCase
         self::assertSame('1.0.0', $this->spec['info']['version']);
     }
 
-    public function testSpecHasBearerSecurityScheme(): void
+    public function testSpecHasTheSessionCookieSecurityScheme(): void
     {
         $schemes = $this->spec['components']['securitySchemes'] ?? [];
-        self::assertArrayHasKey('Bearer', $schemes);
-        self::assertSame('http', $schemes['Bearer']['type']);
-        self::assertSame('bearer', $schemes['Bearer']['scheme']);
-        self::assertSame('JWT', $schemes['Bearer']['bearerFormat']);
+        self::assertSame(['SessionCookie'], array_keys($schemes));
+        self::assertSame(['type' => 'apiKey', 'name' => 'brumy_session', 'in' => 'cookie'], $schemes['SessionCookie']);
+        self::assertSame([['SessionCookie' => []]], $this->spec['security']);
     }
 
     public function testSpecCoversAllExpectedPaths(): void
@@ -58,8 +57,12 @@ final class OpenApiSpecTest extends ApiTestCase
             '/api/auth/register',
             '/api/auth/registration',
             '/api/auth/login',
-            '/api/auth/refresh',
             '/api/auth/logout',
+            '/api/auth/2fa/check',
+            '/api/auth/2fa/setup',
+            '/api/auth/2fa/enable',
+            '/api/auth/2fa/disable',
+            '/api/auth/2fa/backup-codes',
             '/api/auth/switch-org',
             '/api/auth/me',
             '/api/vehicles',
@@ -134,15 +137,18 @@ final class OpenApiSpecTest extends ApiTestCase
     {
         $health = $this->spec['paths']['/api/health']['get'] ?? null;
         self::assertNotNull($health);
-        // security: [] disabilita Bearer requirement
+        // security: [] toglie il requisito del cookie di sessione
         self::assertArrayHasKey('security', $health);
         self::assertSame([], $health['security']);
     }
 
-    public function testAuthLoginEndpointNoAuthRequired(): void
+    public function testSignInEndpointsNeedNoSession(): void
     {
-        $login = $this->spec['paths']['/api/auth/login']['post'] ?? null;
-        self::assertNotNull($login);
-        self::assertSame([], $login['security']);
+        foreach (['/api/auth/login', '/api/auth/2fa/check', '/api/auth/logout'] as $path) {
+            $operation = $this->spec['paths'][$path]['post'] ?? null;
+            self::assertNotNull($operation, $path);
+            self::assertSame([], $operation['security'], $path);
+        }
+        self::assertArrayNotHasKey('/api/auth/refresh', $this->spec['paths']);
     }
 }

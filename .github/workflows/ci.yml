@@ -32,9 +32,6 @@ jobs:
       APP_DEBUG: '0'
       APP_SECRET: ci_test_secret_dummy
       DATABASE_URL: mysql://root:ci_test_root_password@127.0.0.1:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4
-      JWT_SECRET_KEY: '%kernel.project_dir%/config/jwt/private.pem'
-      JWT_PUBLIC_KEY: '%kernel.project_dir%/config/jwt/public.pem'
-      JWT_PASSPHRASE: ci_test_jwt_passphrase
       CORS_ALLOW_ORIGIN: '^https?://localhost(:[0-9]+)?$'
 
     steps:
@@ -67,9 +64,6 @@ jobs:
 
       - name: Audit dependencies
         run: composer audit --locked
-
-      - name: Generate JWT keys
-        run: php bin/console lexik:jwt:generate-keypair --skip-if-exists
 
       - name: Create + migrate test DB
         run: |
@@ -164,7 +158,7 @@ jobs:
 
       # Smoke test PRIMA di pubblicare: l'immagine linux/amd64 si costruisce e si carica nel Docker locale
       # (load: true), poi scripts/smoke-image.sh la avvia con un MariaDB usa-e-getta e verifica SPA, API,
-      # header, migrazioni e chiavi JWT. Se fallisce il job si ferma qui e nessun tag arriva su GHCR.
+      # header, migrazioni, sessioni e CSRF. Se fallisce il job si ferma qui e nessun tag arriva su GHCR.
       # Il build multi-arch che segue riusa i layer di questo (stessa istanza BuildKit nel job).
       - name: Build app image for the smoke test (amd64)
         uses: docker/build-push-action@v6

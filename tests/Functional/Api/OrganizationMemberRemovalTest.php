@@ -54,7 +54,7 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         $this->jsonRequest(
             'DELETE',
             '/api/organizations/'.$org->getId().'/members/'.$this->membership($member, $org)->getId(),
-            accessToken: $this->tokenFor($actor, $org),
+            session: $this->sessionFor($actor, $org),
         );
     }
 
@@ -85,7 +85,7 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         self::assertSame([$car->getId()], $this->ownedIds($owner, $org));
         self::assertSame([], $this->ownedIds($member, $org));
         // Anche dall'API: il rimuovente la vede come propria
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $this->tokenFor($owner, $org));
+        $this->jsonRequest('GET', '/api/vehicles', session: $this->sessionFor($owner, $org));
         /** @var list<array<string, mixed>> $list */
         $list = $this->jsonBody();
         self::assertSame(['Auto del membro'], array_column($list, 'name'));
@@ -350,7 +350,7 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         self::assertNotNull($this->em()->find(OrganizationInvitation::class, $otherOrgId), 'Gli inviti di altre org non si toccano');
 
         // La seconda casella prova comunque ad accettare il vecchio link
-        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $rawPending], accessToken: $this->tokenFor($secondMailbox, $org));
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $rawPending], session: $this->sessionFor($secondMailbox, $org));
         self::assertResponseStatusCodeSame(400);
         self::assertSame('invitation.invalid', $this->jsonBody()['title']);
         $this->em()->clear();
@@ -380,7 +380,7 @@ final class OrganizationMemberRemovalTest extends ApiTestCase
         $carId = $car->getId();
         $vanId = $van->getId();
 
-        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], accessToken: $this->tokenFor($formerMember, $org));
+        $this->jsonRequest('POST', '/api/auth/invitation/accept', ['token' => $raw], session: $this->sessionFor($formerMember, $org));
         self::assertResponseStatusCodeSame(200);
 
         $this->em()->clear();

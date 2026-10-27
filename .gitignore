@@ -3,9 +3,6 @@
 
 /brumy/
 
-config/jwt/private.pem
-config/jwt/public.pem
-
 /vendor/
 /var/
 .phpunit.cache/

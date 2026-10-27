@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authFetch } from '@/api/client';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { testUser } from '@/test/authFixtures';
 import { resyncPushOnSessionStart, resyncThisDevice, sessionStarted } from './pushResync';
 import { urlBase64ToUint8Array } from './webPush';
 
@@ -133,18 +134,7 @@ describe('resyncThisDevice', () => {
   });
 });
 
-const user = (id: number): User => ({
-  id,
-  email: `u${id}@test.it`,
-  firstName: 'A',
-  lastName: 'B',
-  locale: 'it',
-  hasAvatar: false,
-  emailVerified: true,
-  pendingEmail: null,
-  isInstanceAdmin: false,
-  memberships: [],
-});
+const user = (id: number): User => testUser({ id, email: `u${id}@test.it`, memberships: [] });
 
 describe('sessionStarted', () => {
   it('scatta al passaggio verso authenticated e al cambio utente', () => {
@@ -166,47 +156,47 @@ describe('resyncPushOnSessionStart', () => {
 
   beforeEach(() => {
     resync.mockReset().mockResolvedValue(undefined);
-    useAuthStore.setState({ status: 'loading', accessToken: null, user: null });
+    useAuthStore.setState({ status: 'loading', user: null, activeOrgId: null });
     stop = resyncPushOnSessionStart(resync);
   });
 
   afterEach(() => {
     stop();
-    useAuthStore.setState({ status: 'loading', accessToken: null, user: null });
+    useAuthStore.setState({ status: 'loading', user: null, activeOrgId: null });
   });
 
   it('ri-registra al login (o al bootstrap) e al cambio di utente', () => {
-    useAuthStore.getState().setAccessToken('tok-1'); // useLogin imposta il token prima di /me
+    useAuthStore.getState().setTwoFactorPending(); // password data, codice ancora da inserire: non è una sessione
     expect(resync).not.toHaveBeenCalled();
 
-    useAuthStore.getState().setAuthenticated('tok-1', user(1));
+    useAuthStore.getState().setAuthenticated(user(1), 1);
     expect(resync).toHaveBeenCalledTimes(1);
 
-    useAuthStore.getState().setAuthenticated('tok-2', user(2));
+    useAuthStore.getState().setAuthenticated(user(2), 1);
     expect(resync).toHaveBeenCalledTimes(2);
   });
 
-  it('non ri-registra su refresh o switch-org (sostituzione del solo access token) né su setUser', () => {
-    useAuthStore.getState().setAuthenticated('tok-1', user(1));
+  it('non ri-registra su switch-org (cambio della sola org attiva) né su setUser', () => {
+    useAuthStore.getState().setAuthenticated(user(1), 1);
     resync.mockClear();
 
-    useAuthStore.getState().setAccessToken('tok-refresh');
+    useAuthStore.getState().setActiveOrgId(2);
     useAuthStore.getState().setUser({ ...user(1), firstName: 'Nuovo' });
 
     expect(resync).not.toHaveBeenCalled();
   });
 
   it('ri-registra di nuovo dopo logout e nuovo login', () => {
-    useAuthStore.getState().setAuthenticated('tok-1', user(1));
+    useAuthStore.getState().setAuthenticated(user(1), 1);
     useAuthStore.getState().logout();
-    useAuthStore.getState().setAuthenticated('tok-1b', user(1));
+    useAuthStore.getState().setAuthenticated(user(1), 1);
 
     expect(resync).toHaveBeenCalledTimes(2);
   });
 
   it('dopo lo stop non reagisce più', () => {
     stop();
-    useAuthStore.getState().setAuthenticated('tok-1', user(1));
+    useAuthStore.getState().setAuthenticated(user(1), 1);
     expect(resync).not.toHaveBeenCalled();
   });
 });

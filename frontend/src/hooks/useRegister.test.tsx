@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { testMe } from '@/test/authFixtures';
 import { useRegister } from './useRegister';
 
 vi.mock('@/api/client', () => ({ authFetch: vi.fn() }));
@@ -17,19 +18,8 @@ function wrapper({ children }: { children: ReactNode }) {
 
 const payload = { email: 'a@b.it', password: 'segreta-123', firstName: 'Anna', lastName: 'Neri' };
 
-function me(locale: User['locale']): User {
-  return {
-    id: 1,
-    email: payload.email,
-    firstName: 'Anna',
-    lastName: 'Neri',
-    locale,
-    hasAvatar: false,
-    emailVerified: false,
-    pendingEmail: null,
-    isInstanceAdmin: true,
-    memberships: [],
-  };
+function me(locale: User['locale']) {
+  return testMe({ email: payload.email, firstName: 'Anna', lastName: 'Neri', locale, emailVerified: false, isInstanceAdmin: true });
 }
 
 /** Il backend risponde con il profilo nella lingua ricevuta nel payload di registrazione. */
@@ -38,7 +28,7 @@ function mockBackend() {
   mockedAuthFetch.mockImplementation(async (path, init) => {
     if (path === '/api/auth/register') {
       sentLocale = (JSON.parse(String(init?.body)) as { locale: User['locale'] }).locale;
-      return { access_token: 'tok', user: me(sentLocale) };
+      return { user: me(sentLocale) };
     }
     if (path === '/api/auth/me') return me(sentLocale);
     throw new Error(`unexpected fetch ${path}`);
@@ -48,7 +38,7 @@ function mockBackend() {
 describe('useRegister', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
-    useAuthStore.setState({ status: 'unauthenticated', accessToken: null, user: null });
+    useAuthStore.setState({ status: 'unauthenticated', user: null, activeOrgId: null });
   });
 
   it.each([
@@ -75,6 +65,7 @@ describe('useRegister', () => {
     result.current.mutate(payload);
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(useAuthStore.getState().status).toBe('authenticated');
     expect(useAuthStore.getState().user?.locale).toBe('en');
     expect(i18n.language.startsWith('en')).toBe(true);
   });

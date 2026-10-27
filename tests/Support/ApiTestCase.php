@@ -7,15 +7,18 @@ namespace App\Tests\Support;
 use App\Entity\Organization;
 use App\Entity\User;
 use App\Enum\OrgRole;
+use App\Service\ActiveOrganizationResolver;
 use App\Tests\Factory\OrganizationFactory;
 use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\UserFactory;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Zenstruck\Foundry\Test\Factories;
 use Zenstruck\Foundry\Test\ResetDatabase;
 
@@ -23,8 +26,8 @@ use Zenstruck\Foundry\Test\ResetDatabase;
  * Base per i test funzionali HTTP. Centralizza:
  * - reset DB tra test (ResetDatabase)
  * - factory autowire (Factories)
- * - helper per creare un utente autenticato + JWT
- * - helper per richieste JSON tipizzate
+ * - helper per creare un utente autenticato + una sessione (id del cookie `brumy_session`)
+ * - helper per richieste JSON tipizzate, che passano il controllo CSRF same-origin come la SPA
  */
 abstract class ApiTestCase extends WebTestCase
 {
@@ -39,12 +42,17 @@ abstract class ApiTestCase extends WebTestCase
      */
     protected array $tmpFiles = [];
 
+    public const SESSION_COOKIE = 'brumy_session';
+    public const REMEMBER_ME_COOKIE = 'brumy_remember';
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->client = static::createClient();
         // Le eccezioni HTTP non interrompono il test: vogliamo asserire sullo status code
         $this->client->catchExceptions(true);
+        // Come il browser per le richieste della SPA: le scritture passano il controllo CSRF (i test CSRF lo sovrascrivono)
+        $this->client->setServerParameter('HTTP_SEC_FETCH_SITE', 'same-origin');
     }
 
     protected function tearDown(): void
@@ -59,7 +67,7 @@ abstract class ApiTestCase extends WebTestCase
     }
 
     /**
-     * Crea utente + organization + membership owner; ritorna [user, org, accessToken].
+     * Crea utente + organization + membership; ritorna [user, org, id di una sessione già autenticata su quell'org].
      *
      * @return array{0: User, 1: Organization, 2: string}
      */
@@ -73,41 +81,73 @@ abstract class ApiTestCase extends WebTestCase
             'role' => $role,
         ]);
 
-        $jwt = static::getContainer()->get(JWTTokenManagerInterface::class);
-        $accessToken = $jwt->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $org->getId(),
-        ]);
-
-        return [$user, $org, $accessToken];
+        return [$user, $org, $this->sessionFor($user, $org)];
     }
 
     /**
-     * Effettua una richiesta JSON autenticata via Bearer.
+     * Apre una sessione autenticata per $user con $org attiva, come farebbe un login (stesso schema di
+     * `KernelBrowser::loginUser()`: token del firewall `api` serializzato in sessione), e ne ritorna l'id da passare a
+     * {@see self::jsonRequest()}. $org null = nessuna org scelta: la sceglie il resolver alla prima richiesta.
+     */
+    protected function sessionFor(User $user, ?Organization $org = null): string
+    {
+        $session = static::getContainer()->get('session.factory');
+        self::assertInstanceOf(SessionFactoryInterface::class, $session);
+        $session = $session->createSession();
+        $session->set('_security_api', serialize(new UsernamePasswordToken($user, 'api', $user->getRoles())));
+        if ($org !== null) {
+            $session->set(ActiveOrganizationResolver::SESSION_KEY, $org->getId());
+        }
+        $session->save();
+
+        return $session->getId();
+    }
+
+    /**
+     * Richiesta JSON. Con $session la richiesta porta quel cookie di sessione (al posto di quello che il client avesse
+     * ricevuto); senza, il client manda i cookie che ha (es. dopo un login), come un browser.
      *
      * @param array<string, mixed>|null $body
+     * @param array<string, string> $server header aggiuntivi in formato $_SERVER (`HTTP_ORIGIN`...)
      */
     protected function jsonRequest(
         string $method,
         string $uri,
         ?array $body = null,
-        ?string $accessToken = null,
-        string $clientType = 'mobile',
+        ?string $session = null,
+        array $server = [],
     ): void {
-        $headers = [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_X_CLIENT_TYPE' => $clientType,
-        ];
-        if ($accessToken !== null) {
-            $headers['HTTP_AUTHORIZATION'] = 'Bearer '.$accessToken;
+        if ($session !== null) {
+            $this->useSession($session);
         }
 
         $this->client->request(
             $method,
             $uri,
-            server: $headers,
+            server: ['CONTENT_TYPE' => 'application/json', ...$server],
             content: $body !== null ? json_encode($body, JSON_THROW_ON_ERROR) : null,
         );
+    }
+
+    /** Mette $sessionId nel cookie `brumy_session` del client, al posto di quello che aveva. */
+    protected function useSession(string $sessionId): void
+    {
+        $jar = $this->client->getCookieJar();
+        $jar->expire(self::SESSION_COOKIE, '/api');
+        $jar->expire(self::SESSION_COOKIE, '/');
+        $jar->set(new Cookie(self::SESSION_COOKIE, $sessionId, null, '/api', 'localhost'));
+    }
+
+    /** Valore del cookie $name impostato dall'ultima risposta (null se non c'è o se la risposta lo cancella). */
+    protected function responseCookie(string $name): ?string
+    {
+        foreach ($this->client->getResponse()->headers->getCookies() as $cookie) {
+            if ($cookie->getName() === $name) {
+                return $cookie->isCleared() ? null : $cookie->getValue();
+            }
+        }
+
+        return null;
     }
 
     /**

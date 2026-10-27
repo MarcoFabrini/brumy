@@ -70,7 +70,7 @@ final class VehicleChartsTest extends ApiTestCase
         $viewer = $this->member($org);
         VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $viewer, 'role' => $role]);
 
-        $this->assertOnlyOwnData($this->charts($this->tokenFor($viewer, $org), $vehicle));
+        $this->assertOnlyOwnData($this->charts($this->sessionFor($viewer, $org), $vehicle));
     }
 
     /** @return iterable<string, array{ShareRole}> */
@@ -86,7 +86,7 @@ final class VehicleChartsTest extends ApiTestCase
         $vehicle = $this->ownedVehicle($this->member($org), $org);
         $stranger = $this->member($org);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts', accessToken: $this->tokenFor($stranger, $org));
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts', session: $this->sessionFor($stranger, $org));
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -98,7 +98,7 @@ final class VehicleChartsTest extends ApiTestCase
         $pending = $this->member($org);
         VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $pending, 'acceptedAt' => null]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts', accessToken: $this->tokenFor($pending, $org));
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts', session: $this->sessionFor($pending, $org));
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -110,10 +110,10 @@ final class VehicleChartsTest extends ApiTestCase
         OrganizationMemberFactory::createOne(['organization' => $otherOrg, 'user' => $user, 'role' => OrgRole::OWNER]);
         $elsewhere = $this->ownedVehicle($user, $otherOrg);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$elsewhere->getId().'/charts', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$elsewhere->getId().'/charts', session: $token);
         self::assertResponseStatusCodeSame(404);
 
-        $this->jsonRequest('GET', '/api/vehicles/999999/charts', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/999999/charts', session: $token);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -186,7 +186,7 @@ final class VehicleChartsTest extends ApiTestCase
         $this->ownData($vehicle);
         $this->expense($vehicle, $this->day(-1, 10), '35.50', ExpenseCategory::INSURANCE);
 
-        $this->jsonRequest('GET', '/api/dashboard/charts?months=6', accessToken: $token);
+        $this->jsonRequest('GET', '/api/dashboard/charts?months=6', session: $token);
         self::assertResponseIsSuccessful();
         $dashboard = $this->jsonBody();
 
@@ -302,7 +302,7 @@ final class VehicleChartsTest extends ApiTestCase
     /** @return array<string, mixed> */
     private function charts(string $token, Vehicle $vehicle, string $query = ''): array
     {
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts'.$query, accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/charts'.$query, session: $token);
         self::assertResponseIsSuccessful();
 
         return $this->jsonBody();

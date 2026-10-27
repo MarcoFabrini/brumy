@@ -6,6 +6,7 @@ import { authFetch } from '@/api/client';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useChangeMemberRole, useRemoveMember } from './useOrganizationMembers';
 import { vehicleKeys } from './useVehicles';
+import { testMe } from '@/test/authFixtures';
 
 vi.mock('@/api/client', () => ({ authFetch: vi.fn() }));
 const mockedAuthFetch = vi.mocked(authFetch);
@@ -85,13 +86,13 @@ describe('useChangeMemberRole', () => {
   });
 
   it('se è il proprio ruolo rilegge /api/auth/me e aggiorna lo store', async () => {
-    const me = { id: 1, memberships: [{ id: 1, role: 'member', organization: { id: 1, name: 'Org', slug: 'org' } }], locale: 'it' };
+    const me = testMe({ memberships: [{ id: 1, role: 'member', organization: { id: 1, name: 'Org', slug: 'org' } }] });
     mockedAuthFetch.mockImplementation(async (path: string) => (path === '/api/auth/me' ? me : { id: 55, role: 'member' }));
     const { result } = setupRole();
 
     await act(() => result.current.mutateAsync({ memberId: 55, role: 'member', self: true }));
 
-    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/auth/me');
+    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/auth/me', expect.anything());
     expect(useAuthStore.getState().user?.memberships[0]?.role).toBe('member');
   });
 
@@ -117,6 +118,8 @@ describe('useChangeMemberRole', () => {
         emailVerified: true,
         pendingEmail: null,
         isInstanceAdmin: false,
+        twoFactorEnabled: false,
+        backupCodesRemaining: 0,
         memberships: [{ id: 55, role: 'owner', organization: { id: 1, name: 'Org', slug: 'org' } }],
       },
     });

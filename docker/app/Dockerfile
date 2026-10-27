@@ -101,8 +101,8 @@ COPY symfony.lock .env ./
 COPY --from=frontend-builder /app/dist /app/public/frontend
 COPY docker/app/Caddyfile /etc/frankenphp/Caddyfile
 
-RUN mkdir -p var/cache var/log config/jwt \
-    && chown -R www-data:www-data var config/jwt /data /config
+RUN mkdir -p var/cache var/log \
+    && chown -R www-data:www-data var /data /config
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1/api/health || exit 1

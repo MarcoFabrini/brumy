@@ -31,7 +31,7 @@ final class ReminderControllerTest extends ApiTestCase
             'description' => 'Revisione biennale',
             'dueDate' => '2026-12-31',
             'notifyDaysBefore' => 30,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Revisione biennale', $this->jsonBody()['description']);
@@ -45,7 +45,7 @@ final class ReminderControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/reminders', [
             'vehicleId' => $vehicle->getId(), 'type' => 'not-a-type', 'description' => 'x', 'dueDate' => '2026-12-31',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'type', 'message' => 'common.invalid_value']], $this->jsonBody()['errors']);
@@ -60,7 +60,7 @@ final class ReminderControllerTest extends ApiTestCase
             'vehicleId' => $vehicle->getId(),
             'type' => 'custom',
             'description' => 'Senza scadenza',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -72,10 +72,8 @@ final class ReminderControllerTest extends ApiTestCase
         $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
 
         // Come il client storico: POST senza body e senza Content-Type.
-        $this->client->request('POST', '/api/reminders/'.$r->getId().'/complete', server: [
-            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
-            'HTTP_X_CLIENT_TYPE' => 'mobile',
-        ]);
+        $this->useSession($token);
+        $this->client->request('POST', '/api/reminders/'.$r->getId().'/complete');
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -97,7 +95,7 @@ final class ReminderControllerTest extends ApiTestCase
         ]);
         $id = $r->getId();
 
-        $this->jsonRequest('POST', '/api/reminders/'.$id.'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders/'.$id.'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -114,7 +112,7 @@ final class ReminderControllerTest extends ApiTestCase
         self::assertSame($vehicle->getId(), $body['next']['vehicle']['id']);
 
         // Tra gli attivi c'è solo il successore.
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), session: $token);
         self::assertSame([$body['next']['id']], array_column($this->jsonBody(), 'id'));
     }
 
@@ -126,7 +124,7 @@ final class ReminderControllerTest extends ApiTestCase
         $connection = static::getContainer()->get(Connection::class);
         $connection->executeStatement('DELETE FROM audit_logs');
 
-        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedOn' => '2026-10-01', 'completedKm' => 9_800], session: $token);
         self::assertResponseIsSuccessful();
         $nextId = $this->jsonBody()['next']['id'];
 
@@ -147,20 +145,20 @@ final class ReminderControllerTest extends ApiTestCase
         $url = '/api/reminders/'.$r->getId().'/complete';
         $tomorrow = static::getContainer()->get(AppClock::class)->today()->modify('+1 day')->format('Y-m-d');
 
-        $this->jsonRequest('POST', $url, ['completedOn' => $tomorrow], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['completedOn' => $tomorrow], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
         self::assertSame([['field' => 'completedOn', 'message' => 'reminder.completed_on_future']], $this->jsonBody()['errors']);
 
-        $this->jsonRequest('POST', $url, ['completedOn' => '30/11/2026'], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['completedOn' => '30/11/2026'], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'completedOn', 'message' => 'common.invalid_date']], $this->jsonBody()['errors']);
 
-        $this->jsonRequest('POST', $url, ['completedKm' => 10_000_000], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['completedKm' => 10_000_000], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'completedKm', 'message' => 'common.km_too_large']], $this->jsonBody()['errors']);
 
-        $this->jsonRequest('GET', '/api/reminders/'.$r->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/'.$r->getId(), session: $token);
         self::assertNull($this->jsonBody()['completedAt'], 'un completamento rifiutato non tocca il promemoria');
     }
 
@@ -172,7 +170,7 @@ final class ReminderControllerTest extends ApiTestCase
         $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'dueKm' => 10_000, 'recurrenceKm' => 10_000]);
 
         // Tagliando registrato in ritardo: nel frattempo è già stato inserito un rifornimento più avanti.
-        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedKm' => 9_800], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders/'.$r->getId().'/complete', ['completedKm' => 9_800], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(19_800, $this->jsonBody()['next']['dueKm']);
@@ -187,11 +185,11 @@ final class ReminderControllerTest extends ApiTestCase
         $count = static fn (): int => (int) static::getContainer()->get(Connection::class)
             ->fetchOne('SELECT COUNT(*) FROM reminders WHERE vehicle_id = ?', [$vehicle->getId()]);
 
-        $this->jsonRequest('POST', $url, ['completedKm' => 9_800], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['completedKm' => 9_800], session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame(2, $count());
 
-        $this->jsonRequest('POST', $url, ['completedKm' => 9_900], accessToken: $token);
+        $this->jsonRequest('POST', $url, ['completedKm' => 9_900], session: $token);
         self::assertResponseStatusCodeSame(409);
         self::assertSame(['type' => 'about:blank', 'title' => 'reminder.already_completed', 'status' => 409], $this->jsonBody());
         self::assertSame(2, $count());
@@ -203,7 +201,7 @@ final class ReminderControllerTest extends ApiTestCase
         [, $otherOrg] = $this->createAuthenticatedUser();
         $foreign = ReminderFactory::createOne(['organization' => $otherOrg, 'vehicle' => VehicleFactory::createOne(['organization' => $otherOrg])]);
 
-        $this->jsonRequest('POST', '/api/reminders/'.$foreign->getId().'/complete', ['completedKm' => 1], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders/'.$foreign->getId().'/complete', ['completedKm' => 1], session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('reminder.not_found', $this->jsonBody()['title']);
@@ -217,24 +215,24 @@ final class ReminderControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/reminders', [
             'vehicleId' => $vehicle->getId(), ...$base, 'recurrenceMonths' => 24, 'recurrenceKm' => 10_000, 'notifyKmBefore' => 500,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
         self::assertSame([24, 10_000, 500], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
         $id = $body['id'];
 
-        $this->jsonRequest('PUT', '/api/reminders/'.$id, [...$base, 'recurrenceMonths' => 12, 'recurrenceKm' => 15_000, 'notifyKmBefore' => 800], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/reminders/'.$id, [...$base, 'recurrenceMonths' => 12, 'recurrenceKm' => 15_000, 'notifyKmBefore' => 800], session: $token);
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
         self::assertSame([12, 15_000, 800], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
 
         // Campi omessi → una tantum con la soglia di default.
-        $this->jsonRequest('PUT', '/api/reminders/'.$id, $base, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/reminders/'.$id, $base, session: $token);
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
         self::assertSame([null, null, 1000], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
 
-        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], session: $token);
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
         self::assertSame([null, null, 1000], [$body['recurrenceMonths'], $body['recurrenceKm'], $body['notifyKmBefore']]);
@@ -287,12 +285,12 @@ final class ReminderControllerTest extends ApiTestCase
         $r = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
         $base = ['type' => 'service', 'description' => 'Tagliando', ...$fields];
 
-        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], accessToken: $token);
+        $this->jsonRequest('POST', '/api/reminders', ['vehicleId' => $vehicle->getId(), ...$base], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
         self::assertSame($errors, $this->jsonBody()['errors']);
 
-        $this->jsonRequest('PUT', '/api/reminders/'.$r->getId(), $base, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/reminders/'.$r->getId(), $base, session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame($errors, $this->jsonBody()['errors']);
     }
@@ -307,10 +305,10 @@ final class ReminderControllerTest extends ApiTestCase
             'completedAt' => new \DateTimeImmutable(),
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), session: $token);
         self::assertCount(1, $this->jsonBody());
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId().'&onlyActive=false', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId().'&onlyActive=false', session: $token);
         self::assertCount(2, $this->jsonBody());
     }
 
@@ -324,13 +322,13 @@ final class ReminderControllerTest extends ApiTestCase
             'dueDate' => new \DateTimeImmutable('+5 days'), 'notifyDaysBefore' => 12,
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$vehicle->getId(), session: $token);
         self::assertResponseIsSuccessful();
         /** @var list<array{notifyDaysBefore: int}> $list */
         $list = $this->jsonBody();
         self::assertSame(12, $list[0]['notifyDaysBefore']);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $token);
         self::assertResponseIsSuccessful();
         /** @var list<array{notifyDaysBefore: int}> $upcoming */
         $upcoming = $this->jsonBody();
@@ -361,7 +359,7 @@ final class ReminderControllerTest extends ApiTestCase
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $archived, 'user' => $user]);
         ReminderFactory::createOne(['organization' => $org, 'vehicle' => $archived, 'dueDate' => new \DateTimeImmutable('-1 day')]);
 
-        $this->jsonRequest('GET', '/api/reminders/overview', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/overview', session: $token);
 
         self::assertResponseIsSuccessful();
         /** @var list<array{id: int, urgency: string, currentKm: int, vehicle: array{id: int}}> $body */
@@ -391,7 +389,7 @@ final class ReminderControllerTest extends ApiTestCase
             'dueDate' => new \DateTimeImmutable('+90 days'), // fuori dalla finestra default (30gg)
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $token);
 
         self::assertResponseIsSuccessful();
         /** @var list<array{id: int, vehicle: array{id: int}}> $body */
@@ -410,7 +408,7 @@ final class ReminderControllerTest extends ApiTestCase
             'dueDate' => new \DateTimeImmutable('+5 days'),
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $tokenA);
 
         self::assertResponseIsSuccessful();
         self::assertSame([], $this->jsonBody());
@@ -438,7 +436,7 @@ final class ReminderControllerTest extends ApiTestCase
             'dueDate' => new \DateTimeImmutable('+5 days'),
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame([$mine->getId()], array_column($this->jsonBody(), 'id'));
@@ -457,7 +455,7 @@ final class ReminderControllerTest extends ApiTestCase
             'dueDate' => new \DateTimeImmutable('+5 days'),
         ]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming?days=90&limit=1', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming?days=90&limit=1', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertCount(1, $this->jsonBody());
@@ -479,7 +477,7 @@ final class ReminderControllerTest extends ApiTestCase
         // Stessa scadenza, solo la descrizione cambia: il livello già notificato resta (niente doppia notifica)
         $this->jsonRequest('PUT', '/api/reminders/'.$id, [
             'type' => 'service', 'description' => 'Tagliando completo', 'dueDate' => '2026-12-31', 'notifyDaysBefore' => 30,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame('Tagliando completo', $this->jsonBody()['description']);
         self::assertSame('soon', $connection->fetchOne('SELECT notified_urgency FROM reminders WHERE id = ?', [$id]));
@@ -487,7 +485,7 @@ final class ReminderControllerTest extends ApiTestCase
         // La scadenza si sposta: la notifica si riarma
         $this->jsonRequest('PUT', '/api/reminders/'.$id, [
             'type' => 'service', 'description' => 'Tagliando completo', 'dueDate' => '2027-03-01', 'dueKm' => 120000, 'notifyDaysBefore' => 14,
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame(120000, $this->jsonBody()['dueKm']);
         self::assertNull($connection->fetchOne('SELECT notified_urgency FROM reminders WHERE id = ?', [$id]) ?: null);
@@ -504,7 +502,7 @@ final class ReminderControllerTest extends ApiTestCase
 
         $this->jsonRequest('PUT', '/api/reminders/'.$r->getId(), [
             'type' => 'custom', 'description' => 'Senza veicolo', 'dueDate' => '2026-12-31',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('Senza veicolo', $this->jsonBody()['description']);
@@ -525,7 +523,7 @@ final class ReminderControllerTest extends ApiTestCase
         foreach ([$vehicle->getId(), $other->getId(), 0] as $vehicleId) {
             $this->jsonRequest('PUT', '/api/reminders/'.$id, [
                 'vehicleId' => $vehicleId, 'type' => 'custom', 'description' => 'Aggiornato', 'dueDate' => '2026-12-31',
-            ], accessToken: $token);
+            ], session: $token);
 
             self::assertResponseIsSuccessful();
             self::assertSame($vehicle->getId(), $this->jsonBody()['vehicle']['id']);
@@ -546,13 +544,13 @@ final class ReminderControllerTest extends ApiTestCase
 
         $this->jsonRequest('PUT', '/api/reminders/'.$r->getId(), [
             'vehicleId' => $vehicle->getId(), 'type' => 'custom', 'description' => 'Senza scadenza',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
         self::assertSame([['field' => 'dueDate', 'message' => 'reminder.due_required']], $this->jsonBody()['errors']);
 
-        $this->jsonRequest('GET', '/api/reminders/'.$r->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/'.$r->getId(), session: $token);
         self::assertSame('Originale', $this->jsonBody()['description']);
     }
 
@@ -562,14 +560,14 @@ final class ReminderControllerTest extends ApiTestCase
         [, $otherOrg] = $this->createAuthenticatedUser();
         $foreign = VehicleFactory::createOne(['organization' => $otherOrg]);
 
-        $this->jsonRequest('GET', '/api/reminders', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders', session: $token);
         self::assertResponseStatusCodeSame(400);
         self::assertSame('query.vehicle_id_required', $this->jsonBody()['title']);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId=-3', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId=-3', session: $token);
         self::assertResponseStatusCodeSame(400);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$foreign->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$foreign->getId(), session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('vehicle.not_found', $this->jsonBody()['title']);
     }
@@ -582,7 +580,7 @@ final class ReminderControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/reminders', [
             'vehicleId' => $foreign->getId(), 'type' => 'inspection', 'description' => 'Intruso', 'dueDate' => '2026-12-31',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('vehicle.not_found', $this->jsonBody()['title']);
@@ -598,12 +596,12 @@ final class ReminderControllerTest extends ApiTestCase
         $hiddenReminder = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $hidden]);
         $sharedReminder = ReminderFactory::createOne(['organization' => $org, 'vehicle' => $shared]);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$hidden->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$hidden->getId(), session: $token);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('GET', '/api/reminders/'.$hiddenReminder->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/'.$hiddenReminder->getId(), session: $token);
         self::assertResponseStatusCodeSame(403);
 
-        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$shared->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders?vehicleId='.$shared->getId(), session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame([$sharedReminder->getId()], array_column($this->jsonBody(), 'id'));
     }
@@ -620,11 +618,11 @@ final class ReminderControllerTest extends ApiTestCase
         ]);
 
         // days enorme: il tetto è 365, i promemoria oltre l'anno non escono
-        $this->jsonRequest('GET', '/api/reminders/upcoming?days=100000&limit=50', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming?days=100000&limit=50', session: $token);
         self::assertSame([$inAYear->getId()], array_column($this->jsonBody(), 'id'));
 
         // days/limit a 0 o negativi si portano al minimo (1), non producono errori né liste illimitate
-        $this->jsonRequest('GET', '/api/reminders/upcoming?days=0&limit=-5', accessToken: $token);
+        $this->jsonRequest('GET', '/api/reminders/upcoming?days=0&limit=-5', session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame([], $this->jsonBody());
     }

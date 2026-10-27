@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { authFetch } from '@/api/client';
+import { logout } from '@/api/endpoints/auth';
 import { unsubscribeThisDevice } from '@/lib/pushCleanup';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 /**
- * useLogout — revoca refresh token server-side + pulisce store + cache,
- * poi redirect login.
+ * useLogout — disiscrive le push di questo dispositivo (finché la sessione vale), chiude la sessione sul server
+ * (cookie di sessione e remember-me), pulisce store e cache, poi redirect al login.
  */
 export function useLogout() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export function useLogout() {
   return async () => {
     await unsubscribeThisDevice();
     try {
-      await authFetch<void>('/api/auth/logout', { method: 'POST' });
+      await logout();
     } catch {
       // Anche se la chiamata fallisce, deautentica comunque lato client
     }

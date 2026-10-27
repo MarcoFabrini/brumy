@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * Punti riconosciuti (letterali con forma `dominio.codice`, commenti esclusi):
  * - `problem('x.y', …)`, `fieldProblem('campo', 'x.y')` (ProblemDetailsResponseTrait);
  * - `createNotFoundException('x.y')` e `createBadRequest('x.y')`;
- * - `new …HttpException('x.y')`, anche con la sfida `'Bearer'` davanti (ApiProblemListener ne fa il title);
+ * - `new …HttpException('x.y')`, anche con la sfida (`'Session'`) davanti (ApiProblemListener ne fa il title);
  * - messaggi dei vincoli: `buildViolation('x.y')` e `message: 'x.y'` (finiscono nel campo `message` dei 422).
  *
  * Le chiavi dinamiche (concatenate, in variabili) non si vedono: restano a carico della checklist di

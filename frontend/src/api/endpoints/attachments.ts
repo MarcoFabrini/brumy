@@ -39,7 +39,7 @@ export function deleteAttachment(id: number) {
   return authFetch<void>(`/api/attachments/${id}`, { method: 'DELETE' });
 }
 
-/** Download bytes (immagine o PDF). `<img src>` non manda Bearer → blob fetch. */
+/** Download bytes (immagine o PDF) come blob: stessa gestione della sessione di authFetch, poi object URL. */
 export function downloadAttachment(id: number): Promise<Blob> {
   return authFetchBlob(`/api/attachments/${id}`);
 }

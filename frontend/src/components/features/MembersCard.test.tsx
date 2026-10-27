@@ -90,7 +90,7 @@ function mockMembers(members: ReturnType<typeof asMember>[], patch?: (path: stri
     if (path === '/api/organizations/1/members') return members;
     if (path === '/api/organizations/1/invitations') return [];
     if (init?.method === 'PATCH') return patch ? patch(path, init) : members[0];
-    if (path === '/api/auth/me') return meAs('member');
+    if (path === '/api/auth/me') return { ...meAs('member'), activeOrganizationId: 1 };
     throw new Error(`unexpected fetch ${path}`);
   });
 }
@@ -106,6 +106,8 @@ function meAs(role: MemberRole): User {
     emailVerified: true,
     pendingEmail: null,
     isInstanceAdmin: false,
+    twoFactorEnabled: false,
+    backupCodesRemaining: 0,
     memberships: [{ id: 1, role, organization: { id: 1, name: 'Org', slug: 'org' } }],
   };
 }

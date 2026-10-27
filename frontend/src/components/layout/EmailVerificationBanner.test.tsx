@@ -24,6 +24,8 @@ const unverified: User = {
   emailVerified: false,
   pendingEmail: null,
   isInstanceAdmin: false,
+  twoFactorEnabled: false,
+  backupCodesRemaining: 0,
   memberships: [],
 };
 
@@ -41,7 +43,7 @@ describe('EmailVerificationBanner — rinvio', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user: unverified });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user: unverified });
   });
 
   it('il pulsante di rinvio ha un bersaglio da 44px', () => {
@@ -82,7 +84,7 @@ describe('EmailVerificationBanner — cambio email in attesa', () => {
   it("mostra il nuovo indirizzo da confermare anche se l'email attuale è verificata", () => {
     useAuthStore.setState({
       status: 'authenticated',
-      accessToken: 'tok',
+      activeOrgId: 1,
       user: { ...unverified, emailVerified: true, pendingEmail: 'nuova@test.it' },
     });
     renderBanner();
@@ -92,7 +94,7 @@ describe('EmailVerificationBanner — cambio email in attesa', () => {
   });
 
   it('non compare con email verificata e nessun cambio in attesa', () => {
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user: { ...unverified, emailVerified: true } });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user: { ...unverified, emailVerified: true } });
     renderBanner();
 
     expect(screen.queryByRole('button', { name: 'Rinvia email' })).not.toBeInTheDocument();

@@ -17,7 +17,7 @@ final class AuditLogControllerTest extends ApiTestCase
         // Trigger audit via vehicle creation
         VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('GET', '/api/audit-logs', accessToken: $token);
+        $this->jsonRequest('GET', '/api/audit-logs', session: $token);
 
         self::assertResponseIsSuccessful();
         /** @var list<array{entityClass: string}> $body */
@@ -30,7 +30,7 @@ final class AuditLogControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
 
-        $this->jsonRequest('GET', '/api/audit-logs', accessToken: $token);
+        $this->jsonRequest('GET', '/api/audit-logs', session: $token);
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -42,7 +42,7 @@ final class AuditLogControllerTest extends ApiTestCase
 
         VehicleFactory::createOne(['organization' => $orgB, 'name' => 'Other org vehicle']);
 
-        $this->jsonRequest('GET', '/api/audit-logs', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/audit-logs', session: $tokenA);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();

@@ -3,9 +3,10 @@ nelmio_cors:
         origin_regex: true
         allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
         allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
-        allow_headers: ['Content-Type', 'Authorization', 'X-Client-Type']
+        allow_headers: ['Content-Type']
         expose_headers: ['Link']
-        # Necessario per dual-channel: il browser invia/riceve cookie HttpOnly
+        # La sessione viaggia nel cookie HttpOnly. Le scritture da un'altra origine le rifiuta comunque il controllo
+        # CSRF same-origin (App\EventListener\ApiCsrfListener).
         allow_credentials: true
         max_age: 3600
     paths:

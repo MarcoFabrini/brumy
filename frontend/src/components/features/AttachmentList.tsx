@@ -16,25 +16,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { downloadAttachment } from '@/api/endpoints/attachments';
 import { useFormat } from '@/hooks/useFormat';
 import type { Attachment, AttachmentEntityType } from '@/api/types/attachment';
+import { triggerDownload } from '@/lib/download';
 
 export interface AttachmentListProps {
   entityType: AttachmentEntityType;
   entityId: number;
   /** Veicolo in sola lettura (condiviso): gli allegati si scaricano ma non si eliminano. */
   readOnly?: boolean;
-}
-
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Revoca differita: su Safari/Firefox revocare subito può annullare il download di blob grandi.
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export function AttachmentList({ entityType, entityId, readOnly = false }: AttachmentListProps) {

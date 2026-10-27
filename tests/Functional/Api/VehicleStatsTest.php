@@ -34,7 +34,7 @@ final class VehicleStatsTest extends ApiTestCase
             'initialKm' => 0,
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -64,7 +64,7 @@ final class VehicleStatsTest extends ApiTestCase
             'organization' => $org, 'vehicle' => $vehicle, 'km' => 15000, 'cost' => '50.00',
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertResponseIsSuccessful();
         // Max tra rifornimento (12000) e manutenzione (15000).
@@ -88,7 +88,7 @@ final class VehicleStatsTest extends ApiTestCase
             'fuelType' => FuelType::DIESEL, 'fullTank' => true,
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(20000, $this->jsonBody()['currentKm']);
@@ -125,7 +125,7 @@ final class VehicleStatsTest extends ApiTestCase
             'fuelType' => FuelType::DIESEL, 'fullTank' => true,
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -174,7 +174,7 @@ final class VehicleStatsTest extends ApiTestCase
             'fuelType' => FuelType::LPG, 'fullTank' => true,
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -209,7 +209,7 @@ final class VehicleStatsTest extends ApiTestCase
             'fuelType' => FuelType::DIESEL, 'fullTank' => false,  // PARZIALE
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         $body = $this->jsonBody();
         self::assertNull($body['consumption']['diesel'], 'Con un solo full tank, consumption deve essere null');
@@ -236,7 +236,7 @@ final class VehicleStatsTest extends ApiTestCase
         $fill('2026-01-20', 10500, '30.000', FuelType::GASOLINE);  // 500 km NON tutti a benzina
         $fill('2026-02-01', 10900, '40.000', FuelType::GASOLINE);  // intervallo pulito: 400 km / 40 L = 10 km/l
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         $body = $this->jsonBody();
         // Senza lo scarto: (500+400)/(30+40) = 12,86. Con lo scarto conta solo l'ultimo intervallo.
@@ -275,7 +275,7 @@ final class VehicleStatsTest extends ApiTestCase
             'fuelType' => FuelType::DIESEL, 'fullTank' => true,
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         $body = $this->jsonBody();
         // (1600-1000) km / (15+25) L = 600/40 = 15 km/l.
@@ -304,7 +304,7 @@ final class VehicleStatsTest extends ApiTestCase
             'organization' => $org, 'vehicle' => $vehicle, 'cost' => '120.50',
         ]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         $body = $this->jsonBody();
         self::assertSame(1, $body['totals']['refuelings']);
@@ -321,18 +321,18 @@ final class VehicleStatsTest extends ApiTestCase
             $this->jsonRequest('POST', '/api/maintenances', [
                 'vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-01', 'km' => 1000, 'type' => $type, 'category' => $category,
                 'description' => 'Lavoro', 'components' => $category === 'unscheduled' ? ['Pastiglie', 'Dischi'] : [],
-            ], accessToken: $token);
+            ], session: $token);
         }
         foreach ([['tax', 'Bollo', null], ['insurance', '', 'Allianz'], ['other', 'Pedaggio', null], ['other', 'Parcheggio', null]] as [$section, $category, $insurer]) {
             $this->jsonRequest('POST', '/api/expenses', [
                 'vehicleId' => $vehicle->getId(), 'occurredAt' => '2026-05-01', 'section' => $section, 'category' => $category,
                 'insurer' => $insurer, 'description' => 'Spesa', 'amount' => '10.00',
-            ], accessToken: $token);
+            ], session: $token);
         }
-        $this->jsonRequest('GET', '/api/components?vehicleId='.$vehicle->getId(), accessToken: $token);
-        $this->jsonRequest('DELETE', '/api/components/'.array_column($this->jsonBody(), 'id')[0], accessToken: $token);
+        $this->jsonRequest('GET', '/api/components?vehicleId='.$vehicle->getId(), session: $token);
+        $this->jsonRequest('DELETE', '/api/components/'.array_column($this->jsonBody(), 'id')[0], session: $token);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $token);
 
         self::assertSame(
             ['scheduled' => 2, 'unscheduled' => 1, 'inspection' => 1, 'tax' => 1, 'insurance' => 1, 'expense' => 2, 'component' => 1],
@@ -346,7 +346,7 @@ final class VehicleStatsTest extends ApiTestCase
         [, $orgB] = $this->createAuthenticatedUser();
         $vehicleB = VehicleFactory::createOne(['organization' => $orgB]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleB->getId().'/stats', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleB->getId().'/stats', session: $tokenA);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -422,7 +422,7 @@ final class VehicleStatsTest extends ApiTestCase
     /** @return array<string, mixed> */
     private function stats(string $token, ?int $vehicleId): array
     {
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId.'/stats', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId.'/stats', session: $token);
         self::assertResponseIsSuccessful();
 
         return $this->jsonBody();

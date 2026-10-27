@@ -18,7 +18,7 @@ final class MaintenanceControllerTest extends ApiTestCase
     public function testListRequiresVehicleIdQueryParam(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('GET', '/api/maintenances', accessToken: $token);
+        $this->jsonRequest('GET', '/api/maintenances', session: $token);
         self::assertResponseStatusCodeSame(400);
         self::assertSame('query.vehicle_id_required', $this->jsonBody()['title']);
     }
@@ -29,7 +29,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         MaintenanceFactory::createMany(3, ['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId(), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertCount(3, $this->jsonBody());
@@ -49,7 +49,7 @@ final class MaintenanceControllerTest extends ApiTestCase
             'description' => 'Cambio olio 5W30',
             'cost' => '120.50',
             'workshop' => 'Officina Rossi',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
@@ -69,7 +69,7 @@ final class MaintenanceControllerTest extends ApiTestCase
             'type' => 'oil_change',
             'description' => 'test',
             'cost' => 'not-a-number',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -91,7 +91,7 @@ final class MaintenanceControllerTest extends ApiTestCase
             'type' => 'filters',
             'category' => 'scheduled',
             'description' => 'updated description',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('updated description', $this->jsonBody()['description']);
@@ -106,7 +106,7 @@ final class MaintenanceControllerTest extends ApiTestCase
             'vehicle' => $vehicle,
         ]);
 
-        $this->jsonRequest('DELETE', '/api/maintenances/'.$maintenance->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/maintenances/'.$maintenance->getId(), session: $token);
         self::assertResponseStatusCodeSame(204);
     }
 
@@ -116,7 +116,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         MaintenanceFactory::createMany(25, ['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId().'&page=1&limit=10', accessToken: $token);
+        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId().'&page=1&limit=10', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertCount(10, $this->jsonBody());
@@ -128,12 +128,12 @@ final class MaintenanceControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $user]);
 
-        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), ' Officina  Rossi '), accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), ' Officina  Rossi '), session: $token);
         self::assertResponseStatusCodeSame(201);
         $workshop = $this->jsonBody()['workshop'];
         self::assertSame('Officina Rossi', $workshop['name']);
 
-        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), 'officina rossi'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), 'officina rossi'), session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame($workshop['id'], $this->jsonBody()['workshop']['id']);
 
@@ -148,7 +148,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), '  '), accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', $this->maintenanceBody($vehicle->getId(), '  '), session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertNull($this->jsonBody()['workshop']);
@@ -162,7 +162,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $vehicle, 'user' => $user]);
 
         // Fai da te: negozio senza officina
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'shop' => ' Ricambi  Bianchi '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'shop' => ' Ricambi  Bianchi '], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertNull($this->jsonBody()['workshop']);
         $shop = $this->jsonBody()['shop'];
@@ -171,16 +171,16 @@ final class MaintenanceControllerTest extends ApiTestCase
         self::assertSame(UserValueKind::SHOP, $value?->getKind());
 
         // Stesso nome come officina: è un'altra lista, quindi un'altra voce
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), 'Ricambi Bianchi'), 'shop' => 'ricambi bianchi'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), 'Ricambi Bianchi'), 'shop' => 'ricambi bianchi'], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertSame($shop['id'], $this->jsonBody()['shop']['id']);
         self::assertNotSame($shop['id'], $this->jsonBody()['workshop']['id']);
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/shop', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/shop', session: $token);
         self::assertSame(['Ricambi Bianchi'], array_column($this->jsonBody(), 'name'));
 
-        $this->jsonRequest('PUT', '/api/maintenances/'.$id, [...$this->maintenanceBody($vehicle->getId(), 'Ricambi Bianchi'), 'shop' => ''], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/maintenances/'.$id, [...$this->maintenanceBody($vehicle->getId(), 'Ricambi Bianchi'), 'shop' => ''], session: $token);
         self::assertResponseIsSuccessful();
         self::assertNull($this->jsonBody()['shop']);
     }
@@ -190,7 +190,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'shop' => str_repeat('a', 201)], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'shop' => str_repeat('a', 201)], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('shop', $this->jsonBody()['errors'][0]['field']);
@@ -202,18 +202,18 @@ final class MaintenanceControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
         // Client vecchio: tipo revisione con la sezione di default
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'type' => 'inspection'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'type' => 'inspection'], session: $token);
         self::assertSame(['inspection', 'inspection'], [$this->jsonBody()['type'], $this->jsonBody()['category']]);
 
         // Sezione revisione con un altro tipo
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'type' => 'other', 'category' => 'inspection'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'type' => 'other', 'category' => 'inspection'], session: $token);
         self::assertSame(['inspection', 'inspection'], [$this->jsonBody()['type'], $this->jsonBody()['category']]);
 
-        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'category' => 'unscheduled'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'category' => 'unscheduled'], session: $token);
         self::assertSame(['oil_change', 'unscheduled'], [$this->jsonBody()['type'], $this->jsonBody()['category']]);
 
         foreach (['inspection' => 2, 'unscheduled' => 1, 'scheduled' => 0] as $category => $count) {
-            $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId().'&category='.$category, accessToken: $token);
+            $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId().'&category='.$category, session: $token);
             self::assertCount($count, $this->jsonBody(), $category);
         }
     }
@@ -233,7 +233,7 @@ final class MaintenanceControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/maintenances', [
             ...$this->maintenanceBody($vehicle->getId(), null),
             'components' => [' filtro  olio mann ', 'Olio 5W30', 'olio 5w30', '  '],
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $components = $this->jsonBody()['components'];
@@ -242,9 +242,9 @@ final class MaintenanceControllerTest extends ApiTestCase
         self::assertNotSame($foreign->getId(), $components[1]['id'], 'il componente di un altro veicolo non si usa');
         $id = $this->jsonBody()['id'];
 
-        $this->jsonRequest('PUT', '/api/maintenances/'.$id, [...$this->maintenanceBody($vehicle->getId(), null), 'components' => []], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/maintenances/'.$id, [...$this->maintenanceBody($vehicle->getId(), null), 'components' => []], session: $token);
         self::assertSame([], $this->jsonBody()['components']);
-        $this->jsonRequest('GET', '/api/components?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/components?vehicleId='.$vehicle->getId(), session: $token);
         self::assertSame(['Filtro olio Mann', 'Olio 5W30'], array_column($this->jsonBody(), 'name'), 'togliere un componente dal lavoro non lo elimina');
     }
 

@@ -37,7 +37,7 @@ describe('ChangePasswordDialog', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'vecchio-token', user: null });
+    useAuthStore.setState({ status: 'authenticated', user: null, activeOrgId: 1 });
   });
 
   afterEach(() => {
@@ -68,7 +68,7 @@ describe('ChangePasswordDialog', () => {
   });
 
   it('invia solo password attuale e nuova (la conferma resta nel browser), poi chiude e avvisa', async () => {
-    mockedAuthFetch.mockResolvedValue({ access_token: 'token-ruotato' });
+    mockedAuthFetch.mockResolvedValue(undefined); // 204: la sessione resta questa
     const user = userEvent.setup();
     const onOpenChange = renderDialog();
 
@@ -79,11 +79,11 @@ describe('ChangePasswordDialog', () => {
     expect(path).toBe('/api/auth/password');
     expect(init?.method).toBe('PUT');
     expect(JSON.parse(String(init?.body))).toEqual({ currentPassword: 'attuale-123', newPassword: 'nuova-password-1' });
-    expect(useAuthStore.getState().accessToken).toBe('token-ruotato');
+    expect(useAuthStore.getState().status).toBe('authenticated');
     expect(await screen.findByText('Password aggiornata')).toBeInTheDocument();
   });
 
-  it('password attuale errata: errore sul campo giusto, il dialogo resta aperto e il token non cambia', async () => {
+  it('password attuale errata: errore sul campo giusto, il dialogo resta aperto e la sessione non cambia', async () => {
     mockedAuthFetch.mockRejectedValue(new ApiError('auth.invalid_current_password', 400));
     const user = userEvent.setup();
     const onOpenChange = renderDialog();
@@ -93,7 +93,7 @@ describe('ChangePasswordDialog', () => {
     expect(await screen.findByText('La password attuale non è corretta')).toBeInTheDocument();
     expect(screen.getByLabelText(/Password attuale/)).toBeInvalid();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
-    expect(useAuthStore.getState().accessToken).toBe('vecchio-token');
+    expect(useAuthStore.getState().status).toBe('authenticated');
     expect(screen.queryByText('Password aggiornata')).not.toBeInTheDocument();
   });
 

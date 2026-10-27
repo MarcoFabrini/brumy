@@ -23,10 +23,6 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
-        bind:
-            $loginLimiter: '@limiter.login'
-            $refreshLimiter: '@limiter.refresh'
-            $forgotPasswordLimiter: '@limiter.forgot_password'
 
     App\:
         resource: '../src/'
@@ -47,7 +43,20 @@ services:
         arguments:
             $timezone: '%app.timezone%'
 
+    # Sessioni in MariaDB (ricetta "Store Sessions in a Database" della documentazione Symfony): stessa connessione
+    # di Doctrine, tabella `sessions` creata dalla migrazione.
+    Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
+        arguments:
+            - '%env(DATABASE_URL)%'
+
 when@test:
+    services:
+        # Lo storage di sessione dei test (mock_file) usa lo stesso nome di cookie dell'app, così i test leggono e
+        # mandano `brumy_session` come il browser.
+        session.storage.factory.mock_file:
+            class: Symfony\Component\HttpFoundation\Session\Storage\MockFileSessionStorageFactory
+            arguments: ['%kernel.cache_dir%/sessions', 'brumy_session']
+
     parameters:
         app.attachments_root: '%kernel.project_dir%/var/test-storage/uploads'
         app.backups_dir: '%kernel.project_dir%/var/test-storage/backups'

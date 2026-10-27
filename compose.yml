@@ -62,7 +62,6 @@ services:
       AUTO_MIGRATE: "true"
       DOMAIN: "${DOMAIN:?Set DOMAIN in .env}"
       APP_SECRET: "${APP_SECRET:?Set APP_SECRET in .env (generate with: openssl rand -hex 32)}"
-      JWT_PASSPHRASE: "${JWT_PASSPHRASE:?Set JWT_PASSPHRASE in .env (generate with: openssl rand -hex 32)}"
       DATABASE_URL: "mysql://${MARIADB_USER}:${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env (generate with: openssl rand -hex 32)}@db:3306/${MARIADB_DATABASE}?serverVersion=mariadb-11.4.0&charset=utf8mb4"
       <<: *app-urls
     env_file:
@@ -73,7 +72,6 @@ services:
     volumes:
       - ./brumy/uploads:/var/storage/uploads
       - ./brumy/backups:/var/backups
-      - ./brumy/jwt:/app/config/jwt
     depends_on:
       db:
         condition: service_healthy
@@ -91,7 +89,7 @@ services:
       # illeggibili poi dall'app, e backup di proprietà root.
       ofelia.job-exec.reminders.user: "www-data"
       ofelia.job-exec.backup.user: "www-data"
-      ofelia.job-exec.refresh-cleanup.user: "www-data"
+      ofelia.job-exec.tokens-cleanup.user: "www-data"
       ofelia.job-exec.messenger-retry.user: "www-data"
       ofelia.job-exec.cache-prune.user: "www-data"
       ofelia.job-exec.fuel-prices.user: "www-data"
@@ -99,8 +97,9 @@ services:
       ofelia.job-exec.reminders.command: "php bin/console app:reminders:dispatch --no-interaction"
       ofelia.job-exec.backup.schedule: "0 0 3 * * *"
       ofelia.job-exec.backup.command: "php bin/console app:backup:create --no-interaction"
-      ofelia.job-exec.refresh-cleanup.schedule: "0 0 4 * * 0"
-      ofelia.job-exec.refresh-cleanup.command: "php bin/console app:refresh-tokens:cleanup --no-interaction"
+      ofelia.job-exec.tokens-cleanup.schedule: "0 0 4 * * 0"
+      # Serie remember-me non usate da 7 giorni, token di reset/verifica e inviti scaduti.
+      ofelia.job-exec.tokens-cleanup.command: "php bin/console app:tokens:cleanup --no-interaction"
       # Le cache su file (rate limiter compresi) cancellano una voce scaduta solo se la si rilegge: senza prune
       # le chiavi usate una volta sola (un login con un'email inventata) resterebbero su disco per sempre.
       ofelia.job-exec.cache-prune.schedule: "0 15 4 * * *"
@@ -138,7 +137,6 @@ services:
       APP_ENV: prod
       DOMAIN: "${DOMAIN:?Set DOMAIN in .env}"
       APP_SECRET: "${APP_SECRET:?Set APP_SECRET in .env (generate with: openssl rand -hex 32)}"
-      JWT_PASSPHRASE: "${JWT_PASSPHRASE:?Set JWT_PASSPHRASE in .env (generate with: openssl rand -hex 32)}"
       DATABASE_URL: "mysql://${MARIADB_USER}:${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env (generate with: openssl rand -hex 32)}@db:3306/${MARIADB_DATABASE}?serverVersion=mariadb-11.4.0&charset=utf8mb4"
       <<: *app-urls
     env_file:

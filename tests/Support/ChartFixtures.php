@@ -17,11 +17,10 @@ use App\Tests\Factory\MaintenanceFactory;
 use App\Tests\Factory\RefuelingFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 /**
  * Helper comuni ai test dei grafici (dashboard e singolo veicolo): date relative al mese corrente
- * di AppClock, veicoli di proprietà, token per un'org e record di rifornimenti/manutenzioni/spese.
+ * di AppClock, veicoli di proprietà e record di rifornimenti/manutenzioni/spese.
  */
 trait ChartFixtures
 {
@@ -54,13 +53,6 @@ trait ChartFixtures
         return $vehicle;
     }
 
-    private function tokenFor(User $user, Organization $org): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $org->getId(),
-        ]);
-    }
 
     private function refueling(Vehicle $vehicle, \DateTimeImmutable $on, int $km, string $liters, string $pricePerLiter, bool $full = true, FuelType $fuel = FuelType::DIESEL): void
     {

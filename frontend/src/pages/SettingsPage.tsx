@@ -33,6 +33,7 @@ import {
   MembersCard,
   OrganizationSwitcher,
   PushSettingsCard,
+  SecuritySection,
   UserAvatar,
 } from '@/components/features';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -68,7 +69,7 @@ export function SettingsPage() {
   const [dialog, setDialog] = useState<DialogKey>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Il logout è asincrono (push, revoca refresh token): senza guardia un secondo tap lo ripete.
+  // Il logout è asincrono (push, chiusura della sessione): senza guardia un secondo tap lo ripete.
   async function onLogout() {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -158,6 +159,9 @@ export function SettingsPage() {
           />
         </ListSection>
       )}
+
+      {/* ── Sicurezza: verifica in due passaggi e codici di recupero ── */}
+      {user && <SecuritySection user={user} />}
 
       {/* ── Organizzazione ────────────────────────────────────── */}
       {membership && (

@@ -77,7 +77,7 @@ final class UserValueControllerTest extends ApiTestCase
         }
         $this->refuelAt($vehicle, $q8);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(['Eni', 'Q8', 'Agip'], $this->names());
@@ -96,7 +96,7 @@ final class UserValueControllerTest extends ApiTestCase
         $this->refuelAt($vehicle, $old, '2025-01-01');
         $this->refuelAt($vehicle, $recent, '2026-06-01');
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertSame(['Recente', 'Vecchio', 'Alfa', 'Bianco'], $this->names());
     }
@@ -109,11 +109,11 @@ final class UserValueControllerTest extends ApiTestCase
         $shop = $this->station($user, $org, 'Rossi', UserValueKind::WORKSHOP);
         MaintenanceFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'workshop' => $shop]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/workshop', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/workshop', session: $token);
         self::assertSame(['Rossi'], $this->names());
 
         ExpenseFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'category' => ExpenseCategory::TOLL]);
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/expense_category', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/expense_category', session: $token);
         self::assertCount(\count(ExpenseCategory::starters()), $this->jsonBody());
         self::assertSame('Pedaggio', $this->names()[0]);
     }
@@ -128,7 +128,7 @@ final class UserValueControllerTest extends ApiTestCase
         $this->station($anna, $org, 'Distributore di Anna');
         $this->station($admin, $org, 'Distributore admin');
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(['Distributore di Anna'], $this->names());
@@ -140,7 +140,7 @@ final class UserValueControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $this->station($user, $org, 'Mio');
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertSame(['Mio'], $this->names());
     }
@@ -150,7 +150,7 @@ final class UserValueControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => OrganizationFactory::createOne()]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('vehicle.not_found', $this->jsonBody()['title']);
@@ -162,7 +162,7 @@ final class UserValueControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $viewer]); // viewer
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -177,12 +177,12 @@ final class UserValueControllerTest extends ApiTestCase
         $this->refuelAt($vehicle, $eni);
         $this->refuelAt($vehicle, $eni, '2026-04-01');
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame(['Agip', 'Eni'], $this->names());
         self::assertSame([0, 2], array_column($this->jsonBody(), 'usageCount'));
 
-        $this->jsonRequest('GET', '/api/values/expense_category', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/expense_category', session: $token);
         self::assertCount(\count(ExpenseCategory::starters()), $this->jsonBody());
     }
 
@@ -194,7 +194,7 @@ final class UserValueControllerTest extends ApiTestCase
         $this->station($user, $org, 'Mio');
         $this->station($user, OrganizationFactory::createOne(), 'Altra org');
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
 
         self::assertSame(['Mio'], $this->names());
     }
@@ -203,7 +203,7 @@ final class UserValueControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/values/colour', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/colour', session: $token);
 
         self::assertResponseStatusCodeSame(404);
     }
@@ -219,7 +219,7 @@ final class UserValueControllerTest extends ApiTestCase
     {
         [$user, $org, $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/values/station', ['name' => '  Q8   Via Roma '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => '  Q8   Via Roma '], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $body = $this->jsonBody();
@@ -232,7 +232,7 @@ final class UserValueControllerTest extends ApiTestCase
     {
         [$user, $org, $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/values/expense_category', ['name' => 'Revisione camper'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/expense_category', ['name' => 'Revisione camper'], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $categories = $this->repo()->findBy(['user' => $user, 'organization' => $org, 'kind' => UserValueKind::EXPENSE_CATEGORY]);
@@ -244,7 +244,7 @@ final class UserValueControllerTest extends ApiTestCase
     {
         [$user, $org, $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/values/expense_category', ['name' => 'pedaggio'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/expense_category', ['name' => 'pedaggio'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'name', 'message' => 'user_value.name_taken']], $this->jsonBody()['errors']);
@@ -256,7 +256,7 @@ final class UserValueControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $this->station($user, $org, 'Eni');
 
-        $this->jsonRequest('POST', '/api/values/station', ['name' => ' eni'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => ' eni'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'name', 'message' => 'user_value.name_taken']], $this->jsonBody()['errors']);
@@ -267,11 +267,11 @@ final class UserValueControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/values/station', ['name' => '   '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => '   '], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('name', $this->jsonBody()['errors'][0]['field']);
 
-        $this->jsonRequest('POST', '/api/values/station', ['name' => str_repeat('a', 201)], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => str_repeat('a', 201)], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('name', $this->jsonBody()['errors'][0]['field']);
     }
@@ -282,15 +282,15 @@ final class UserValueControllerTest extends ApiTestCase
         $eni = $this->station($user, $org, 'Eni');
         $nbsp = "\u{00A0}\u{3000}\u{00A0}";
 
-        $this->jsonRequest('POST', '/api/values/station', ['name' => $nbsp], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => $nbsp], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('name', $this->jsonBody()['errors'][0]['field']);
 
-        $this->jsonRequest('PATCH', '/api/values/'.$eni->getId(), ['name' => $nbsp], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$eni->getId(), ['name' => $nbsp], session: $token);
         self::assertResponseStatusCodeSame(422);
         self::assertSame('name', $this->jsonBody()['errors'][0]['field']);
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame(['Eni'], $this->names());
     }
 
@@ -301,7 +301,7 @@ final class UserValueControllerTest extends ApiTestCase
         $eni = $this->station($user, $org, 'Eni');
         $this->refuelAt($vehicle, $eni);
 
-        $this->jsonRequest('PATCH', '/api/values/'.$eni->getId(), ['name' => 'Eni Station'], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$eni->getId(), ['name' => 'Eni Station'], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(['id' => $eni->getId(), 'name' => 'Eni Station', 'usageCount' => 1, 'fuelStationId' => null, 'followsPrice' => false], $this->jsonBody());
@@ -312,7 +312,7 @@ final class UserValueControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $value = $this->station($user, $org, 'q8 via roma');
 
-        $this->jsonRequest('PATCH', '/api/values/'.$value->getId(), ['name' => 'Q8 Via Roma'], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$value->getId(), ['name' => 'Q8 Via Roma'], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('Q8 Via Roma', $this->jsonBody()['name']);
@@ -324,7 +324,7 @@ final class UserValueControllerTest extends ApiTestCase
         $this->station($user, $org, 'Eni');
         $q8 = $this->station($user, $org, 'Q8');
 
-        $this->jsonRequest('PATCH', '/api/values/'.$q8->getId(), ['name' => 'ENI'], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$q8->getId(), ['name' => 'ENI'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'name', 'message' => 'user_value.name_taken']], $this->jsonBody()['errors']);
@@ -339,10 +339,10 @@ final class UserValueControllerTest extends ApiTestCase
         $aId = $a->getId();
         $this->refuelAt($vehicle, $a);
 
-        $this->jsonRequest('POST', '/api/values/'.$aId.'/merge', ['intoId' => $b->getId()], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$aId.'/merge', ['intoId' => $b->getId()], session: $token);
 
         self::assertResponseStatusCodeSame(204);
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame([['id' => $b->getId(), 'name' => 'Eni', 'usageCount' => 1, 'fuelStationId' => null, 'followsPrice' => false]], $this->jsonBody());
     }
 
@@ -351,7 +351,7 @@ final class UserValueControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $a = $this->station($user, $org, 'Eni');
 
-        $this->jsonRequest('POST', '/api/values/'.$a->getId().'/merge', ['intoId' => 999999], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$a->getId().'/merge', ['intoId' => 999999], session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('user_value.not_found', $this->jsonBody()['title']);
@@ -362,7 +362,7 @@ final class UserValueControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $a = $this->station($user, $org, 'Eni');
 
-        $this->jsonRequest('POST', '/api/values/'.$a->getId().'/merge', ['intoId' => $a->getId()], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$a->getId().'/merge', ['intoId' => $a->getId()], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame([['field' => 'intoId', 'message' => 'user_value.merge_invalid']], $this->jsonBody()['errors']);
@@ -376,12 +376,12 @@ final class UserValueControllerTest extends ApiTestCase
         $workshop = $this->station($user, $org, 'Rossi', UserValueKind::WORKSHOP);
         $this->refuelAt($vehicle, $station);
 
-        $this->jsonRequest('POST', '/api/values/'.$station->getId().'/merge', ['intoId' => $workshop->getId()], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$station->getId().'/merge', ['intoId' => $workshop->getId()], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('intoId', $this->jsonBody()['errors'][0]['field']);
         self::assertSame('user_value.merge_invalid', $this->jsonBody()['errors'][0]['message']);
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame(1, $this->rows()[0]['usageCount'], 'nessun record spostato');
     }
 
@@ -390,10 +390,10 @@ final class UserValueControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $a = $this->station($user, $org, 'Eni');
 
-        $this->jsonRequest('DELETE', '/api/values/'.$a->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$a->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(204);
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame([], $this->jsonBody());
     }
 
@@ -406,26 +406,26 @@ final class UserValueControllerTest extends ApiTestCase
         $eniId = $eni->getId();
         $refueling = RefuelingFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'station' => $eni]);
 
-        $this->jsonRequest('DELETE', '/api/values/'.$eniId, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$eniId, session: $token);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame([], $this->jsonBody(), 'non è più nella lista');
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/station', session: $token);
         self::assertSame([], $this->jsonBody(), 'non è più suggerita');
-        $this->jsonRequest('GET', '/api/refuelings/'.$refueling->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/refuelings/'.$refueling->getId(), session: $token);
         self::assertSame(['id' => $eniId, 'name' => 'Eni'], $this->jsonBody()['station'], 'il record la mostra ancora');
 
-        $this->jsonRequest('PATCH', '/api/values/'.$eniId, ['name' => 'Altro'], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$eniId, ['name' => 'Altro'], session: $token);
         self::assertResponseStatusCodeSame(404, 'rinomina di una voce eliminata');
-        $this->jsonRequest('DELETE', '/api/values/'.$eniId, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$eniId, session: $token);
         self::assertResponseStatusCodeSame(404, 'seconda eliminazione');
         $other = $this->station($user, $org, 'Q8');
-        $this->jsonRequest('POST', '/api/values/'.$other->getId().'/merge', ['intoId' => $eniId], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$other->getId().'/merge', ['intoId' => $eniId], session: $token);
         self::assertResponseStatusCodeSame(404, 'unione in una voce eliminata');
 
         // Il nome torna libero: riscriverlo crea una voce nuova, i vecchi record restano su quella eliminata
-        $this->jsonRequest('POST', '/api/values/station', ['name' => 'Eni'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/station', ['name' => 'Eni'], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertNotSame($eniId, $this->jsonBody()['id']);
         self::assertSame(0, $this->jsonBody()['usageCount']);
@@ -439,7 +439,7 @@ final class UserValueControllerTest extends ApiTestCase
         $eni = $this->station($user, $org, 'Eni');
         $eniId = $eni->getId();
         $refueling = RefuelingFactory::createOne(['vehicle' => $vehicle, 'organization' => $org, 'station' => $eni]);
-        $this->jsonRequest('DELETE', '/api/values/'.$eniId, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$eniId, session: $token);
         $payload = [
             'vehicleId' => $vehicle->getId(),
             'refueledAt' => '2026-05-01', 'km' => 60000,
@@ -447,32 +447,32 @@ final class UserValueControllerTest extends ApiTestCase
             'fuelType' => 'diesel', 'fullTank' => true,
         ];
 
-        $this->jsonRequest('PUT', '/api/refuelings/'.$refueling->getId(), [...$payload, 'station' => ' eni '], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/refuelings/'.$refueling->getId(), [...$payload, 'station' => ' eni '], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame($eniId, $this->jsonBody()['station']['id'], 'stesso nome: resta la voce eliminata');
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame([], $this->jsonBody(), 'e non torna nella lista');
 
-        $this->jsonRequest('PUT', '/api/refuelings/'.$refueling->getId(), [...$payload, 'station' => 'Q8'], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/refuelings/'.$refueling->getId(), [...$payload, 'station' => 'Q8'], session: $token);
         self::assertSame('Q8', $this->jsonBody()['station']['name']);
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertSame(['Q8'], $this->names());
     }
 
     public function testDeletingEveryCategoryDoesNotBringBackTheStarters(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('GET', '/api/values/expense_category', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/expense_category', session: $token);
         $ids = array_column($this->rows(), 'id');
         self::assertCount(\count(ExpenseCategory::starters()), $ids);
 
         foreach ($ids as $id) {
-            $this->jsonRequest('DELETE', '/api/values/'.$id, accessToken: $token);
+            $this->jsonRequest('DELETE', '/api/values/'.$id, session: $token);
             self::assertResponseStatusCodeSame(204);
         }
 
-        $this->jsonRequest('GET', '/api/values/expense_category', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/expense_category', session: $token);
         self::assertSame([], $this->jsonBody());
     }
 
@@ -485,17 +485,17 @@ final class UserValueControllerTest extends ApiTestCase
         $theirs = $this->station($mario, $org, 'Suo');
         $theirsId = $theirs->getId();
 
-        $this->jsonRequest('PATCH', '/api/values/'.$theirsId, ['name' => 'Rubato'], accessToken: $token);
+        $this->jsonRequest('PATCH', '/api/values/'.$theirsId, ['name' => 'Rubato'], session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('user_value.not_found', $this->jsonBody()['title']);
 
-        $this->jsonRequest('POST', '/api/values/'.$theirsId.'/merge', ['intoId' => $mine->getId()], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$theirsId.'/merge', ['intoId' => $mine->getId()], session: $token);
         self::assertResponseStatusCodeSame(404);
 
-        $this->jsonRequest('POST', '/api/values/'.$mine->getId().'/merge', ['intoId' => $theirsId], accessToken: $token);
+        $this->jsonRequest('POST', '/api/values/'.$mine->getId().'/merge', ['intoId' => $theirsId], session: $token);
         self::assertResponseStatusCodeSame(404);
 
-        $this->jsonRequest('DELETE', '/api/values/'.$theirsId, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$theirsId, session: $token);
         self::assertResponseStatusCodeSame(404);
 
         $still = $this->repo()->find($theirsId);
@@ -509,7 +509,7 @@ final class UserValueControllerTest extends ApiTestCase
         $otherOrg = OrganizationFactory::createOne();
         $foreign = $this->station($user, $otherOrg, 'Altrove');
 
-        $this->jsonRequest('DELETE', '/api/values/'.$foreign->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/values/'.$foreign->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(404);
     }

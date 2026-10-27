@@ -59,7 +59,7 @@ describe('endpoint allegati', () => {
     expect(mockedAuthFetch).toHaveBeenCalledWith('/api/attachments/5', { method: 'DELETE' });
   });
 
-  it('il download passa per la fetch blob autenticata (un <img src> non manderebbe il Bearer)', async () => {
+  it('il download passa per la fetch blob autenticata', async () => {
     const blob = new Blob(['x'], { type: 'image/png' });
     mockedBlob.mockResolvedValue(blob);
 

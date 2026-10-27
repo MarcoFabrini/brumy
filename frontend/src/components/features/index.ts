@@ -1,7 +1,9 @@
 export { AuthBrand, type AuthBrandProps } from './AuthBrand';
 export { AuthLink } from './AuthLink';
+export { TwoFactorLoginStep } from './TwoFactorLoginStep';
 export { EditProfileDialog, type EditProfileDialogProps } from './EditProfileDialog';
 export { ChangePasswordDialog, type ChangePasswordDialogProps } from './ChangePasswordDialog';
+export { SecuritySection, type SecuritySectionProps } from './SecuritySection';
 export { OrganizationSwitcher, type OrganizationSwitcherProps } from './OrganizationSwitcher';
 export { UserAvatar, type UserAvatarProps } from './UserAvatar';
 export { EditOrganizationDialog, type EditOrganizationDialogProps } from './EditOrganizationDialog';

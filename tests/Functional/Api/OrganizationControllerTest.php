@@ -30,7 +30,7 @@ final class OrganizationControllerTest extends ApiTestCase
         // Crea un'altra org dove l'utente NON è membro
         OrganizationFactory::createOne();
 
-        $this->jsonRequest('GET', '/api/organizations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations', session: $token);
 
         self::assertResponseIsSuccessful();
         /** @var list<array<string, mixed>> $orgs */
@@ -45,14 +45,14 @@ final class OrganizationControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/organizations', [
             'name' => 'Famiglia Rossi',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Famiglia Rossi', $this->jsonBody()['name']);
         self::assertNotEmpty($this->jsonBody()['slug']);
 
         // Tramite /me l'utente deve avere ora 2 memberships
-        $this->jsonRequest('GET', '/api/auth/me', accessToken: $token);
+        $this->jsonRequest('GET', '/api/auth/me', session: $token);
         self::assertCount(2, $this->jsonBody()['memberships']);
     }
 
@@ -63,7 +63,7 @@ final class OrganizationControllerTest extends ApiTestCase
         foreach ([OrgRole::OWNER, OrgRole::ADMIN, OrgRole::MEMBER] as $role) {
             [, , $token] = $this->createAuthenticatedUser($role);
 
-            $this->jsonRequest('POST', '/api/organizations', ['name' => 'Abuso '.$role->value], accessToken: $token);
+            $this->jsonRequest('POST', '/api/organizations', ['name' => 'Abuso '.$role->value], session: $token);
 
             self::assertResponseStatusCodeSame(403);
             self::assertSame('org.create_forbidden', $this->jsonBody()['title']);
@@ -76,7 +76,7 @@ final class OrganizationControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         OrganizationFactory::createOne(['slug' => 'famiglia-rossi']);
 
-        $this->jsonRequest('POST', '/api/organizations', ['name' => 'Famiglia Rossi', 'slug' => 'famiglia-rossi'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/organizations', ['name' => 'Famiglia Rossi', 'slug' => 'famiglia-rossi'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->jsonBody()['title']);
@@ -88,7 +88,7 @@ final class OrganizationControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->takeSlugRightBeforeTheNextFlush('corsa');
 
-        $this->jsonRequest('POST', '/api/organizations', ['name' => 'Corsa', 'slug' => 'corsa'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/organizations', ['name' => 'Corsa', 'slug' => 'corsa'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertContains(['field' => 'slug', 'message' => 'org.slug_taken'], $this->jsonBody()['errors']);
@@ -99,7 +99,7 @@ final class OrganizationControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $this->takeSlugRightBeforeTheNextFlush('corsa-update');
 
-        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => 'Nuovo nome', 'slug' => 'corsa-update'], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => 'Nuovo nome', 'slug' => 'corsa-update'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertContains(['field' => 'slug', 'message' => 'org.slug_taken'], $this->jsonBody()['errors']);
@@ -136,7 +136,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $other = OrganizationFactory::createOne();
 
         // Come un id inesistente: l'esistenza di org altrui non si deduce dallo status.
-        $this->jsonRequest('GET', '/api/organizations/'.$other->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$other->getId(), session: $token);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -146,7 +146,7 @@ final class OrganizationControllerTest extends ApiTestCase
 
         $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), [
             'name' => 'Updated',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -156,7 +156,7 @@ final class OrganizationControllerTest extends ApiTestCase
 
         $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), [
             'name' => 'New Name',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('New Name', $this->jsonBody()['name']);
@@ -166,7 +166,7 @@ final class OrganizationControllerTest extends ApiTestCase
     {
         [, $org, $token] = $this->createAuthenticatedUser(OrgRole::ADMIN);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), session: $token);
         self::assertResponseStatusCodeSame(403, 'Solo owner può cancellare org');
     }
 
@@ -175,7 +175,7 @@ final class OrganizationControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $id = $org->getId();
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$id, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$id, session: $token);
         self::assertResponseStatusCodeSame(204);
 
         $repo = static::getContainer()->get(OrganizationRepository::class);
@@ -191,7 +191,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'Newcomer@Test.it',
             'role' => OrgRole::MEMBER,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('newcomer@test.it', $this->jsonBody()['email'], 'Email normalizzata lowercase');
@@ -202,7 +202,7 @@ final class OrganizationControllerTest extends ApiTestCase
         self::assertInstanceOf(Email::class, $message);
         self::assertSame(1, preg_match('/accept-invite\?token=[a-f0-9]+/', $message->toString()), 'Email con link di accettazione');
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertResponseIsSuccessful();
         self::assertCount(1, $this->jsonBody());
     }
@@ -214,7 +214,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'ghost@nowhere.test',
             'role' => 'member',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201, 'Si può invitare anche chi non ha ancora un account');
     }
@@ -223,7 +223,7 @@ final class OrganizationControllerTest extends ApiTestCase
     {
         [, $org, $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -239,7 +239,7 @@ final class OrganizationControllerTest extends ApiTestCase
     {
         [, $org, $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', session: $token);
         self::assertResponseStatusCodeSame(403, 'Un membro non vede la lista utenti dell\'org');
     }
 
@@ -250,14 +250,14 @@ final class OrganizationControllerTest extends ApiTestCase
         $invite = fn () => $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'pending@test.it',
             'role' => 'member',
-        ], accessToken: $token);
+        ], session: $token);
 
         $invite();
         self::assertResponseStatusCodeSame(201);
         $invite();
         self::assertResponseStatusCodeSame(201, 'Re-invito rimanda, non 409');
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertCount(1, $this->jsonBody(), 'Un solo invito pendente per email');
     }
 
@@ -275,12 +275,12 @@ final class OrganizationControllerTest extends ApiTestCase
             },
         );
 
-        $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', ['email' => 'unlucky@test.it', 'role' => 'member'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', ['email' => 'unlucky@test.it', 'role' => 'member'], session: $token);
 
         self::assertSame(1, $attempts, 'L\'invio è stato tentato ed è fallito');
         self::assertResponseStatusCodeSame(201);
         self::assertSame('unlucky@test.it', $this->jsonBody()['email']);
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertSame(['unlucky@test.it'], array_column($this->jsonBody(), 'email'), 'L\'invito esiste anche senza email');
     }
 
@@ -289,9 +289,9 @@ final class OrganizationControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         [, $otherOrg, $otherToken] = $this->createAuthenticatedUser();
         $this->keepRateLimiterCountersForTheWholeTest();
-        $invite = fn (int $orgId, string $jwt, int $n) => $this->jsonRequest('POST', '/api/organizations/'.$orgId.'/members', [
+        $invite = fn (int $orgId, string $session, int $n) => $this->jsonRequest('POST', '/api/organizations/'.$orgId.'/members', [
             'email' => "guest$n@test.it", 'role' => 'member',
-        ], accessToken: $jwt);
+        ], session: $session);
 
         for ($n = 1; $n <= 20; ++$n) {
             $invite((int) $org->getId(), $token, $n);
@@ -300,7 +300,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $invite((int) $org->getId(), $token, 21);
         self::assertResponseStatusCodeSame(429);
         self::assertSame('member.invite_rate_limited', $this->jsonBody()['title']);
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertCount(20, $this->jsonBody(), 'Il 21° invito non viene creato');
 
         // Il limite è per utente che invita: un altro admin non ne risente
@@ -315,15 +315,15 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'revoke@test.it',
             'role' => 'member',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
         $invId = $this->jsonBody()['id'];
         self::assertIsInt($invId);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/invitations/'.$invId, accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/invitations/'.$invId, session: $token);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertCount(0, $this->jsonBody());
     }
 
@@ -336,7 +336,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'already@test.it',
             'role' => 'member',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(409);
     }
@@ -348,7 +348,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'sneaky@test.it',
             'role' => 'owner',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -360,7 +360,7 @@ final class OrganizationControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/organizations/'.$org->getId().'/members', [
             'email' => 'coowner@test.it',
             'role' => 'owner',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
     }
@@ -373,13 +373,13 @@ final class OrganizationControllerTest extends ApiTestCase
             ->findMembership($owner, $org);
         self::assertNotNull($ownerMembership);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/members/'.$ownerMembership->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/members/'.$ownerMembership->getId(), session: $token);
         self::assertResponseStatusCodeSame(409);
     }
 
     // ----- switch-org -----
 
-    public function testSwitchOrgIssuesNewToken(): void
+    public function testSwitchOrgChangesTheActiveOrganizationOfTheSession(): void
     {
         [$user, , $token] = $this->createAuthenticatedUser();
         // Aggiungo all'utente una seconda org
@@ -392,17 +392,13 @@ final class OrganizationControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/auth/switch-org', [
             'organizationId' => $org2->getId(),
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
-        $body = $this->jsonBody();
-        self::assertArrayHasKey('access_token', $body);
-        self::assertSame($org2->getId(), $body['active_org_id']);
+        self::assertSame(['activeOrganizationId' => $org2->getId()], $this->jsonBody());
 
-        // Decodifica il nuovo JWT e verifica che active_org_id sia cambiato
-        $parts = explode('.', $body['access_token']);
-        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
-        self::assertSame($org2->getId(), $payload['active_org_id']);
+        $this->jsonRequest('GET', '/api/auth/me', session: $token);
+        self::assertSame($org2->getId(), $this->jsonBody()['activeOrganizationId']);
     }
 
     public function testSwitchOrgRefusesNonMember(): void
@@ -412,7 +408,7 @@ final class OrganizationControllerTest extends ApiTestCase
 
         $this->jsonRequest('POST', '/api/auth/switch-org', [
             'organizationId' => $other->getId(),
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(404);
     }

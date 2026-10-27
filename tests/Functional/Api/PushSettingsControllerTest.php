@@ -18,7 +18,7 @@ final class PushSettingsControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+        $this->jsonRequest('GET', '/api/settings/push', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -37,7 +37,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         foreach ([OrgRole::ADMIN, OrgRole::MEMBER] as $role) {
             [, , $token] = $this->createAuthenticatedUser($role);
 
-            $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+            $this->jsonRequest('GET', '/api/settings/push', session: $token);
             self::assertResponseStatusCodeSame(403);
             self::assertSame('settings.instance_admin_required', $this->jsonBody()['title']);
         }
@@ -48,7 +48,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         $this->createAuthenticatedUser();
         [, , $token] = $this->createAuthenticatedUser(OrgRole::MEMBER);
 
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -62,11 +62,11 @@ final class PushSettingsControllerTest extends ApiTestCase
         $this->createAuthenticatedUser(); // primo utente = admin di istanza
         [, , $token] = $this->createAuthenticatedUser(); // secondo OWNER, org diversa
 
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+        $this->jsonRequest('GET', '/api/settings/push', session: $token);
         self::assertResponseStatusCodeSame(403);
         self::assertSame('settings.instance_admin_required', $this->jsonBody()['title']);
 
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -74,7 +74,7 @@ final class PushSettingsControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
 
         self::assertResponseIsSuccessful();
         $body = $this->jsonBody();
@@ -82,7 +82,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         self::assertArrayHasKey('removedSubscriptions', $body);
 
         // GET ora riporta le chiavi presenti; la private non esce mai dall'API.
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+        $this->jsonRequest('GET', '/api/settings/push', session: $token);
         $get = $this->jsonBody();
         self::assertTrue($get['hasKeys']);
         self::assertSame($body['publicKey'], $get['publicKey']);
@@ -104,7 +104,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/settings/push', [
             'subject' => 'mailto:admin@example.com',
             'enabled' => true,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('push.no_keys', $this->jsonBody()['title']);
@@ -118,18 +118,18 @@ final class PushSettingsControllerTest extends ApiTestCase
         // qui verifichiamo solo che, una volta generata, la public key del DB vince.
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
         $publicKey = $this->jsonBody()['publicKey'];
 
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+        $this->jsonRequest('GET', '/api/settings/push', session: $token);
         self::assertTrue($this->jsonBody()['enabled']);
 
         // La public key del DB (appena generata) è esposta al frontend a runtime.
-        $this->jsonRequest('GET', '/api/push-subscriptions/vapid-public-key', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions/vapid-public-key', session: $token);
         self::assertSame($publicKey, $this->jsonBody()['publicKey']);
 
         // Una volta abilitata, la sorgente esposta in Settings è 'db' (a prescindere dall'env).
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $token);
+        $this->jsonRequest('GET', '/api/settings/push', session: $token);
         self::assertSame('db', $this->jsonBody()['source']);
     }
 
@@ -138,9 +138,9 @@ final class PushSettingsControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
 
         // Generare abilita già da solo — config completa, ma nessun device sottoscritto.
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
 
-        $this->jsonRequest('POST', '/api/settings/push/test', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/test', session: $token);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('push.no_subscription', $this->jsonBody()['title']);
@@ -159,17 +159,17 @@ final class PushSettingsControllerTest extends ApiTestCase
     public function testUpdateForbiddenForNonInstanceAdminAndSettingsStayUntouched(): void
     {
         [, , $adminToken] = $this->createAuthenticatedUser(); // primo utente = admin di istanza
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $adminToken);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $adminToken);
         $publicKey = $this->jsonBody()['publicKey'];
 
         // Un OWNER di un'altra org non deve poter spegnere o ridirigere il push di tutta l'istanza
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:evil@example.com', 'enabled' => false], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:evil@example.com', 'enabled' => false], session: $token);
 
         self::assertResponseStatusCodeSame(403);
         self::assertSame('settings.instance_admin_required', $this->jsonBody()['title']);
 
-        $this->jsonRequest('GET', '/api/settings/push', accessToken: $adminToken);
+        $this->jsonRequest('GET', '/api/settings/push', session: $adminToken);
         $settings = $this->jsonBody();
         self::assertTrue($settings['enabled']);
         self::assertSame($publicKey, $settings['publicKey']);
@@ -181,7 +181,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         $this->createAuthenticatedUser();
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/settings/push/test', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/test', session: $token);
 
         self::assertResponseStatusCodeSame(403);
         self::assertSame('settings.instance_admin_required', $this->jsonBody()['title']);
@@ -191,7 +191,7 @@ final class PushSettingsControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('POST', '/api/settings/push/test', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/test', session: $token);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame('push.not_configured', $this->jsonBody()['title']);
@@ -200,9 +200,9 @@ final class PushSettingsControllerTest extends ApiTestCase
     public function testUpdateSavesTheSubjectAndDisablingStopsExposingThePublicKey(): void
     {
         [, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
 
-        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:ops@example.com', 'enabled' => false], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:ops@example.com', 'enabled' => false], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('mailto:ops@example.com', $this->jsonBody()['subject']);
@@ -210,11 +210,11 @@ final class PushSettingsControllerTest extends ApiTestCase
         self::assertTrue($this->jsonBody()['hasKeys'], 'Disabilitare non cancella le chiavi');
 
         // Il frontend non deve più iscrivere device a un push spento
-        $this->jsonRequest('GET', '/api/push-subscriptions/vapid-public-key', accessToken: $token);
+        $this->jsonRequest('GET', '/api/push-subscriptions/vapid-public-key', session: $token);
         self::assertSame('', $this->jsonBody()['publicKey']);
 
         // Riabilitare con le chiavi presenti è consentito
-        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:ops@example.com', 'enabled' => true], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => 'mailto:ops@example.com', 'enabled' => true], session: $token);
         self::assertResponseIsSuccessful();
         self::assertTrue($this->jsonBody()['enabled']);
     }
@@ -223,7 +223,7 @@ final class PushSettingsControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => str_repeat('a', 256), 'enabled' => false], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/settings/push', ['subject' => str_repeat('a', 256), 'enabled' => false], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('subject', $this->jsonBody()['errors'][0]['field']);
@@ -233,7 +233,7 @@ final class PushSettingsControllerTest extends ApiTestCase
     {
         // La vecchia public key è incastonata in ogni subscription: dopo la rigenerazione nessuna può ricevere.
         [$admin, , $token] = $this->createAuthenticatedUser();
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
         $firstKey = $this->jsonBody()['publicKey'];
 
         [$other] = $this->createAuthenticatedUser();
@@ -250,7 +250,7 @@ final class PushSettingsControllerTest extends ApiTestCase
         }
         $em->flush();
 
-        $this->jsonRequest('POST', '/api/settings/push/generate', accessToken: $token);
+        $this->jsonRequest('POST', '/api/settings/push/generate', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(2, $this->jsonBody()['removedSubscriptions']);

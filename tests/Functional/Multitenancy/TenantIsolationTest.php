@@ -41,7 +41,7 @@ final class TenantIsolationTest extends ApiTestCase
         [, $orgB] = $this->createAuthenticatedUser();
         VehicleFactory::createOne(['organization' => $orgB]);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/vehicles', session: $tokenA);
         self::assertResponseIsSuccessful();
 
         $vehicles = $this->jsonBody();
@@ -54,7 +54,7 @@ final class TenantIsolationTest extends ApiTestCase
         [, $orgB] = $this->createAuthenticatedUser();
         $vehicleB = VehicleFactory::createOne(['organization' => $orgB]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleB->getId(), accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleB->getId(), session: $tokenA);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -71,7 +71,7 @@ final class TenantIsolationTest extends ApiTestCase
             'year' => 2020,
             'type' => 'car',
             'fuelType' => 'diesel',
-        ], accessToken: $tokenA);
+        ], session: $tokenA);
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -87,7 +87,7 @@ final class TenantIsolationTest extends ApiTestCase
             'km' => 100,
             'type' => 'oil_change',
             'description' => 'cross-tenant attempt',
-        ], accessToken: $tokenA);
+        ], session: $tokenA);
 
         self::assertResponseStatusCodeSame(404, 'Il vehicle non esiste nell\'org dell\'utente → 404');
     }
@@ -109,7 +109,7 @@ final class TenantIsolationTest extends ApiTestCase
         VehicleFactory::createOne(['organization' => $org]);
 
         // Il plain member però ha come "active_org" la SUA org personale → lista vuota
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $memberToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $memberToken);
         self::assertResponseIsSuccessful();
         self::assertCount(0, $this->jsonBody());
     }
@@ -133,17 +133,12 @@ final class TenantIsolationTest extends ApiTestCase
             'role' => ShareRole::VIEWER,
         ]);
 
-        // memberB ha però come active_org la sua org personale. Per testare lo share,
-        // generiamo manualmente un JWT con active_org = orgA per memberB.
-        $jwt = static::getContainer()
-            ->get(\Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface::class);
-        $tokenBOnOrgA = $jwt->createFromPayload($memberB, [
-            'user_id' => $memberB->getId(),
-            'active_org_id' => $orgA->getId(),
-        ]);
+        // memberB ha però come org attiva la sua org personale. Per testare lo share,
+        // apriamo una sessione di memberB con org attiva orgA.
+        $tokenBOnOrgA = $this->sessionFor($memberB, $orgA);
 
         // VIEW → OK
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $tokenBOnOrgA);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $tokenBOnOrgA);
         self::assertResponseIsSuccessful();
 
         // EDIT → 403 perché viewer
@@ -154,11 +149,11 @@ final class TenantIsolationTest extends ApiTestCase
             'year' => 2020,
             'type' => 'car',
             'fuelType' => 'diesel',
-        ], accessToken: $tokenBOnOrgA);
+        ], session: $tokenBOnOrgA);
         self::assertResponseStatusCodeSame(403);
 
         // Anche DELETE → 403
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId(), accessToken: $tokenBOnOrgA);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId(), session: $tokenBOnOrgA);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -175,14 +170,14 @@ final class TenantIsolationTest extends ApiTestCase
             'year' => 2020,
             'type' => 'car',
             'fuelType' => 'diesel',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
         $vehicleId = $this->jsonBody()['id'];
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles', session: $token);
         self::assertSame([$vehicleId], array_column($this->jsonBody(), 'id'));
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId, accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId, session: $token);
         self::assertSame(
             ['canEdit' => true, 'canDelete' => true, 'canShare' => true],
             $this->jsonBody()['permissions'],
@@ -195,17 +190,12 @@ final class TenantIsolationTest extends ApiTestCase
             'user' => $otherMember,
             'role' => OrgRole::MEMBER,
         ]);
-        $otherToken = static::getContainer()
-            ->get(\Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface::class)
-            ->createFromPayload($otherMember, [
-                'user_id' => $otherMember->getId(),
-                'active_org_id' => $org->getId(),
-            ]);
+        $otherToken = $this->sessionFor($otherMember, $org);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $otherToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $otherToken);
         self::assertCount(0, $this->jsonBody(), 'Senza share un altro member non vede il veicolo');
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId, accessToken: $otherToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicleId, session: $otherToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -233,13 +223,13 @@ final class TenantIsolationTest extends ApiTestCase
         if (isset($body['vehicleId'])) {
             $body['vehicleId'] = $vehicleA->getId();
         }
-        $this->jsonRequest($method, $url.$pathSuffix, $body === [] ? null : $body, accessToken: $tokenA);
+        $this->jsonRequest($method, $url.$pathSuffix, $body === [] ? null : $body, session: $tokenA);
 
         self::assertResponseStatusCodeSame(404, "$method $url$pathSuffix da un'altra org deve essere 404");
         self::assertSame($notFoundTitle, $this->jsonBody()['title']);
 
         // Controllo: il dato esiste ed è intatto per chi ne è il proprietario.
-        $this->jsonRequest('GET', $url, accessToken: $tokenB);
+        $this->jsonRequest('GET', $url, session: $tokenB);
         self::assertResponseIsSuccessful();
         self::assertSame($id, $this->jsonBody()['id']);
         self::assertSame($vehicleB->getId(), $this->jsonBody()['vehicleId'] ?? $this->jsonBody()['vehicle']['id'] ?? null);

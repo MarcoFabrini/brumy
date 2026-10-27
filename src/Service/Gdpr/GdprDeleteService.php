@@ -16,8 +16,8 @@ use App\Enum\OrgRole;
 use App\Repository\OrganizationInvitationRepository;
 use App\Repository\OrganizationMemberRepository;
 use App\Repository\PushSubscriptionRepository;
+use App\Security\RememberMeTokens;
 use App\Service\OrganizationMemberRemover;
-use App\Service\RefreshTokenService;
 use App\Service\Storage\AttachmentStorageInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -34,7 +34,9 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *    con altri membri attivi (deve trasferire ownership prima).
  * 2. Anonymize PII (email, firstName, lastName, password) → email univoca
  *    pseudo-randomica `deleted-<id>-<hash>@anonymized.local`.
- * 3. Revoke tutti i refresh token attivi e invalida gli access token (RefreshTokenService, stesso lock della rotazione).
+ * 3. Chiude ogni sessione: email e password cambiano, quindi le sessioni aperte non autenticano più alla richiesta
+ *    successiva ({@see User::isEqualTo()}); le serie remember-me della vecchia email vengono cancellate; la verifica in
+ *    due passaggi e l'ultima org attiva si azzerano.
  * 4. Delete tutte le push subscription (token mobile, endpoint web).
  * 5. Per ogni org dove l'utente è unico membro → delete org (cascade) e dei suoi file allegati.
  *    Negli altri casi le memberships restano (storia partecipazione), ma i veicoli di cui è
@@ -53,7 +55,7 @@ final class GdprDeleteService
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly RefreshTokenService $refreshTokens,
+        private readonly RememberMeTokens $rememberMeTokens,
         private readonly PushSubscriptionRepository $pushRepo,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly AttachmentStorageInterface $storage,
@@ -64,7 +66,7 @@ final class GdprDeleteService
     }
 
     /**
-     * @return array{anonymized_user_id: int, revoked_tokens: int, deleted_push_subs: int, deleted_orgs: int, kept_memberships: int}
+     * @return array{anonymized_user_id: int, deleted_remember_me_tokens: int, deleted_push_subs: int, deleted_orgs: int, kept_memberships: int}
      *
      * @throws GdprDeleteBlockedException se l'utente è ultimo owner di un'org condivisa
      */
@@ -97,16 +99,10 @@ final class GdprDeleteService
     /**
      * @param list<string> $filesToDelete riempito con i file da rimuovere dopo il commit
      *
-     * @return array{anonymized_user_id: int, revoked_tokens: int, deleted_push_subs: int, deleted_orgs: int, kept_memberships: int}
+     * @return array{anonymized_user_id: int, deleted_remember_me_tokens: int, deleted_push_subs: int, deleted_orgs: int, kept_memberships: int}
      */
     private function anonymizeInTransaction(User $user, int $userId, array &$filesToDelete): array
     {
-        // Per prima cosa: la revoca prende il lock sulla riga `users` di RefreshTokenService (ordine fisso `users` →
-        // `refresh_tokens`) come primo statement della transazione, così una rotazione concorrente finisce prima o non
-        // trova più il token. Preso più tardi, dopo i lock condivisi delle FK su org e membership, rischierebbe un
-        // deadlock. Revoca anche gli access token già emessi; il numero di refresh token revocati va nel riepilogo.
-        $activeTokens = $this->refreshTokens->revokeAllForUser($user);
-
         $deletedOrgs = 0;
         $keptMemberships = 0;
         /** @var list<Organization> $orgsToRemove */
@@ -175,6 +171,11 @@ final class GdprDeleteService
         }
 
         // Anonymize PII
+        // Cookie remember-me: puntano alla vecchia email, che sparisce; le righe vanno via comunque (contengono l'email).
+        $deletedRememberMe = $this->rememberMeTokens->deleteForUser($oldEmail);
+        $user->disableTwoFactor();
+        $user->setLastActiveOrganization(null);
+
         $anonEmail = sprintf('deleted-%d-%s%s', $userId, bin2hex(random_bytes(8)), User::ANONYMIZED_EMAIL_SUFFIX);
         $randomPassword = bin2hex(random_bytes(32));
         $user->cancelPendingEmail();
@@ -189,7 +190,7 @@ final class GdprDeleteService
 
         return [
             'anonymized_user_id' => $userId,
-            'revoked_tokens' => $activeTokens,
+            'deleted_remember_me_tokens' => $deletedRememberMe,
             'deleted_push_subs' => $deletedPushSubs,
             'deleted_orgs' => $deletedOrgs,
             'kept_memberships' => $keptMemberships,

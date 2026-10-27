@@ -33,7 +33,7 @@ describe('RequireRegistrationOpen', () => {
     renderAt('/register', <RequireRegistrationOpen><div>FORM REGISTRAZIONE</div></RequireRegistrationOpen>);
 
     expect(await screen.findByText('FORM REGISTRAZIONE')).toBeInTheDocument();
-    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/auth/registration', { skipRefresh: true });
+    expect(mockedAuthFetch).toHaveBeenCalledWith('/api/auth/registration', { anonymous: true });
   });
 
   it('istanza con utenti (registrazione chiusa): la pagina sparisce, redirect al login', async () => {

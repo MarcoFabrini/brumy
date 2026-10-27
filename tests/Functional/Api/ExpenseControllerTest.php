@@ -28,7 +28,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'amount' => '650.00',
             'recurring' => true,
             'recurringPeriod' => 'yearly',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertTrue($this->jsonBody()['recurring']);
@@ -48,7 +48,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'amount' => '10.00',
             'recurring' => true,
             'recurringPeriod' => 'weekly',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('occurredAt', $this->jsonBody()['errors'][0]['field']);
@@ -66,7 +66,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'description' => 'Multa autovelox',
             'amount' => '85.00',
             'recurring' => false,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertFalse($this->jsonBody()['recurring']);
@@ -83,7 +83,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'category' => 'tax',
             'description' => 'X',
             'amount' => 'abc',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -94,7 +94,7 @@ final class ExpenseControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         ExpenseFactory::createMany(3, ['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertCount(3, $this->jsonBody());
@@ -119,12 +119,12 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurring' => true,
             'recurringPeriod' => 'monthly',
             'recurringUntil' => '2026-06-15',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('2026-06-15', substr($this->jsonBody()['recurringUntil'], 0, 10));
 
-        $this->jsonRequest('GET', '/api/expenses/'.$this->jsonBody()['id'], accessToken: $token);
+        $this->jsonRequest('GET', '/api/expenses/'.$this->jsonBody()['id'], session: $token);
         self::assertSame('2026-06-15', substr($this->jsonBody()['recurringUntil'], 0, 10));
     }
 
@@ -143,7 +143,7 @@ final class ExpenseControllerTest extends ApiTestCase
                 'recurring' => true,
                 'recurringPeriod' => 'monthly',
                 'recurringUntil' => $until,
-            ], accessToken: $token);
+            ], session: $token);
 
             self::assertResponseStatusCodeSame(201);
             self::assertNull($this->jsonBody()['recurringUntil']);
@@ -164,7 +164,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurring' => true,
             'recurringPeriod' => 'yearly',
             'recurringUntil' => '2026-01-15',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
     }
@@ -183,7 +183,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurring' => true,
             'recurringPeriod' => 'monthly',
             'recurringUntil' => '2026-01-14',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame(
@@ -205,7 +205,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'amount' => '85.00',
             'recurring' => false,
             'recurringUntil' => '2026-06-15',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame(
@@ -228,7 +228,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurring' => true,
             'recurringPeriod' => 'monthly',
             'recurringUntil' => '15/06/2026',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('recurringUntil', $this->jsonBody()['errors'][0]['field']);
@@ -256,12 +256,12 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurringPeriod' => 'monthly',
         ];
 
-        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $payload + ['recurringUntil' => '2026-09-15'], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $payload + ['recurringUntil' => '2026-09-15'], session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame('2026-09-15', substr($this->jsonBody()['recurringUntil'], 0, 10));
 
         // Senza data di fine la spesa torna "in corso".
-        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $payload, accessToken: $token);
+        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $payload, session: $token);
         self::assertResponseIsSuccessful();
         self::assertNull($this->jsonBody()['recurringUntil']);
     }
@@ -285,7 +285,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'description' => 'Ora singola',
             'amount' => '9.99',
             'recurring' => false,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertFalse($this->jsonBody()['recurring']);
@@ -305,7 +305,7 @@ final class ExpenseControllerTest extends ApiTestCase
             'recurringUntil' => new \DateTimeImmutable('2030-01-01'),
         ]);
 
-        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), session: $token);
 
         self::assertResponseIsSuccessful();
         $item = current($this->jsonBody());
@@ -320,7 +320,7 @@ final class ExpenseControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), ' Revisione  camper '), accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), ' Revisione  camper '), session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $category = $this->jsonBody()['category'];
@@ -333,7 +333,7 @@ final class ExpenseControllerTest extends ApiTestCase
         self::assertSame($user->getId(), $value->getUser()->getId());
         self::assertNull($value->getStarterKey());
 
-        $this->jsonRequest('GET', '/api/expenses/'.$this->jsonBody()['id'], accessToken: $token);
+        $this->jsonRequest('GET', '/api/expenses/'.$this->jsonBody()['id'], session: $token);
         self::assertSame(['id' => $category['id'], 'name' => 'Revisione camper'], $this->jsonBody()['category']);
     }
 
@@ -342,7 +342,7 @@ final class ExpenseControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser(); // locale 'it'
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), 'toll'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), 'toll'), session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Pedaggio', $this->jsonBody()['category']['name']);
@@ -356,7 +356,7 @@ final class ExpenseControllerTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $expense = ExpenseFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
 
-        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $this->expenseBody($vehicle->getId(), 'Lavaggio interni'), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/expenses/'.$expense->getId(), $this->expenseBody($vehicle->getId(), 'Lavaggio interni'), session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame('Lavaggio interni', $this->jsonBody()['category']['name']);
@@ -369,7 +369,7 @@ final class ExpenseControllerTest extends ApiTestCase
 
         // Anche gli spazi Unicode (NBSP, tab) contano come vuoto, come per il nome della voce
         foreach (['  ', "\u{00A0}\t"] as $blank) {
-            $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), $blank), accessToken: $token);
+            $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), $blank), session: $token);
 
             self::assertResponseStatusCodeSame(422);
             self::assertSame('category', $this->jsonBody()['errors'][0]['field']);
@@ -383,7 +383,7 @@ final class ExpenseControllerTest extends ApiTestCase
         [$user, $org, $token] = $this->createAuthenticatedUser(); // locale 'it'
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), 'bollo'), 'section' => 'tax'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), 'bollo'), 'section' => 'tax'], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('tax', $this->jsonBody()['section']);
@@ -392,9 +392,9 @@ final class ExpenseControllerTest extends ApiTestCase
         $value = static::getContainer()->get('doctrine')->getRepository(UserValue::class)->find($this->jsonBody()['category']['id']);
         self::assertSame([UserValueKind::TAX_TYPE, TaxType::ROAD_TAX->value], [$value?->getKind(), $value?->getStarterKey()]);
 
-        $this->jsonRequest('GET', '/api/values/tax_type', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/tax_type', session: $token);
         self::assertSame(['Altra tassa', 'Bollo', 'Passaggio di proprietà', 'Superbollo'], array_column($this->jsonBody(), 'name'));
-        $this->jsonRequest('GET', '/api/values/expense_category', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/expense_category', session: $token);
         self::assertNotContains('Bollo', array_column($this->jsonBody(), 'name'), 'il bollo non è più una categoria delle altre spese');
     }
 
@@ -403,7 +403,7 @@ final class ExpenseControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), ' '), 'section' => 'tax'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), ' '), 'section' => 'tax'], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame(['field' => 'category', 'message' => 'expense.tax_type.required'], array_intersect_key($this->jsonBody()['errors'][0], ['field' => 1, 'message' => 1]));
@@ -414,19 +414,19 @@ final class ExpenseControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), ''), 'section' => 'insurance', 'insurer' => ' Allianz '], accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), ''), 'section' => 'insurance', 'insurer' => ' Allianz '], session: $token);
         self::assertResponseStatusCodeSame(201);
         self::assertNull($this->jsonBody()['category']);
         self::assertSame('Allianz', $this->jsonBody()['insurer']['name']);
         $id = $this->jsonBody()['id'];
 
         // Un testo di categoria mandato per sbaglio con l'assicurazione non crea nulla
-        $this->jsonRequest('PUT', '/api/expenses/'.$id, [...$this->expenseBody($vehicle->getId(), 'Pedaggio'), 'section' => 'insurance'], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/expenses/'.$id, [...$this->expenseBody($vehicle->getId(), 'Pedaggio'), 'section' => 'insurance'], session: $token);
         self::assertResponseIsSuccessful();
         self::assertNull($this->jsonBody()['category']);
         self::assertNull($this->jsonBody()['insurer']);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/insurer', accessToken: $token);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/values/insurer', session: $token);
         self::assertSame(['Allianz'], array_column($this->jsonBody(), 'name'));
     }
 
@@ -434,10 +434,10 @@ final class ExpenseControllerTest extends ApiTestCase
     {
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
-        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), 'Varie'), accessToken: $token);
+        $this->jsonRequest('POST', '/api/expenses', $this->expenseBody($vehicle->getId(), 'Varie'), session: $token);
         $other = $this->jsonBody()['category'];
 
-        $this->jsonRequest('PUT', '/api/expenses/'.$this->jsonBody()['id'], [...$this->expenseBody($vehicle->getId(), 'Varie'), 'section' => 'tax'], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/expenses/'.$this->jsonBody()['id'], [...$this->expenseBody($vehicle->getId(), 'Varie'), 'section' => 'tax'], session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertNotSame($other['id'], $this->jsonBody()['category']['id']);
@@ -450,15 +450,15 @@ final class ExpenseControllerTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         foreach ([['tax', 'Bollo', null], ['insurance', '', 'Allianz'], ['other', 'Pedaggio', null]] as [$section, $category, $insurer]) {
-            $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), $category), 'section' => $section, 'insurer' => $insurer], accessToken: $token);
+            $this->jsonRequest('POST', '/api/expenses', [...$this->expenseBody($vehicle->getId(), $category), 'section' => $section, 'insurer' => $insurer], session: $token);
             self::assertResponseStatusCodeSame(201);
         }
 
         foreach (['tax' => 'tax', 'insurance' => 'insurance', 'other' => 'other'] as $query => $expected) {
-            $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId().'&section='.$query, accessToken: $token);
+            $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId().'&section='.$query, session: $token);
             self::assertSame([$expected], array_column($this->jsonBody(), 'section'));
         }
-        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/expenses?vehicleId='.$vehicle->getId(), session: $token);
         self::assertCount(3, $this->jsonBody());
     }
 

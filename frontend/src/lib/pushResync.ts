@@ -46,7 +46,7 @@ type Session = { status: AuthStatus; user: { id: number } | null };
 
 /**
  * True quando inizia una sessione autenticata: lo store passa a `authenticated` (login, registrazione, invito,
- * bootstrap al reload) oppure cambia l'utente. Non la sola sostituzione dell'access token (refresh, switch-org).
+ * bootstrap al reload) oppure cambia l'utente. Non il solo cambio di organizzazione attiva (switch-org).
  */
 export function sessionStarted(next: Session, prev: Session): boolean {
   if (next.status !== 'authenticated' || next.user === null) return false;

@@ -14,7 +14,6 @@ use App\Tests\Factory\UserFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -30,7 +29,7 @@ final class OrganizationAccessTest extends ApiTestCase
         [, $orgB] = $this->createAuthenticatedUser();
         $victim = OrganizationMemberFactory::createOne(['organization' => $orgB, 'user' => UserFactory::createOne(), 'role' => OrgRole::MEMBER]);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$orgA->getId().'/members/'.$victim->getId(), accessToken: $tokenA);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$orgA->getId().'/members/'.$victim->getId(), session: $tokenA);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('member.not_found', $this->jsonBody()['title']);
@@ -46,7 +45,7 @@ final class OrganizationAccessTest extends ApiTestCase
         $em->persist($invitation);
         $em->flush();
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$orgA->getId().'/invitations/'.$invitation->getId(), accessToken: $tokenA);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$orgA->getId().'/invitations/'.$invitation->getId(), session: $tokenA);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('invitation.not_found', $this->jsonBody()['title']);
@@ -58,12 +57,12 @@ final class OrganizationAccessTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         [, $foreign] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/organizations/'.$foreign->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$foreign->getId(), session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('org.not_found', $this->jsonBody()['title']);
         $foreignBody = $this->jsonBody();
 
-        $this->jsonRequest('GET', '/api/organizations/999999', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/999999', session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame($foreignBody, $this->jsonBody(), 'Stessa risposta: gli id delle altre org non si enumerano');
     }
@@ -74,15 +73,15 @@ final class OrganizationAccessTest extends ApiTestCase
         [, $orgB] = $this->createAuthenticatedUser();
         $victim = OrganizationMemberFactory::createOne(['organization' => $orgB, 'user' => UserFactory::createOne(), 'role' => OrgRole::MEMBER]);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId().'/members/'.$victim->getId(), accessToken: $tokenA);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId().'/members/'.$victim->getId(), session: $tokenA);
         self::assertResponseStatusCodeSame(404);
-        $this->jsonRequest('POST', '/api/organizations/'.$orgB->getId().'/members', ['email' => 'x@test.it', 'role' => 'member'], accessToken: $tokenA);
+        $this->jsonRequest('POST', '/api/organizations/'.$orgB->getId().'/members', ['email' => 'x@test.it', 'role' => 'member'], session: $tokenA);
         self::assertResponseStatusCodeSame(404);
-        $this->jsonRequest('GET', '/api/organizations/'.$orgB->getId().'/invitations', accessToken: $tokenA);
+        $this->jsonRequest('GET', '/api/organizations/'.$orgB->getId().'/invitations', session: $tokenA);
         self::assertResponseStatusCodeSame(404);
-        $this->jsonRequest('PUT', '/api/organizations/'.$orgB->getId(), ['name' => 'Rubata'], accessToken: $tokenA);
+        $this->jsonRequest('PUT', '/api/organizations/'.$orgB->getId(), ['name' => 'Rubata'], session: $tokenA);
         self::assertResponseStatusCodeSame(404);
-        $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId(), accessToken: $tokenA);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$orgB->getId(), session: $tokenA);
         self::assertResponseStatusCodeSame(404);
 
         self::assertSame($orgB->getName(), $this->db()->fetchOne('SELECT name FROM organizations WHERE id = ?', [$orgB->getId()]));
@@ -99,7 +98,7 @@ final class OrganizationAccessTest extends ApiTestCase
         $other = OrganizationMemberFactory::createOne(['organization' => $org, 'user' => UserFactory::createOne(), 'role' => OrgRole::MEMBER]);
         $path = strtr($path, ['{org}' => (string) $org->getId(), '{member}' => (string) $other->getId()]);
 
-        $this->jsonRequest($method, $path, $body === [] ? null : $body, accessToken: $token);
+        $this->jsonRequest($method, $path, $body === [] ? null : $body, session: $token);
 
         self::assertResponseStatusCodeSame(403, "$method $path");
         self::assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM organization_members WHERE id = ?', [$other->getId()]));
@@ -120,10 +119,10 @@ final class OrganizationAccessTest extends ApiTestCase
         [, $org] = $this->createAuthenticatedUser();
         $adminToken = $this->tokenOfNewMember($org, OrgRole::ADMIN);
 
-        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => 'Rinominata da admin'], accessToken: $adminToken);
+        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => 'Rinominata da admin'], session: $adminToken);
         self::assertResponseIsSuccessful();
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), accessToken: $adminToken);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), session: $adminToken);
         self::assertResponseStatusCodeSame(403, 'Solo l\'owner elimina l\'organizzazione (e a cascata tutti i dati)');
         self::assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM organizations WHERE id = ?', [$org->getId()]));
     }
@@ -133,11 +132,11 @@ final class OrganizationAccessTest extends ApiTestCase
         $org = OrganizationFactory::createOne();
         $user = UserFactory::createOne();
         OrganizationMemberFactory::createOne(['organization' => $org, 'user' => $user, 'role' => OrgRole::ADMIN, 'acceptedAt' => null]);
-        $token = $this->jwtFor($user, $org);
+        $token = $this->sessionFor($user, $org);
 
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId(), accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId(), session: $token);
         self::assertResponseStatusCodeSame(403);
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/invitations', session: $token);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -145,7 +144,7 @@ final class OrganizationAccessTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/organizations/999999', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/999999', session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('org.not_found', $this->jsonBody()['title']);
@@ -156,7 +155,7 @@ final class OrganizationAccessTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $before = $org->getName();
 
-        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => ''], accessToken: $token);
+        $this->jsonRequest('PUT', '/api/organizations/'.$org->getId(), ['name' => ''], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('name', $this->jsonBody()['errors'][0]['field']);
@@ -175,12 +174,6 @@ final class OrganizationAccessTest extends ApiTestCase
         $user = UserFactory::createOne();
         OrganizationMemberFactory::createOne(['organization' => $org, 'user' => $user, 'role' => $role]);
 
-        return $this->jwtFor($user, $org);
-    }
-
-    private function jwtFor(User $user, Organization $org): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)
-            ->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $org->getId()]);
+        return $this->sessionFor($user, $org);
     }
 }

@@ -1,16 +1,13 @@
-import { activeOrgIdFromToken } from '@/lib/jwt';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 /**
- * Membership dell'organizzazione ATTIVA, cioè quella del claim `active_org_id` dell'access token:
- * è l'org su cui opera davvero ogni chiamata API. Se il claim manca o non corrisponde a nessuna
- * membership: owner/admin se presente, altrimenti la prima. Source unica per topbar / sidebar /
- * impostazioni.
+ * Membership dell'organizzazione ATTIVA della sessione (`activeOrganizationId` di `/me`, poi `switch-org`): è l'org
+ * su cui opera davvero ogni chiamata API. Se manca o non corrisponde a nessuna membership: owner/admin se presente,
+ * altrimenti la prima. Source unica per topbar / sidebar / impostazioni.
  */
 export function useActiveMembership() {
   const user = useAuthStore((s) => s.user);
-  const accessToken = useAuthStore((s) => s.accessToken);
-  const activeOrgId = activeOrgIdFromToken(accessToken);
+  const activeOrgId = useAuthStore((s) => s.activeOrgId);
   return (
     user?.memberships.find((m) => m.organization.id === activeOrgId) ??
     user?.memberships.find((m) => m.role === 'owner' || m.role === 'admin') ??

@@ -82,7 +82,7 @@ final class OrganizationMemberRoleTest extends ApiTestCase
     private function changeRole(User $actor, Organization $org, User $target, array $body): void
     {
         $memberId = $this->membership($target, $org)->getId();
-        $this->jsonRequest('PATCH', '/api/organizations/'.$org->getId().'/members/'.$memberId, $body, $this->tokenFor($actor, $org));
+        $this->jsonRequest('PATCH', '/api/organizations/'.$org->getId().'/members/'.$memberId, $body, $this->sessionFor($actor, $org));
     }
 
     private function auditRows(): int
@@ -158,7 +158,7 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         [$stranger, $strangerOrg] = $this->createAuthenticatedUser(); // owner di un'altra org
 
         $memberId = $this->membership($target, $org)->getId();
-        $this->jsonRequest('PATCH', '/api/organizations/'.$org->getId().'/members/'.$memberId, ['role' => 'admin'], $this->tokenFor($stranger, $strangerOrg));
+        $this->jsonRequest('PATCH', '/api/organizations/'.$org->getId().'/members/'.$memberId, ['role' => 'admin'], $this->sessionFor($stranger, $strangerOrg));
 
         // 404 come per un'org inesistente: chi non ne fa parte non ne deduce l'esistenza. Il ruolo non cambia.
         self::assertResponseStatusCodeSame(404);
@@ -349,7 +349,7 @@ final class OrganizationMemberRoleTest extends ApiTestCase
 
         $this->changeRole($owner, $org, $target, ['role' => 'admin']);
         $patched = $this->jsonBody();
-        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', accessToken: $token);
+        $this->jsonRequest('GET', '/api/organizations/'.$org->getId().'/members', session: $token);
         $listed = array_values(array_filter($this->jsonBody(), static fn (array $m): bool => $m['id'] === $patched['id']));
 
         self::assertResponseStatusCodeSame(200);
@@ -376,8 +376,8 @@ final class OrganizationMemberRoleTest extends ApiTestCase
 
         // visibile a owner e admin dell'org tramite l'API
         $admin = $this->addMember($org, OrgRole::ADMIN);
-        foreach ([$ownerToken, $this->tokenFor($admin, $org)] as $token) {
-            $this->jsonRequest('GET', '/api/audit-logs', accessToken: $token);
+        foreach ([$ownerToken, $this->sessionFor($admin, $org)] as $token) {
+            $this->jsonRequest('GET', '/api/audit-logs', session: $token);
             self::assertResponseIsSuccessful();
             $entries = array_values(array_filter($this->jsonBody(), static fn (array $l): bool => $l['action'] === 'updated' && str_ends_with((string) $l['entityClass'], 'OrganizationMember')));
             self::assertCount(1, $entries);
@@ -458,21 +458,21 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         [$owner, $org] = $this->createAuthenticatedUser();
         $admin = $this->addMember($org, OrgRole::ADMIN);
         $member = $this->addMember($org, OrgRole::MEMBER);
-        $adminToken = $this->tokenFor($admin, $org);
-        $memberToken = $this->tokenFor($member, $org);
+        $adminToken = $this->sessionFor($admin, $org);
+        $memberToken = $this->sessionFor($member, $org);
         $list = '/api/organizations/'.$org->getId().'/members';
 
-        $this->jsonRequest('GET', $list, accessToken: $adminToken);
+        $this->jsonRequest('GET', $list, session: $adminToken);
         self::assertResponseStatusCodeSame(200);
-        $this->jsonRequest('GET', $list, accessToken: $memberToken);
+        $this->jsonRequest('GET', $list, session: $memberToken);
         self::assertResponseStatusCodeSame(403);
 
         $this->changeRole($owner, $org, $admin, ['role' => 'member']);
         $this->changeRole($owner, $org, $member, ['role' => 'admin']);
 
-        $this->jsonRequest('GET', $list, accessToken: $adminToken);
+        $this->jsonRequest('GET', $list, session: $adminToken);
         self::assertResponseStatusCodeSame(403, 'L\'admin declassato perde l\'accesso con lo stesso token');
-        $this->jsonRequest('GET', $list, accessToken: $memberToken);
+        $this->jsonRequest('GET', $list, session: $memberToken);
         self::assertResponseStatusCodeSame(200, 'Il member promosso lo ottiene senza nuovo login');
     }
 
@@ -484,7 +484,7 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         $theirs = $this->ownedVehicle($owner, $org, ['name' => 'Dell\'owner']);
         $this->expense($mine, $this->day(0), '10.00');
         $this->expense($theirs, $this->day(0), '1000.00');
-        $adminToken = $this->tokenFor($admin, $org);
+        $adminToken = $this->sessionFor($admin, $org);
 
         $this->changeRole($owner, $org, $admin, ['role' => 'member']);
         self::assertResponseStatusCodeSame(200);
@@ -493,15 +493,15 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         $this->em()->clear();
         $owned = static::getContainer()->get(VehicleRepository::class)->findOwnedByUserInOrganization($admin, $org);
         self::assertSame([$mine->getId()], array_map(static fn ($v) => $v->getId(), $owned));
-        $this->jsonRequest('GET', '/api/dashboard/charts?months=2', accessToken: $adminToken);
+        $this->jsonRequest('GET', '/api/dashboard/charts?months=2', session: $adminToken);
         self::assertSame('10.00', $this->jsonBody()['totals']['spending']);
         $recipients = static::getContainer()->get(OrganizationMemberRepository::class)->findNotificationRecipients($org, $mine);
         self::assertSame([$admin->getId()], array_map(static fn (OrganizationMember $m) => $m->getUser()->getId(), $recipients));
 
         // Quello visto solo grazie al ruolo admin non c'è più
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $adminToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $adminToken);
         self::assertSame(['Mia'], array_column($this->jsonBody(), 'name'));
-        $this->jsonRequest('GET', '/api/vehicles/'.$theirs->getId(), accessToken: $adminToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$theirs->getId(), session: $adminToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -513,14 +513,14 @@ final class OrganizationMemberRoleTest extends ApiTestCase
         $theirs = $this->ownedVehicle($owner, $org, ['name' => 'Dell\'owner']);
         $this->expense($mine, $this->day(0), '10.00');
         $this->expense($theirs, $this->day(0), '1000.00');
-        $memberToken = $this->tokenFor($member, $org);
+        $memberToken = $this->sessionFor($member, $org);
 
         $this->changeRole($owner, $org, $member, ['role' => 'admin']);
         self::assertResponseStatusCodeSame(200);
 
-        $this->jsonRequest('GET', '/api/dashboard/charts?months=2', accessToken: $memberToken);
+        $this->jsonRequest('GET', '/api/dashboard/charts?months=2', session: $memberToken);
         self::assertSame('10.00', $this->jsonBody()['totals']['spending'], 'I totali restano quelli dei veicoli posseduti');
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $memberToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $memberToken);
         $items = $this->jsonBody();
         $byName = array_column($items, 'ownership', 'name');
         self::assertEqualsCanonicalizing(['Mia' => 'owned', 'Dell\'owner' => 'organization'], $byName);

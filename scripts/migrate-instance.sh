@@ -6,7 +6,7 @@
 # <vecchio-nome> è il nome della cartella dati (./<vecchio-nome>/) e il prefisso delle variabili
 # del .env (<VECCHIO_NOME>_TAG, <VECCHIO_NOME>_REGISTRY). Cosa fa:
 #   1. esporta il database con un MariaDB usa-e-getta avviato sulla vecchia cartella (la tocca solo in lettura);
-#   2. sposta ./<vecchio-nome>/ in ./brumy/ (allegati, backup e chiavi JWT restano com'erano);
+#   2. sposta ./<vecchio-nome>/ in ./brumy/ (allegati e backup restano com'erano);
 #   3. mette la vecchia cartella del database da parte in ./brumy/db.pre-rename;
 #   4. aggiorna il .env (copia in .env.pre-rename): prefisso delle variabili, e nome e utente del
 #      database se coincidevano con il vecchio nome;

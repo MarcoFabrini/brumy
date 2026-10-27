@@ -23,12 +23,10 @@ function renderWithProviders(ui: React.ReactNode) {
   );
 }
 
-const tokenFor = (orgId: number) => `h.${btoa(JSON.stringify({ active_org_id: orgId })).replace(/=+$/, '')}.s`;
-
 function setMemberships(memberships: User['memberships'], activeOrgId: number) {
   useAuthStore.setState({
     status: 'authenticated',
-    accessToken: tokenFor(activeOrgId),
+    activeOrgId,
     user: {
       id: 1,
       email: 'anna@test.it',
@@ -39,6 +37,8 @@ function setMemberships(memberships: User['memberships'], activeOrgId: number) {
       emailVerified: true,
       pendingEmail: null,
       isInstanceAdmin: false,
+      twoFactorEnabled: false,
+      backupCodesRemaining: 0,
       memberships,
     },
   });
@@ -49,7 +49,7 @@ const famiglia = { id: 12, role: 'member', organization: { id: 2, name: 'Famigli
 
 describe('navigazione', () => {
   beforeEach(async () => {
-    useAuthStore.setState({ status: 'loading', accessToken: null, user: null });
+    useAuthStore.setState({ status: 'loading', activeOrgId: null, user: null });
     mockedAuthFetch.mockReset();
     mockedAuthFetch.mockResolvedValue([]);
     await i18n.changeLanguage('it');

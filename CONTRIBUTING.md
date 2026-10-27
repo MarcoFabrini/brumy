@@ -29,7 +29,6 @@ You need [Lando](https://lando.dev).
 git clone https://github.com/MarcoFabrini/brumy.git
 cd brumy
 lando start
-lando jwt-keys
 lando sf doctrine:migrations:migrate --no-interaction
 lando sf doctrine:database:create --env=test --if-not-exists
 lando phpunit
@@ -49,7 +48,7 @@ docker run -d --name brumy-testdb --network brumy_default --network-alias testdb
 lando ssh -s appserver -c 'cd /app && XDEBUG_MODE=off APP_ENV=test DATABASE_URL="mysql://root:root@testdb:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" php bin/phpunit'
 ```
 
-**Production image smoke test.** CI builds and publishes the Docker image on version tags, so a broken image (missing PHP extension, bad entrypoint or Caddyfile, JWT keys, migrations, SPA assets) must never get there unnoticed. `scripts/smoke-image.sh` starts the image against a throw-away MariaDB and checks the SPA, the API, the security headers, the first-user registration and login, the scheduled commands and a restart. It needs only Docker, publishes no host port and removes everything it creates, even on failure:
+**Production image smoke test.** CI builds and publishes the Docker image on version tags, so a broken image (missing PHP extension, bad entrypoint or Caddyfile, sessions, migrations, SPA assets) must never get there unnoticed. `scripts/smoke-image.sh` starts the image against a throw-away MariaDB and checks the SPA, the API, the security headers, the first-user registration and the session sign-in (cookies, CSRF), the scheduled commands and a restart. It needs only Docker, publishes no host port and removes everything it creates, even on failure:
 
 ```bash
 docker build -f docker/app/Dockerfile --target prod -t brumy-smoke:local .
@@ -138,7 +137,6 @@ Serve [Lando](https://lando.dev).
 git clone https://github.com/MarcoFabrini/brumy.git
 cd brumy
 lando start
-lando jwt-keys
 lando sf doctrine:migrations:migrate --no-interaction
 lando sf doctrine:database:create --env=test --if-not-exists
 lando phpunit
@@ -158,7 +156,7 @@ docker run -d --name brumy-testdb --network brumy_default --network-alias testdb
 lando ssh -s appserver -c 'cd /app && XDEBUG_MODE=off APP_ENV=test DATABASE_URL="mysql://root:root@testdb:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" php bin/phpunit'
 ```
 
-**Smoke test dell'immagine di produzione.** La CI costruisce e pubblica l'immagine Docker sui tag di versione: un'immagine rotta (estensione PHP mancante, entrypoint o Caddyfile sbagliati, chiavi JWT, migrazioni, asset della SPA) non deve arrivarci senza che nessuno se ne accorga. `scripts/smoke-image.sh` avvia l'immagine con un MariaDB usa-e-getta e controlla SPA, API, header di sicurezza, registrazione e login del primo utente, comandi pianificati e un riavvio. Serve solo Docker, non pubblica porte sull'host e rimuove tutto ciò che crea, anche in caso di errore:
+**Smoke test dell'immagine di produzione.** La CI costruisce e pubblica l'immagine Docker sui tag di versione: un'immagine rotta (estensione PHP mancante, entrypoint o Caddyfile sbagliati, sessioni, migrazioni, asset della SPA) non deve arrivarci senza che nessuno se ne accorga. `scripts/smoke-image.sh` avvia l'immagine con un MariaDB usa-e-getta e controlla SPA, API, header di sicurezza, registrazione del primo utente e login a sessione (cookie, CSRF), comandi pianificati e un riavvio. Serve solo Docker, non pubblica porte sull'host e rimuove tutto ciò che crea, anche in caso di errore:
 
 ```bash
 docker build -f docker/app/Dockerfile --target prod -t brumy-smoke:local .

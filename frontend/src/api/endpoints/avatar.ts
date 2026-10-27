@@ -1,6 +1,6 @@
 import { authFetch, authFetchBlob } from '@/api/client';
 
-/** Foto profilo dell'utente corrente. `<img src>` non manda Bearer → blob fetch. */
+/** Foto profilo dell'utente corrente, scaricata come blob (stessa gestione della sessione di authFetch) e mostrata da object URL. */
 export function fetchAvatar(): Promise<Blob> {
   return authFetchBlob('/api/auth/avatar');
 }

@@ -49,9 +49,9 @@ final class CredentialTransitionPushTest extends ApiTestCase
         $this->jsonRequest('PUT', '/api/auth/password', [
             'currentPassword' => UserFactory::DEFAULT_PASSWORD,
             'newPassword' => 'Another-Pass-123',
-        ], accessToken: $token);
-        self::assertResponseIsSuccessful();
-        $fresh = (string) $this->jsonBody()['access_token'];
+        ], session: $token);
+        self::assertResponseStatusCodeSame(204);
+        $fresh = (string) $this->responseCookie(self::SESSION_COOKIE); // stessa sessione, id rigenerato
 
         self::assertSame(0, $this->subscriptionsOf($user));
         self::assertSame(1, $this->subscriptionsOf($other));
@@ -69,7 +69,7 @@ final class CredentialTransitionPushTest extends ApiTestCase
         $this->subscribe($token, self::ENDPOINT);
         $this->subscribe($otherToken, 'https://fcm.googleapis.com/fcm/send/other-user');
 
-        $this->jsonRequest('PUT', '/api/auth/profile', $this->profile('nuova-email@test.it', UserFactory::DEFAULT_PASSWORD), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', $this->profile('nuova-email@test.it', UserFactory::DEFAULT_PASSWORD), session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame(1, $this->subscriptionsOf($user), 'La sola richiesta non tocca le subscription');
 
@@ -85,7 +85,7 @@ final class CredentialTransitionPushTest extends ApiTestCase
         [$user, , $token] = $this->createAuthenticatedUser();
         $this->subscribe($token, self::ENDPOINT);
 
-        $this->jsonRequest('PUT', '/api/auth/profile', $this->profile($user->getEmail()), accessToken: $token);
+        $this->jsonRequest('PUT', '/api/auth/profile', $this->profile($user->getEmail()), session: $token);
         self::assertResponseIsSuccessful();
 
         self::assertSame(1, $this->subscriptionsOf($user));
@@ -96,10 +96,9 @@ final class CredentialTransitionPushTest extends ApiTestCase
         $user = UserFactory::createOne(['email' => 'push-logout@test.it']);
         $this->jsonRequest('POST', '/api/auth/login', ['email' => 'push-logout@test.it', 'password' => UserFactory::DEFAULT_PASSWORD]);
         self::assertResponseIsSuccessful();
-        $session = $this->jsonBody();
-        $this->subscribe((string) $session['access_token'], self::ENDPOINT);
+        $this->subscribe((string) $this->responseCookie(self::SESSION_COOKIE), self::ENDPOINT);
 
-        $this->jsonRequest('POST', '/api/auth/logout', ['refresh_token' => $session['refresh_token']]);
+        $this->jsonRequest('POST', '/api/auth/logout');
         self::assertResponseStatusCodeSame(204);
 
         // Il logout lato client disiscrive già il proprio dispositivo; il server non cancella quelli degli altri.
@@ -115,7 +114,7 @@ final class CredentialTransitionPushTest extends ApiTestCase
             'endpoint' => $endpoint,
             'p256dh' => 'p256dh-key',
             'authSecret' => 'auth-secret',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
     }
 

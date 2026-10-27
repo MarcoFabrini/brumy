@@ -8,6 +8,7 @@ import { ApiError, authFetch } from '@/api/client';
 import { Toaster } from '@/components/ui';
 import { clearQueryCacheOnSessionChange } from '@/lib/sessionCache';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { testUser } from '@/test/authFixtures';
 import { OrganizationSwitcher } from './OrganizationSwitcher';
 
 vi.mock('@/api/client', async (importOriginal) => ({
@@ -16,27 +17,14 @@ vi.mock('@/api/client', async (importOriginal) => ({
 }));
 const mockedAuthFetch = vi.mocked(authFetch);
 
-const tokenFor = (orgId: number) => `h.${btoa(JSON.stringify({ active_org_id: orgId })).replace(/=+$/, '')}.s`;
-
 const officina = { id: 11, role: 'owner', organization: { id: 1, name: 'Officina Rossi', slug: 'officina-rossi' } } as const;
 const famiglia = { id: 12, role: 'member', organization: { id: 2, name: 'Famiglia Neri', slug: 'famiglia-neri' } } as const;
 
 function setSession(memberships: User['memberships'], activeOrgId = 1) {
   useAuthStore.setState({
     status: 'authenticated',
-    accessToken: tokenFor(activeOrgId),
-    user: {
-      id: 1,
-      email: 'anna@test.it',
-      firstName: 'Anna',
-      lastName: 'Neri',
-      locale: 'it',
-      hasAvatar: false,
-      emailVerified: true,
-      pendingEmail: null,
-      isInstanceAdmin: false,
-      memberships,
-    },
+    activeOrgId,
+    user: testUser({ email: 'anna@test.it', firstName: 'Anna', lastName: 'Neri', memberships }),
   });
 }
 
@@ -112,12 +100,12 @@ describe('OrganizationSwitcher', () => {
     expect(mockedAuthFetch).not.toHaveBeenCalled();
   });
 
-  it('sceglierne un\'altra chiama switch-org, salva il token, svuota la cache e porta alla home', async () => {
+  it('sceglierne un\'altra chiama switch-org, salva l\'org attiva, svuota la cache e porta alla home', async () => {
     const user = userEvent.setup();
     setSession([officina, famiglia], 1);
-    mockedAuthFetch.mockResolvedValue({ access_token: tokenFor(2) });
+    mockedAuthFetch.mockResolvedValue({ activeOrganizationId: 2 });
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    // Come in main.tsx: è la sessione che svuota la cache quando l'org del token cambia.
+    // Come in main.tsx: è la sessione che svuota la cache quando l'org attiva cambia.
     const stop = clearQueryCacheOnSessionChange(qc);
     qc.setQueryData(['vehicles', 'list'], [{ id: 42 }]);
     renderSwitcher(qc);
@@ -132,9 +120,9 @@ describe('OrganizationSwitcher', () => {
       '/api/auth/switch-org',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 2 }) }),
     );
-    expect(useAuthStore.getState().accessToken).toBe(tokenFor(2));
+    expect(useAuthStore.getState().activeOrgId).toBe(2);
     expect(qc.getQueryData(['vehicles', 'list'])).toBeUndefined();
-    // il nome in vista segue il nuovo claim
+    // il nome in vista segue la nuova org attiva
     expect(await screen.findByRole('button', { name: 'Famiglia Neri, cambia organizzazione' })).toBeInTheDocument();
     stop();
   });
@@ -151,7 +139,7 @@ describe('OrganizationSwitcher', () => {
     await user.click(await screen.findByRole('menuitem', { name: /Famiglia Neri/ }));
 
     expect(await screen.findByText('Non fai parte di questa organizzazione')).toBeInTheDocument();
-    expect(useAuthStore.getState().accessToken).toBe(tokenFor(1));
+    expect(useAuthStore.getState().activeOrgId).toBe(1);
     expect(qc.getQueryData(['vehicles', 'list'])).toEqual([{ id: 42 }]);
     expect(screen.getByTestId('where')).toHaveTextContent('/vehicles/42');
     expect(screen.getByRole('button', { name: 'Officina Rossi, cambia organizzazione' })).toBeInTheDocument();
@@ -160,7 +148,7 @@ describe('OrganizationSwitcher', () => {
   it('un doppio click sulla voce invia una sola richiesta', async () => {
     const user = userEvent.setup();
     setSession([officina, famiglia], 1);
-    mockedAuthFetch.mockResolvedValue({ access_token: tokenFor(2) });
+    mockedAuthFetch.mockResolvedValue({ activeOrganizationId: 2 });
     renderSwitcher();
 
     await user.click(screen.getByRole('button', { name: /cambia organizzazione/ }));
@@ -173,7 +161,7 @@ describe('OrganizationSwitcher', () => {
   it('si apre e si sceglie da tastiera', async () => {
     const user = userEvent.setup();
     setSession([officina, famiglia], 1);
-    mockedAuthFetch.mockResolvedValue({ access_token: tokenFor(2) });
+    mockedAuthFetch.mockResolvedValue({ activeOrganizationId: 2 });
     renderSwitcher();
 
     screen.getByRole('button', { name: /cambia organizzazione/ }).focus();

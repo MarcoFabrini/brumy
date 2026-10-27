@@ -39,6 +39,8 @@ const user: User = {
   emailVerified: true,
   pendingEmail: null,
   isInstanceAdmin: false,
+  twoFactorEnabled: false,
+  backupCodesRemaining: 0,
   memberships: [{ id: 1, role: 'member', organization: { id: 1, name: 'Officina', slug: 'officina' } }],
 };
 
@@ -59,7 +61,7 @@ describe('SettingsPage — logout', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user });
   });
 
   it('un doppio tap non ripete il logout: il pulsante è disattivato finché è in corso', async () => {
@@ -95,7 +97,7 @@ describe('SettingsPage — semantica', () => {
     mockedAuthFetch.mockReset();
     mockedAuthFetch.mockRejectedValue(new ApiError('http.404', 404));
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user });
   });
 
   it('ha esattamente un h1 e le sezioni raggruppate come h2', () => {
@@ -137,7 +139,7 @@ describe('SettingsPage — testo grande e organizzazione', () => {
     mockedAuthFetch.mockReset();
     mockedAuthFetch.mockRejectedValue(new ApiError('http.404', 404));
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user });
     useThemeStore.setState({ largeText: false });
   });
 

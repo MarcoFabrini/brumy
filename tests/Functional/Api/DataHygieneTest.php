@@ -25,7 +25,6 @@ use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -49,7 +48,7 @@ final class DataHygieneTest extends ApiTestCase
         ReminderFactory::createOne(['organization' => $org, 'vehicle' => $shared, 'dueDate' => new \DateTimeImmutable('+3 days')]);
         ReminderFactory::createOne(['organization' => $org, 'vehicle' => $hidden, 'dueDate' => new \DateTimeImmutable('+3 days')]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $this->tokenFor($member, $org));
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $this->sessionFor($member, $org));
 
         self::assertResponseIsSuccessful();
         self::assertSame([$visible->getId()], array_column($this->jsonBody(), 'id'));
@@ -62,7 +61,7 @@ final class DataHygieneTest extends ApiTestCase
         VehicleShareFactory::new()->asAdmin()->create(['vehicle' => $archived, 'user' => $owner]);
         ReminderFactory::createOne(['organization' => $org, 'vehicle' => $archived, 'dueDate' => new \DateTimeImmutable('+3 days')]);
 
-        $this->jsonRequest('GET', '/api/reminders/upcoming', accessToken: $ownerToken);
+        $this->jsonRequest('GET', '/api/reminders/upcoming', session: $ownerToken);
 
         self::assertSame([], $this->jsonBody());
     }
@@ -72,10 +71,10 @@ final class DataHygieneTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/archive', accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/archive', session: $token);
         self::assertNotNull($this->jsonBody()['archivedAt']);
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/unarchive', accessToken: $token);
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/unarchive', session: $token);
         self::assertResponseIsSuccessful();
         self::assertNull($this->jsonBody()['archivedAt']);
     }
@@ -93,7 +92,7 @@ final class DataHygieneTest extends ApiTestCase
         $onMaintenance = $this->upload($token, 'maintenance', $maintenance->getId());
         $onOtherVehicle = $this->upload($token, 'vehicle', $other->getId());
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId(), session: $token);
         self::assertResponseStatusCodeSame(204);
 
         self::assertNull($this->attachmentRow($onVehicle['id']));
@@ -119,7 +118,7 @@ final class DataHygieneTest extends ApiTestCase
         $record = $factory::createOne(['organization' => $org, 'vehicle' => $vehicle]);
         $attachment = $this->upload($token, $kind, $record->getId());
 
-        $this->jsonRequest('DELETE', '/api/'.$kind.'s/'.$record->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/'.$kind.'s/'.$record->getId(), session: $token);
         self::assertResponseStatusCodeSame(204);
 
         self::assertNull($this->attachmentRow($attachment['id']));
@@ -143,7 +142,7 @@ final class DataHygieneTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $attachment = $this->upload($token, 'vehicle', $vehicle->getId());
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), session: $token);
         self::assertResponseStatusCodeSame(204);
 
         self::assertFalse($this->storedFileExists($attachment['path']));
@@ -160,7 +159,7 @@ final class DataHygieneTest extends ApiTestCase
         MaintenanceFactory::createOne(['organization' => $org, 'vehicle' => $vehicle, 'workshop' => $workshop]);
         ExpenseFactory::createOne(['organization' => $org, 'vehicle' => $vehicle]); // categoria di partenza dell'utente
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId(), session: $token);
         self::assertResponseStatusCodeSame(204);
 
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -178,7 +177,7 @@ final class DataHygieneTest extends ApiTestCase
         $membership = OrganizationMemberFactory::repository()->findOneBy(['user' => $member, 'organization' => $org]);
         self::assertNotNull($membership);
 
-        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/members/'.$membership->getId(), accessToken: $ownerToken);
+        $this->jsonRequest('DELETE', '/api/organizations/'.$org->getId().'/members/'.$membership->getId(), session: $ownerToken);
         self::assertResponseStatusCodeSame(204);
 
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -212,7 +211,7 @@ final class DataHygieneTest extends ApiTestCase
             'liters' => '30.000',
             'pricePerLiter' => '1.8000',
             'fuelType' => 'diesel',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('fuelType', $this->jsonBody()['errors'][0]['field']);
@@ -234,7 +233,7 @@ final class DataHygieneTest extends ApiTestCase
             'description' => 'Assicurazione',
             'amount' => '400.00',
             ...$recurrence,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -261,7 +260,7 @@ final class DataHygieneTest extends ApiTestCase
             'amount' => '400.00',
             'recurring' => true,
             'recurringPeriod' => 'yearly',
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
     }
@@ -278,7 +277,7 @@ final class DataHygieneTest extends ApiTestCase
             'description' => 'x',
             'amount' => '1.00',
             'notes' => str_repeat('a', 70_000),
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -288,7 +287,7 @@ final class DataHygieneTest extends ApiTestCase
         [, $org, $token] = $this->createAuthenticatedUser();
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
 
-        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId().'&page=99999999999999999999', accessToken: $token);
+        $this->jsonRequest('GET', '/api/refuelings?vehicleId='.$vehicle->getId().'&page=99999999999999999999', session: $token);
 
         self::assertResponseIsSuccessful();
     }
@@ -304,25 +303,18 @@ final class DataHygieneTest extends ApiTestCase
         return $user;
     }
 
-    private function tokenFor(User $user, \App\Entity\Organization $org): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $org->getId(),
-        ]);
-    }
 
     /**
      * @return array{id: int, path: string}
      */
     private function upload(string $token, string $entityType, ?int $entityId): array
     {
+        $this->useSession($token);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => $entityType, 'entityId' => (string) $entityId],
             files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')],
-            server: ['HTTP_AUTHORIZATION' => 'Bearer '.$token, 'HTTP_X_CLIENT_TYPE' => 'mobile'],
         );
         self::assertResponseStatusCodeSame(201);
         $id = (int) $this->jsonBody()['id'];

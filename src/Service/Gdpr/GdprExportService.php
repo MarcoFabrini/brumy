@@ -52,7 +52,7 @@ use App\Repository\VehicleShareRepository;
  *
  * Esclude:
  * - password hash (sensibile, no portabilità)
- * - refresh_tokens (auth-only, non personal data)
+ * - sessioni e serie remember-me (solo autenticazione), segreto TOTP e codici di recupero (credenziali)
  * - allegati binari (solo metadata; copia file separata se serve)
  * - p256dh / authSecret push (chiavi crypto)
  * - audit `changes` (diff dei campi: possono contenere dati di altri membri) e hash dei token d'invito

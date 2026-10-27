@@ -106,13 +106,13 @@ final class VehicleTransferTest extends ApiTestCase
     private function transfer(User $actor, array $body, ?Vehicle $vehicle = null, ?Organization $org = null): void
     {
         $vehicle ??= $this->vehicle;
-        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/transfer', $body, $this->tokenFor($actor, $org ?? $this->org));
+        $this->jsonRequest('POST', '/api/vehicles/'.$vehicle->getId().'/transfer', $body, $this->sessionFor($actor, $org ?? $this->org));
     }
 
     private function candidates(User $actor, ?Vehicle $vehicle = null): void
     {
         $vehicle ??= $this->vehicle;
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/transfer-candidates', accessToken: $this->tokenFor($actor, $this->org));
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/transfer-candidates', session: $this->sessionFor($actor, $this->org));
     }
 
     /** @return array<int, array{role: string, accepted: bool, id: int}> userId => dati dello share, riletti dal DB */
@@ -228,7 +228,7 @@ final class VehicleTransferTest extends ApiTestCase
         $this->assertOwnerIs($stranger, $foreign);
 
         // E un membro di entrambe le org non può usare il token di una per toccare l'altra
-        $this->jsonRequest('POST', '/api/vehicles/999999/transfer', ['userId' => $this->bob->getId()], $this->tokenFor($this->orgOwner, $this->org));
+        $this->jsonRequest('POST', '/api/vehicles/999999/transfer', ['userId' => $this->bob->getId()], $this->sessionFor($this->orgOwner, $this->org));
         self::assertResponseStatusCodeSame(404);
     }
 
@@ -383,7 +383,7 @@ final class VehicleTransferTest extends ApiTestCase
         self::assertArrayNotHasKey($this->alice->getId(), $after);
         self::assertSame($viewerBefore, $after[$this->uid($viewer)]);
         // il precedente owner (member) non vede più il veicolo
-        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), accessToken: $this->tokenFor($this->alice, $this->org));
+        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), session: $this->sessionFor($this->alice, $this->org));
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -466,15 +466,15 @@ final class VehicleTransferTest extends ApiTestCase
             'dueDate' => $this->today()->modify('+3 days'),
         ]);
 
-        $aliceToken = $this->tokenFor($this->alice, $this->org);
-        $bobToken = $this->tokenFor($this->bob, $this->org);
+        $aliceToken = $this->sessionFor($this->alice, $this->org);
+        $bobToken = $this->sessionFor($this->bob, $this->org);
         $total = function (string $token): float {
-            $this->jsonRequest('GET', '/api/dashboard/charts?months=12', accessToken: $token);
+            $this->jsonRequest('GET', '/api/dashboard/charts?months=12', session: $token);
             self::assertResponseIsSuccessful();
 
             return (float) $this->jsonBody()['totals']['spending'];
         };
-        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId().'/charts?months=12', accessToken: $aliceToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId().'/charts?months=12', session: $aliceToken);
         $vehicleSpending = (float) $this->jsonBody()['totals']['spending'];
         self::assertGreaterThan(50.0, $vehicleSpending, 'Lo storico del veicolo comprende rifornimenti, manutenzione e spese ricorrenti');
         $aliceBefore = $total($aliceToken);
@@ -489,7 +489,7 @@ final class VehicleTransferTest extends ApiTestCase
         self::assertEqualsWithDelta(7.0, $total($aliceToken), 0.001);
         self::assertEqualsWithDelta($bobBefore + $vehicleSpending, $total($bobToken), 0.001);
         // l'admin dell'org non è mai stato proprietario di nulla
-        self::assertEqualsWithDelta(0.0, $total($this->tokenFor($admin, $this->org)), 0.001);
+        self::assertEqualsWithDelta(0.0, $total($this->sessionFor($admin, $this->org)), 0.001);
 
         $this->em()->clear();
         $vehicles = static::getContainer()->get(VehicleRepository::class);
@@ -514,15 +514,15 @@ final class VehicleTransferTest extends ApiTestCase
         );
 
         // ownership e permessi per ciascuno
-        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), accessToken: $aliceToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), session: $aliceToken);
         self::assertSame('shared', $this->jsonBody()['ownership']);
         self::assertSame(['canEdit' => false, 'canDelete' => false, 'canShare' => false], $this->jsonBody()['permissions']);
-        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), accessToken: $bobToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), session: $bobToken);
         self::assertSame('owned', $this->jsonBody()['ownership']);
         self::assertSame(['canEdit' => true, 'canDelete' => true, 'canShare' => true], $this->jsonBody()['permissions']);
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $this->tokenFor($admin, $this->org));
+        $this->jsonRequest('GET', '/api/vehicles', session: $this->sessionFor($admin, $this->org));
         self::assertSame('organization', array_column($this->jsonBody(), 'ownership', 'name')['Panda'], 'L\'admin dell\'org mantiene `organization`');
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $aliceToken);
+        $this->jsonRequest('GET', '/api/vehicles', session: $aliceToken);
         self::assertSame('shared', array_column($this->jsonBody(), 'ownership', 'name')['Panda']);
         self::assertSame('owned', array_column($this->jsonBody(), 'ownership', 'name')['Seconda']);
     }
@@ -532,7 +532,7 @@ final class VehicleTransferTest extends ApiTestCase
         $this->transfer($this->alice, ['userId' => $this->bob->getId(), 'keepAccess' => false]);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/vehicles', accessToken: $this->tokenFor($this->alice, $this->org));
+        $this->jsonRequest('GET', '/api/vehicles', session: $this->sessionFor($this->alice, $this->org));
         self::assertSame([], $this->jsonBody());
     }
 
@@ -583,7 +583,7 @@ final class VehicleTransferTest extends ApiTestCase
 
         self::assertResponseStatusCodeSame(204);
         $this->assertOwnerIs($this->bob, $archived);
-        $this->jsonRequest('GET', '/api/vehicles?archived=1', accessToken: $this->tokenFor($this->bob, $this->org));
+        $this->jsonRequest('GET', '/api/vehicles?archived=1', session: $this->sessionFor($this->bob, $this->org));
         self::assertSame(['Vecchia'], array_column($this->jsonBody(), 'name'));
         self::assertNotNull(array_values($this->jsonBody())[0]['archivedAt']);
     }
@@ -668,8 +668,8 @@ final class VehicleTransferTest extends ApiTestCase
         self::assertSame((string) $aliceShareId, $updated[0]['entity_id']);
         self::assertSame(['role' => ['admin', 'viewer']], json_decode((string) $updated[0]['changes'], true));
 
-        foreach ([$this->tokenFor($this->orgOwner, $this->org), $this->tokenFor($admin, $this->org)] as $token) {
-            $this->jsonRequest('GET', '/api/audit-logs', accessToken: $token);
+        foreach ([$this->sessionFor($this->orgOwner, $this->org), $this->sessionFor($admin, $this->org)] as $token) {
+            $this->jsonRequest('GET', '/api/audit-logs', session: $token);
             self::assertResponseIsSuccessful();
             $shareEntries = array_filter($this->jsonBody(), static fn (array $l): bool => $l['entityClass'] === 'VehicleShare');
             self::assertCount(2, $shareEntries);
@@ -679,15 +679,15 @@ final class VehicleTransferTest extends ApiTestCase
     public function testExistingShareCreateAndRevokeRowsAreNowVisibleInTheAuditLog(): void
     {
         $this->em()->getConnection()->executeStatement('DELETE FROM audit_logs');
-        $aliceToken = $this->tokenFor($this->alice, $this->org);
+        $aliceToken = $this->sessionFor($this->alice, $this->org);
 
         $this->jsonRequest('POST', '/api/vehicles/'.$this->vehicle->getId().'/shares', ['userIds' => [$this->uid($this->bob)]], $aliceToken);
         self::assertResponseStatusCodeSame(201);
         $shareId = array_values($this->jsonBody())[0]['id'];
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$this->vehicle->getId().'/shares/'.$shareId, accessToken: $aliceToken);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$this->vehicle->getId().'/shares/'.$shareId, session: $aliceToken);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/audit-logs', accessToken: $this->tokenFor($this->orgOwner, $this->org));
+        $this->jsonRequest('GET', '/api/audit-logs', session: $this->sessionFor($this->orgOwner, $this->org));
         $actions = array_column(array_filter($this->jsonBody(), static fn (array $l): bool => $l['entityClass'] === 'VehicleShare'), 'action');
         sort($actions);
         self::assertSame(['created', 'deleted'], $actions);
@@ -865,21 +865,21 @@ final class VehicleTransferTest extends ApiTestCase
         $this->transfer($this->alice, ['userId' => $this->bob->getId()]);
         self::assertResponseStatusCodeSame(204);
 
-        $bobToken = $this->tokenFor($this->bob, $this->org);
-        $this->jsonRequest('GET', '/api/refuelings/'.$refueling->getId(), accessToken: $bobToken);
+        $bobToken = $this->sessionFor($this->bob, $this->org);
+        $this->jsonRequest('GET', '/api/refuelings/'.$refueling->getId(), session: $bobToken);
         self::assertResponseIsSuccessful();
         $station = $this->jsonBody()['station'];
         self::assertSame('Eni', $station['name']);
         self::assertNotSame($eniId, $station['id']);
         $this->assertInListOf($this->bob, $station['id'], UserValueKind::STATION);
 
-        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), accessToken: $bobToken);
+        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), session: $bobToken);
         self::assertResponseIsSuccessful();
         $category = $this->jsonBody()['category'];
         self::assertSame('Revisione camper', $category['name']);
         $this->assertInListOf($this->bob, $category['id'], UserValueKind::EXPENSE_CATEGORY);
 
-        $this->jsonRequest('GET', '/api/expenses/'.$toll->getId(), accessToken: $bobToken);
+        $this->jsonRequest('GET', '/api/expenses/'.$toll->getId(), session: $bobToken);
         self::assertResponseIsSuccessful();
         $tollValue = $this->assertInListOf($this->bob, $this->jsonBody()['category']['id'], UserValueKind::EXPENSE_CATEGORY);
         self::assertSame(ExpenseCategory::TOLL->value, $tollValue->getStarterKey());
@@ -905,7 +905,7 @@ final class VehicleTransferTest extends ApiTestCase
         $this->transfer($this->alice, ['userId' => $this->bob->getId()]);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), accessToken: $this->tokenFor($this->bob, $this->org));
+        $this->jsonRequest('GET', '/api/expenses/'.$expense->getId(), session: $this->sessionFor($this->bob, $this->org));
         self::assertResponseIsSuccessful();
         $category = $this->jsonBody()['category'];
         self::assertSame('Toll', $category['name']);

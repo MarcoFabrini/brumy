@@ -9,7 +9,6 @@ use App\Tests\Factory\OrganizationMemberFactory;
 use App\Tests\Factory\UserFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Support\ApiTestCase;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -111,7 +110,7 @@ final class ApiErrorFormatTest extends ApiTestCase
 
     public function testInvalidEmailAndWrongTypeUseCommonKeys(): void
     {
-        $this->request('POST', '/api/auth/login', ['email' => 'non-una-email', 'password' => 'x'], accept: '*/*');
+        $this->request('POST', '/api/auth/forgot-password', ['email' => 'non-una-email'], accept: '*/*');
 
         self::assertResponseStatusCodeSame(422);
         self::assertContains(['field' => 'email', 'message' => 'account.email.invalid'], $this->jsonBody()['errors']);
@@ -121,38 +120,25 @@ final class ApiErrorFormatTest extends ApiTestCase
         self::assertContains(['field' => 'year', 'message' => 'common.invalid_value'], $this->jsonBody()['errors']);
     }
 
-    /**
-     * @param array<string, string> $server
-     */
     #[DataProvider('unauthenticatedRequests')]
-    public function testMissingInvalidOrExpiredTokenUsesTheProjectShape(array $server, string $accept): void
+    public function testMissingOrUnknownSessionUsesTheProjectShape(?string $session, string $accept): void
     {
-        $this->client->request('GET', '/api/vehicles', server: $server + ['HTTP_ACCEPT' => $accept]);
+        if ($session !== null) {
+            $this->useSession($session);
+        }
+        $this->client->request('GET', '/api/vehicles', server: ['HTTP_ACCEPT' => $accept]);
 
         self::assertResponseStatusCodeSame(401);
         self::assertSame(['type' => 'about:blank', 'title' => 'http.401', 'status' => 401], $this->jsonBody());
-        self::assertSame('Bearer', $this->client->getResponse()->headers->get('WWW-Authenticate'));
     }
 
-    /** @return iterable<string, array{array<string, string>, string}> */
+    /** @return iterable<string, array{string|null, string}> */
     public static function unauthenticatedRequests(): iterable
     {
         foreach (['*/*', 'text/html,application/xhtml+xml', 'application/json'] as $accept) {
-            yield "no token ($accept)" => [[], $accept];
-            yield "garbage token ($accept)" => [['HTTP_AUTHORIZATION' => 'Bearer not.a.jwt'], $accept];
+            yield "no session ($accept)" => [null, $accept];
+            yield "unknown session id ($accept)" => ['sconosciuta0123456789abcdef', $accept];
         }
-    }
-
-    public function testExpiredTokenUsesTheProjectShapeToo(): void
-    {
-        [$user, $org] = $this->createAuthenticatedUser();
-        $expired = static::getContainer()->get(JWTTokenManagerInterface::class)
-            ->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $org->getId(), 'exp' => time() - 3600]);
-
-        $this->client->request('GET', '/api/vehicles', server: ['HTTP_AUTHORIZATION' => 'Bearer '.$expired, 'HTTP_ACCEPT' => '*/*']);
-
-        self::assertResponseStatusCodeSame(401);
-        self::assertSame(['type' => 'about:blank', 'title' => 'http.401', 'status' => 401], $this->jsonBody());
     }
 
     public function testForbiddenHasAStableTitle(): void
@@ -162,7 +148,7 @@ final class ApiErrorFormatTest extends ApiTestCase
         $stranger = UserFactory::createOne();
         OrganizationMemberFactory::createOne(['organization' => $org, 'user' => $stranger, 'role' => OrgRole::MEMBER]);
 
-        $this->request('GET', '/api/vehicles/'.$vehicle->getId(), accept: '*/*', token: $this->tokenFor($stranger, $org));
+        $this->request('GET', '/api/vehicles/'.$vehicle->getId(), accept: '*/*', token: $this->sessionFor($stranger, $org));
 
         self::assertResponseStatusCodeSame(403);
         self::assertSame(['type' => 'about:blank', 'title' => 'http.403', 'status' => 403], $this->jsonBody());
@@ -193,10 +179,10 @@ final class ApiErrorFormatTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
+        $this->useSession($token);
         $this->client->request('POST', '/api/vehicles', server: [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => '*/*',
-            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
         ], content: '{"name": ');
 
         self::assertResponseStatusCodeSame(400);
@@ -206,16 +192,10 @@ final class ApiErrorFormatTest extends ApiTestCase
     /** @param array<string, mixed>|null $body */
     private function request(string $method, string $uri, ?array $body = null, string $accept = '*/*', ?string $token = null): void
     {
-        $server = ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => $accept, 'HTTP_X_CLIENT_TYPE' => 'web'];
         if ($token !== null) {
-            $server['HTTP_AUTHORIZATION'] = 'Bearer '.$token;
+            $this->useSession($token);
         }
-        $this->client->request($method, $uri, server: $server, content: $body !== null ? json_encode($body, JSON_THROW_ON_ERROR) : null);
+        $this->client->request($method, $uri, server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => $accept], content: $body !== null ? json_encode($body, JSON_THROW_ON_ERROR) : null);
     }
 
-    private function tokenFor(\App\Entity\User $user, \App\Entity\Organization $org): string
-    {
-        return static::getContainer()->get(\Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface::class)
-            ->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $org->getId()]);
-    }
 }

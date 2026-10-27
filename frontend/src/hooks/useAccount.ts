@@ -3,9 +3,10 @@ import { z } from 'zod';
 import i18n from '@/i18n';
 import { authFetch } from '@/api/client';
 import { switchOrganization } from '@/api/endpoints/auth';
+import { enterSession, reloadUser } from '@/lib/authSession';
 import { profileLocale } from '@/lib/format';
 import { resyncThisDevice } from '@/lib/pushResync';
-import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -18,28 +19,20 @@ interface ProfilePayload {
   currentPassword?: string;
 }
 
-interface AuthLikeResponse {
-  access_token: string;
-  user: Omit<User, 'memberships'>;
-}
-
 /**
  * Aggiorna profilo (nome/email/locale) e ricarica /me. Una nuova email non cambia subito l'account: diventa
- * `pendingEmail` e il server manda un link al nuovo indirizzo; la sessione resta questa (l'access token riemesso ha
- * la stessa scadenza). Le sessioni si chiudono solo quando il link viene aperto.
+ * `pendingEmail` e il server manda un link al nuovo indirizzo; la sessione resta questa. Le sessioni si chiudono solo
+ * quando il link viene aperto.
  */
 export function useUpdateProfile() {
   return useMutation({
     mutationFn: async (payload: ProfilePayload) => {
-      const res = await authFetch<AuthLikeResponse>('/api/auth/profile', {
+      await authFetch<unknown>('/api/auth/profile', {
         method: 'PUT',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
-      useAuthStore.getState().setAccessToken(res.access_token);
-      const me = await authFetch<User>('/api/auth/me');
-      useAuthStore.getState().setUser(me);
-      return me;
+      return reloadUser();
     },
   });
 }
@@ -50,18 +43,17 @@ interface ChangePasswordPayload {
 }
 
 /**
- * Cambia password: verifica corrente, ruota la sessione (nuovo access_token + cookie). Il server chiude tutte le
- * altre sessioni e cancella le push subscription: questo browser ri-registra la propria.
+ * Cambia password: verifica la corrente. Questa sessione resta (il server ne rinnova id e cookie remember-me), le
+ * altre si chiudono e le push subscription vengono cancellate: questo browser ri-registra la propria.
  */
 export function useChangePassword() {
   return useMutation({
     mutationFn: async (payload: ChangePasswordPayload) => {
-      const res = await authFetch<AuthLikeResponse>('/api/auth/password', {
+      await authFetch<void>('/api/auth/password', {
         method: 'PUT',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
-      useAuthStore.getState().setAccessToken(res.access_token);
       void resyncThisDevice();
     },
   });
@@ -81,9 +73,7 @@ export function useUpdateOrganization() {
         headers: JSON_HEADERS,
         body: JSON.stringify({ name: payload.name }),
       });
-      const me = await authFetch<User>('/api/auth/me');
-      useAuthStore.getState().setUser(me);
-      return me;
+      return reloadUser();
     },
   });
 }
@@ -96,7 +86,7 @@ export function useForgotPassword() {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
-        skipRefresh: true,
+        anonymous: true,
       }),
   });
 }
@@ -109,7 +99,7 @@ export function useResetPassword() {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
-        skipRefresh: true,
+        anonymous: true,
       }),
   });
 }
@@ -117,8 +107,8 @@ export function useResetPassword() {
 const verifyEmailResponseSchema = z.object({ emailChanged: z.boolean() });
 
 /**
- * Conferma l'indirizzo email col token dal link (pubblico, no sessione). Se il link confermava un cambio email il
- * server ha chiuso tutte le sessioni: anche questa finisce e si rientra con il nuovo indirizzo.
+ * Conferma l'indirizzo email col token dal link (pubblico). Se il link confermava un cambio email il server ha chiuso
+ * tutte le sessioni, anche questa: si rientra con il nuovo indirizzo.
  */
 export function useVerifyEmail() {
   return useMutation({
@@ -128,18 +118,18 @@ export function useVerifyEmail() {
           method: 'POST',
           headers: JSON_HEADERS,
           body: JSON.stringify(payload),
-          skipRefresh: true,
+          anonymous: true,
         }),
       ),
     onSuccess: ({ emailChanged }) => {
-      const { status, setUser, logout } = useAuthStore.getState();
+      const { status, logout } = useAuthStore.getState();
       if (status !== 'authenticated') return;
       if (emailChanged) {
         logout();
         return;
       }
       // Se l'utente è già dentro, il banner "verifica l'email" deve sparire senza ricaricare.
-      void authFetch<User>('/api/auth/me').then(setUser, () => undefined);
+      void reloadUser().catch(() => undefined);
     },
   });
 }
@@ -163,7 +153,7 @@ export interface InvitationPreview {
 export function useInvitationPreview(token: string) {
   return useQuery({
     queryKey: ['invitation', token],
-    queryFn: () => authFetch<InvitationPreview>(`/api/auth/invitation/${encodeURIComponent(token)}`, { skipRefresh: true }),
+    queryFn: () => authFetch<InvitationPreview>(`/api/auth/invitation/${encodeURIComponent(token)}`, { anonymous: true }),
     enabled: token.length > 0,
     retry: false,
   });
@@ -180,11 +170,11 @@ export function useAcceptInvitation() {
         body: JSON.stringify(payload),
       });
 
-      // Il token in uso opera ancora sulla vecchia organizzazione: si passa a quella appena
+      // La sessione opera ancora sulla vecchia organizzazione: si passa a quella appena
       // accettata, altrimenti l'utente non vedrebbe mai i dati per cui è stato invitato.
       if (res?.organizationId) {
         try {
-          useAuthStore.getState().setAccessToken(await switchOrganization(res.organizationId));
+          useAuthStore.getState().setActiveOrgId(await switchOrganization(res.organizationId));
           // La cache appartiene alla vecchia organizzazione. L'anteprima dell'invito resta: la pagina
           // è ancora iscritta a quella chiave e, ora che l'invito è consumato, un refetch darebbe 400.
           qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'invitation' });
@@ -193,9 +183,7 @@ export function useAcceptInvitation() {
         }
       }
 
-      const me = await authFetch<User>('/api/auth/me');
-      useAuthStore.getState().setUser(me);
-      return me;
+      return reloadUser();
     },
   });
 }
@@ -208,22 +196,18 @@ interface RegisterInvitedPayload {
   locale?: 'it' | 'en';
 }
 
-/** Registra un nuovo account dall'invito e accetta in un colpo: logga l'utente. */
+/** Registra un nuovo account dall'invito e accetta in un colpo: il backend apre la sessione, qui si carica /me. */
 export function useRegisterInvited() {
-  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   return useMutation({
     mutationFn: async (payload: RegisterInvitedPayload) => {
-      const data = await authFetch<{ access_token: string }>('/api/auth/invitation/register', {
+      await authFetch<unknown>('/api/auth/invitation/register', {
         method: 'POST',
         headers: JSON_HEADERS,
         // Lingua dell'interfaccia, non 'it' fisso: altrimenti chi si registra in inglese si ritrova in italiano.
         body: JSON.stringify({ locale: profileLocale(i18n.language), ...payload }),
-        skipRefresh: true,
+        anonymous: true,
       });
-      useAuthStore.getState().setAccessToken(data.access_token);
-      const me = await authFetch<User>('/api/auth/me');
-      setAuthenticated(data.access_token, me);
-      return me;
+      return enterSession();
     },
   });
 }

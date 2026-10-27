@@ -22,7 +22,7 @@ final class RecordRemindersTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/maintenances', [
             'vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-10', 'km' => 80000, 'category' => 'inspection',
             'description' => 'Revisione biennale', 'nextDueDate' => '2028-05-31',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
 
         $reminders = $this->reminders();
@@ -47,7 +47,7 @@ final class RecordRemindersTest extends ApiTestCase
             'vehicleId' => $vehicle->getId(), 'occurredAt' => '2026-05-28', 'section' => 'insurance', 'insurer' => 'Allianz',
             'description' => 'Polizza 2026', 'amount' => '480.00', 'recurring' => true, 'recurringPeriod' => 'semiannual',
             'nextDueDate' => '2026-11-30',
-        ], accessToken: $token);
+        ], session: $token);
         self::assertResponseStatusCodeSame(201);
 
         $reminders = $this->reminders();
@@ -67,7 +67,7 @@ final class RecordRemindersTest extends ApiTestCase
         $tax = fn (string $type, string $due) => $this->jsonRequest('POST', '/api/expenses', [
             'vehicleId' => $vehicle->getId(), 'occurredAt' => '2026-01-31', 'section' => 'tax', 'category' => $type,
             'description' => $type.' 2026', 'amount' => '200.00', 'nextDueDate' => $due,
-        ], accessToken: $token);
+        ], session: $token);
 
         $tax('Bollo', '2027-01-31');
         $tax('Superbollo', '2027-01-31');
@@ -86,9 +86,9 @@ final class RecordRemindersTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $org]);
         $body = ['vehicleId' => $vehicle->getId(), 'performedAt' => '2026-05-10', 'km' => 80000, 'category' => 'inspection', 'description' => 'Revisione'];
 
-        $this->jsonRequest('POST', '/api/maintenances', $body, accessToken: $token);
-        $this->jsonRequest('PUT', '/api/maintenances/'.$this->jsonBody()['id'], [...$body, 'nextDueDate' => '2028-05-31'], accessToken: $token);
-        $this->jsonRequest('POST', '/api/maintenances', [...$body, 'category' => 'scheduled', 'nextDueDate' => '2028-05-31'], accessToken: $token);
+        $this->jsonRequest('POST', '/api/maintenances', $body, session: $token);
+        $this->jsonRequest('PUT', '/api/maintenances/'.$this->jsonBody()['id'], [...$body, 'nextDueDate' => '2028-05-31'], session: $token);
+        $this->jsonRequest('POST', '/api/maintenances', [...$body, 'category' => 'scheduled', 'nextDueDate' => '2028-05-31'], session: $token);
 
         self::assertSame([], $this->reminders());
     }

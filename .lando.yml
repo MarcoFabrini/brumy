@@ -21,9 +21,6 @@ services:
         APP_DEBUG: "1"
         APP_SECRET: dev_secret_change_me
         DATABASE_URL: "mysql://brumy:brumy@database:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4"
-        JWT_SECRET_KEY: "%kernel.project_dir%/config/jwt/private.pem"
-        JWT_PUBLIC_KEY: "%kernel.project_dir%/config/jwt/public.pem"
-        JWT_PASSPHRASE: dev_jwt_passphrase
         MAILER_DSN: "smtp://mailpit:1025"
         FRONTEND_URL: "https://brumy.lndo.site"
         CORS_ALLOW_ORIGIN: '^https?://(localhost|127\.0\.0\.1|.*\.lndo\.site)(:[0-9]+)?$'
@@ -70,9 +67,6 @@ tooling:
     cmd: php vendor/bin/phpstan analyse --memory-limit=1G --no-progress
     env:
       XDEBUG_MODE: "off"
-  jwt-keys:
-    service: appserver
-    cmd: php bin/console lexik:jwt:generate-keypair --skip-if-exists
   npm:
     service: node
     dir: /app/frontend

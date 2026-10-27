@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authFetch } from '@/api/client';
 import { vehicleKeys } from '@/hooks/useVehicles';
-import { useAuthStore, type User } from '@/stores/useAuthStore';
+import { reloadUser } from '@/lib/authSession';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -105,7 +106,7 @@ interface ChangeMemberRoleVars {
 async function syncOwnMembership(updated: OrgMember): Promise<void> {
   const store = useAuthStore.getState();
   try {
-    store.setUser(await authFetch<User>('/api/auth/me'));
+    await reloadUser();
   } catch {
     const user = useAuthStore.getState().user;
     if (user) {

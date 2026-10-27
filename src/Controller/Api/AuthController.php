@@ -6,8 +6,6 @@ namespace App\Controller\Api;
 
 use App\Dto\Request\ChangePasswordRequest;
 use App\Dto\Request\ForgotPasswordRequest;
-use App\Dto\Request\LoginRequest;
-use App\Dto\Request\RefreshRequest;
 use App\Dto\Request\RegisterRequest;
 use App\Dto\Request\ResetPasswordRequest;
 use App\Dto\Request\SwitchOrgRequest;
@@ -20,7 +18,6 @@ use App\Entity\Organization;
 use App\Entity\OrganizationInvitation;
 use App\Entity\OrganizationMember;
 use App\Entity\PasswordResetToken;
-use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\EmailVerificationTokenRepository;
 use App\Repository\OrganizationInvitationRepository;
@@ -37,36 +34,30 @@ use App\Service\LogRedactor;
 use App\Service\MailBuilder;
 use App\Service\OrganizationSlugs;
 use App\Service\UserAvatar;
-use App\Service\RefreshRejection;
-use App\Service\RefreshTokenService;
 use App\Service\Storage\AttachmentStorageInterface;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailureException;
-use Lexik\Bundle\JWTAuthenticationBundle\Security\Authenticator\Token\JWTPostAuthenticationToken;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
-use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Security\Http\Authenticator\Passport\Badge\RememberMeBadge;
+use Symfony\Component\Security\Http\RememberMe\RememberMeHandlerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[OA\Tag(name: 'Auth')]
@@ -87,8 +78,6 @@ final class AuthController extends AbstractController
         private readonly OrganizationRepository $orgRepo,
         private readonly OrganizationMemberRepository $memberRepo,
         private readonly UserPasswordHasherInterface $passwordHasher,
-        private readonly JWTTokenManagerInterface $jwtManager,
-        private readonly RefreshTokenService $refreshTokens,
         private readonly PasswordResetTokenRepository $resetTokenRepo,
         private readonly EmailVerificationTokenRepository $verificationTokenRepo,
         private readonly OrganizationInvitationRepository $invitationRepo,
@@ -96,16 +85,10 @@ final class AuthController extends AbstractController
         private readonly MailBuilder $mailBuilder,
         private readonly OrganizationSlugs $orgSlugs,
         private readonly ValidatorInterface $validator,
-        private readonly RateLimiterFactory $loginLimiter,
-        private readonly RateLimiterFactory $refreshLimiter,
-        #[Autowire(service: 'limiter.login_ip')]
-        private readonly RateLimiterFactory $loginIpLimiter,
-        #[Autowire(service: 'limiter.token_actions')]
-        private readonly RateLimiterFactory $tokenActionsLimiter,
+        private readonly RateLimiterFactoryInterface $tokenActionsLimiter,
         private readonly RequestStack $requestStack,
-        private readonly RateLimiterFactory $forgotPasswordLimiter,
+        private readonly RateLimiterFactoryInterface $forgotPasswordLimiter,
         private readonly RateLimiterFactoryInterface $forgotPasswordIpLimiter,
-        #[Autowire(service: 'limiter.verification_email')]
         private readonly RateLimiterFactoryInterface $verificationEmailLimiter,
         private readonly AfterResponseTasks $afterResponse,
         private readonly LoggerInterface $logger,
@@ -115,6 +98,8 @@ final class AuthController extends AbstractController
         private readonly Security $security,
         private readonly VehicleShareRepository $shareRepo,
         private readonly UserAvatar $avatar,
+        #[Autowire(service: 'security.authenticator.remember_me_handler.api')]
+        private readonly RememberMeHandlerInterface $rememberMe,
     ) {
     }
 
@@ -132,24 +117,24 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Register the first user + personal organization (first-run only)',
-        description: 'Open ONLY while the instance has no users: the first account becomes the instance admin. From then on it answers 403 auth.registration_closed and new users join exclusively via invitation (POST /api/auth/invitation/register). Header X-Client-Type discriminates web (cookie) vs mobile (Bearer body).',
+        description: 'Open ONLY while the instance has no users: the first account becomes the instance admin. From then on it answers 403 auth.registration_closed and new users join exclusively via invitation (POST /api/auth/invitation/register). Signs the new user in: session cookie brumy_session plus the brumy_remember cookie.',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: RegisterRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 201, description: 'User created + JWT issued'),
+            new OA\Response(response: 201, description: '{user}; session opened'),
             new OA\Response(response: 403, description: 'auth.registration_closed'),
             new OA\Response(response: 409, description: 'auth.email_taken (concurrent first-run race)'),
             new OA\Response(response: 422, description: 'validation_failed'),
+            new OA\Response(response: 429, description: 'auth.too_many_attempts'),
+            new OA\Response(response: 503, description: 'auth.try_again'),
         ],
     )]
     #[Route('/register', name: 'register', methods: ['POST'])]
-    public function register(
-        Request $request,
-        #[MapRequestPayload] RegisterRequest $payload,
-    ): JsonResponse {
+    public function register(#[MapRequestPayload] RegisterRequest $payload): JsonResponse
+    {
         if ($this->throttled($this->tokenActionsLimiter)) {
             return $this->problem('auth.too_many_attempts', 429);
         }
@@ -215,163 +200,77 @@ final class AuthController extends AbstractController
         // Invio email di verifica (best-effort: un SMTP giù non deve far fallire il registro).
         $this->issueAndSendVerification($user);
 
-        $clientType = $this->resolveClientType($request);
-
-        return $this->buildAuthResponse($user, $clientType, statusCode: 201);
+        return $this->signIn($user);
     }
 
+    /**
+     * Il login lo fa il firewall (`json_login`, success/failure handler in {@see \App\Security}): questa azione esiste
+     * solo come rotta e per la documentazione. La raggiunge soltanto una richiesta che non è JSON.
+     */
     #[OA\Post(
-        summary: 'Login with email + password',
-        description: 'Rate limited (5/min per email+IP). Header X-Client-Type: web → refresh in HttpOnly cookie. mobile → refresh in body.',
+        summary: 'Sign in with email + password',
+        description: 'JSON only. Throttled by the firewall: 5 failures per minute per (email, IP) and 25 per IP, then 429 even with the right password. Without two-step verification it opens the session (cookie brumy_session) and sets the brumy_remember cookie (7 days from the last use); with two-step verification on it answers twoFactorRequired: true and the session waits for the code at POST /api/auth/2fa/check (every protected route answers 401 auth.two_factor_required until then). Unknown email and wrong password give the same answer.',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
-            content: new OA\JsonContent(ref: new Model(type: LoginRequest::class)),
+            content: new OA\JsonContent(
+                required: ['email', 'password'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email'),
+                    new OA\Property(property: 'password', type: 'string'),
+                ],
+            ),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'JWT issued'),
+            new OA\Response(response: 200, description: '{twoFactorRequired: bool}'),
+            new OA\Response(response: 400, description: 'http.400 (not JSON, malformed JSON, missing email or password)'),
             new OA\Response(response: 401, description: 'auth.invalid_credentials'),
+            new OA\Response(response: 403, description: 'auth.csrf_invalid'),
             new OA\Response(response: 429, description: 'auth.too_many_attempts'),
         ],
     )]
     #[Route('/login', name: 'login', methods: ['POST'])]
-    public function login(
-        Request $request,
-        #[MapRequestPayload] LoginRequest $payload,
-    ): JsonResponse {
-        // Prima il limite per IP, che non scrive nulla: il limiter per (email, IP) salva uno stato per ogni chiave nuova,
-        // e un IP già bloccato non deve poter creare stati (file di cache) con un'email diversa a ogni richiesta.
-        if ($this->isBlocked($this->loginIpLimiter)
-            || !$this->loginLimiter->create($this->loginLimiterKey($request, $payload->email))->consume()->isAccepted()
-        ) {
-            return $this->problem('auth.too_many_attempts', 429);
-        }
-
-        $user = $this->userRepo->findOneByEmail($payload->email);
-        if (!$user) {
-            // Stesso costo di una verifica reale: il tempo di risposta non rivela se l'email esiste.
-            $this->passwordHasher->hashPassword(new User(), $payload->password);
-            $this->throttled($this->loginIpLimiter);
-
-            return $this->problem('auth.invalid_credentials', 401);
-        }
-        if (!$this->passwordHasher->isPasswordValid($user, $payload->password)) {
-            $this->throttled($this->loginIpLimiter);
-
-            return $this->problem('auth.invalid_credentials', 401);
-        }
-
-        // Null se un reset/cambio password o un cambio email è stato committato dopo la verifica: la password
-        // controllata non è più quella dell'account e la sessione non deve nascere.
-        $refresh = $this->refreshTokens->issueIfCredentialsUnchanged($user);
-        if ($refresh === null) {
-            return $this->problem('auth.invalid_credentials', 401);
-        }
-
-        return $this->buildAuthResponse($user, $this->resolveClientType($request), existingRefresh: $refresh);
+    public function login(): never
+    {
+        throw new BadRequestHttpException();
     }
 
+    /** Il logout lo fa il firewall ({@see \App\EventListener\LogoutResponseListener}): rotta e documentazione. */
     #[OA\Post(
-        summary: 'Rotate access + refresh token',
-        description: 'Web reads cookie. Mobile sends refresh in body. Old refresh is revoked and the new one stays in the same session family. Presenting an already-rotated token again (after a 10 second grace for concurrent requests) revokes the whole family: the answer is the same 401 auth.invalid_refresh_token. Rate limited (30/min per IP).',
+        summary: 'Sign out',
+        description: 'Always 204, also without a session or while two-step verification is in progress. Ends the session, deletes the remember-me series of this device and clears both cookies. Push subscriptions are not touched.',
         security: [],
-        requestBody: new OA\RequestBody(
-            required: false,
-            content: new OA\JsonContent(ref: new Model(type: RefreshRequest::class)),
-        ),
         responses: [
-            new OA\Response(response: 200, description: 'New tokens'),
-            new OA\Response(response: 400, description: 'auth.refresh_token_required'),
-            new OA\Response(response: 401, description: 'auth.invalid_refresh_token'),
-            new OA\Response(response: 429, description: 'auth.too_many_attempts'),
+            new OA\Response(response: 204, description: 'Signed out'),
+            new OA\Response(response: 403, description: 'auth.csrf_invalid'),
         ],
     )]
-    #[Route('/refresh', name: 'refresh', methods: ['POST'])]
-    public function refresh(
-        Request $request,
-        #[MapRequestPayload(acceptFormat: 'json')] ?RefreshRequest $payload = null,
-    ): JsonResponse {
-        $limiter = $this->refreshLimiter->create('refresh-'.$request->getClientIp());
-        if (!$limiter->consume()->isAccepted()) {
-            return $this->problem('auth.too_many_attempts', 429);
-        }
-
-        $cookieToken = $request->cookies->get(RefreshTokenService::COOKIE_NAME);
-        $bodyToken = $payload?->refreshToken;
-
-        // Il canale di ingresso determina il canale di uscita
-        $clientType = $cookieToken !== null ? 'web' : 'mobile';
-        $rawToken = $cookieToken ?? $bodyToken;
-
-        if (!$rawToken) {
-            return $this->problem('auth.refresh_token_required', 400);
-        }
-
-        $refresh = $this->refreshTokens->findValid($rawToken);
-        if (!$refresh) {
-            // Stessa risposta per token sconosciuto, scaduto, ruotato da poco o riusato: il client non
-            // deve poter capire se ha fatto scattare la revoca della sessione.
-            $rejection = $this->refreshTokens->classifyRejected($rawToken);
-            $response = $this->problem('auth.invalid_refresh_token', 401);
-            // Se era un cookie invalido, lo cancelliamo. Non se ha perso una corsa con un'altra richiesta
-            // (due schede): quella ha appena consegnato il cookie nuovo e cancellarlo scollegherebbe l'utente.
-            if ($cookieToken !== null && $rejection !== RefreshRejection::RaceLost) {
-                $response->headers->clearCookie(RefreshTokenService::COOKIE_NAME, '/api/auth');
-            }
-            return $response;
-        }
-
-        $rotated = $this->refreshTokens->rotate($refresh);
-        if ($rotated === null) {
-            return $this->problem('auth.invalid_refresh_token', 401);
-        }
-
-        return $this->buildAuthResponse($refresh->getUser(), $clientType, existingRefresh: $rotated);
-    }
-
-    #[OA\Post(
-        summary: 'Logout — revoke refresh + clear cookie',
-        description: 'Accepts refresh token from cookie or body {refresh_token}. Returns 204 even if token missing. Revokes the whole session (refresh token family), including a successor issued by a concurrent rotation. With a valid refresh token it also invalidates every access token of the user already issued, on every device: the other devices keep their refresh token and recover with a refresh. Push subscriptions are not touched.',
-        security: [],
-        responses: [new OA\Response(response: 204, description: 'Logged out')],
-    )]
     #[Route('/logout', name: 'logout', methods: ['POST'])]
-    public function logout(Request $request): JsonResponse
+    public function logout(): never
     {
-        // Rotta pubblica: il corpo può essere qualsiasi JSON (scalare, lista, refresh_token non stringa) e non deve dare 500.
-        $body = json_decode($request->getContent() ?: '{}', true);
-        $rawToken = $request->cookies->get(RefreshTokenService::COOKIE_NAME)
-            ?? (is_array($body) ? ($body['refresh_token'] ?? null) : null);
-
-        if (is_string($rawToken) && $rawToken !== '' && ($refresh = $this->refreshTokens->findValid($rawToken))) {
-            $this->refreshTokens->revoke($refresh);
-        }
-
-        $response = new JsonResponse(null, 204);
-        $response->headers->clearCookie(RefreshTokenService::COOKIE_NAME, '/api/auth');
-        return $response;
+        throw new BadRequestHttpException();
     }
 
     /**
-     * Cambia l'organization attiva: emette un nuovo JWT con `active_org_id` aggiornato e la stessa scadenza
-     * del token presentato. Il client deve sostituire il vecchio access token nello state e
-     * mantenere lo stesso refresh token (la sessione non cambia).
+     * Cambia l'organizzazione attiva della sessione corrente (le altre sessioni dell'utente restano sulla loro) e la
+     * ricorda come ultima scelta per le sessioni nuove.
      */
     #[OA\Post(
         summary: 'Switch active organization',
-        description: 'Issues a new JWT with the updated active_org_id claim and the same expiry as the presented token (it never extends the session: a fresh expiry comes only from a refresh or a credential). Refresh token unchanged.',
+        description: 'Changes the active organization of this session only and remembers it as the starting organization of the next sessions (e.g. after the browser is restarted).',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: SwitchOrgRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'New access_token + active_org_id'),
+            new OA\Response(response: 200, description: '{activeOrganizationId}'),
             new OA\Response(response: 403, description: 'auth.not_member (membership still pending)'),
             new OA\Response(response: 404, description: 'org.not_found (unknown id, or no relation with the organization)'),
         ],
     )]
     #[Route('/switch-org', name: 'switch_org', methods: ['POST'])]
-    public function switchOrg(Request $request, #[MapRequestPayload] SwitchOrgRequest $payload): JsonResponse
+    #[IsGranted('ROLE_USER')]
+    public function switchOrg(#[MapRequestPayload] SwitchOrgRequest $payload): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
@@ -385,39 +284,29 @@ final class AuthController extends AbstractController
             return $this->problem('auth.not_member', 403); // invito ancora in attesa
         }
 
-        $accessToken = $this->reissueAccessToken($user, $org->getId());
+        $this->activeOrganization->remember($user, $org);
 
-        // Ricorda l'org scelta sulla sessione, così un refresh non riporta alla prima org.
-        $rawRefresh = $request->cookies->get(RefreshTokenService::COOKIE_NAME) ?? $payload->refreshToken;
-        $refresh = $rawRefresh ? $this->refreshTokens->findValid($rawRefresh) : null;
-        if ($refresh !== null && $refresh->getUser()->getId() === $user->getId()) {
-            $this->refreshTokens->setActiveOrganization($refresh, (int) $org->getId());
-        }
-
-        return $this->json([
-            'access_token' => $accessToken,
-            'active_org_id' => $org->getId(),
-        ]);
+        return $this->json(['activeOrganizationId' => $org->getId()]);
     }
 
     #[OA\Get(
         summary: 'Current user profile + organization memberships',
+        description: 'How the SPA knows who is signed in. activeOrganizationId is the active organization of this session (null without an accepted membership).',
         responses: [
-            new OA\Response(response: 200, description: 'User + memberships array'),
-            new OA\Response(response: 401, description: 'auth.not_authenticated'),
+            new OA\Response(response: 200, description: 'User (with twoFactorEnabled, backupCodesRemaining) + activeOrganizationId + memberships array'),
+            new OA\Response(response: 401, description: 'http.401 (no session); auth.two_factor_required (two-step verification in progress)'),
         ],
     )]
     #[Route('/me', name: 'me', methods: ['GET'])]
+    #[IsGranted('ROLE_USER')]
     public function me(): JsonResponse
     {
-        /** @var User|null $user */
+        /** @var User $user */
         $user = $this->getUser();
-        if (!$user) {
-            return $this->problem('auth.not_authenticated', 401);
-        }
 
         return $this->json([
             ...$this->userPayload($user),
+            'activeOrganizationId' => $this->activeOrganization->tryResolve()?->getId(),
             'memberships' => array_map(static fn (OrganizationMember $m) => [
                 'id' => $m->getId(),
                 'role' => $m->getRole()->value,
@@ -432,13 +321,13 @@ final class AuthController extends AbstractController
 
     #[OA\Put(
         summary: 'Update current user profile (name, email, locale)',
-        description: 'Name and locale change at once. A different email (requires currentPassword) does not change the account email: it becomes `pendingEmail` and a confirmation link is sent to it; the change happens when the link is opened (POST /verify-email), which also ends every session of the user. The answer is the same whether or not the new address already has an account (the check runs at confirmation). At most 3 confirmation emails per 15 minutes per user (429 auth.too_many_attempts). Always returns an access_token with the same expiry as the presented one.',
+        description: 'Name and locale change at once. A different email (requires currentPassword) does not change the account email: it becomes `pendingEmail` and a confirmation link is sent to it; the change happens when the link is opened (POST /verify-email), which also ends every session of the user. The answer is the same whether or not the new address already has an account (the check runs at confirmation). At most 3 confirmation emails per 15 minutes per user (429 auth.too_many_attempts).',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: UpdateProfileRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'Updated user (with pendingEmail) + access_token'),
+            new OA\Response(response: 200, description: '{user} (with pendingEmail)'),
             new OA\Response(response: 400, description: 'auth.invalid_current_password'),
             new OA\Response(response: 422, description: 'validation_failed'),
             new OA\Response(response: 429, description: 'auth.too_many_attempts (confirmation emails)'),
@@ -446,7 +335,7 @@ final class AuthController extends AbstractController
     )]
     #[Route('/profile', name: 'update_profile', methods: ['PUT'])]
     #[IsGranted('ROLE_USER')]
-    public function updateProfile(Request $request, #[MapRequestPayload] UpdateProfileRequest $payload): JsonResponse
+    public function updateProfile(#[MapRequestPayload] UpdateProfileRequest $payload): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
@@ -482,23 +371,18 @@ final class AuthController extends AbstractController
             $this->sendEmailChangeConfirmation($user);
         }
 
-        // Il token presentato resta valido. La risposta riporta comunque un access_token (contratto del client), con
-        // l'org attiva e la stessa scadenza: un profile update non deve allungare la sessione.
-        return $this->json([
-            'access_token' => $this->reissueAccessToken($user, $this->activeOrganization->tryResolve()?->getId()),
-            'user' => $this->userPayload($user),
-        ]);
+        return $this->json(['user' => $this->userPayload($user)]);
     }
 
     #[OA\Put(
         summary: 'Change current user password',
-        description: 'Verifies currentPassword, then sets newPassword. Invalidates every access token and refresh token of the user (logs out other devices), deletes the push subscriptions and issues a fresh session for the current client, keeping the active organization.',
+        description: 'Verifies currentPassword, then sets newPassword. Every other session and remember-me cookie of the user stops working (other devices are signed out at their next request) and the push subscriptions are deleted. This session stays signed in with a new id and a new brumy_remember cookie, keeping the active organization.',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: new Model(type: ChangePasswordRequest::class)),
         ),
         responses: [
-            new OA\Response(response: 200, description: 'New access_token + rotated refresh'),
+            new OA\Response(response: 204, description: 'Password changed'),
             new OA\Response(response: 400, description: 'auth.invalid_current_password'),
             new OA\Response(response: 422, description: 'validation_failed'),
         ],
@@ -519,16 +403,15 @@ final class AuthController extends AbstractController
         $user->setPassword($this->passwordHasher->hashPassword($user, $payload->newPassword));
         $this->em->flush();
 
-        // Sicurezza: invalida tutte le sessioni esistenti, poi riapri quella corrente
-        // mantenendone l'org attiva (altrimenti si ricadrebbe sulla prima membership).
-        $activeOrgId = $this->activeOrganization->tryResolve()?->getId();
-        $this->endAllSessions($user);
+        // Le altre sessioni hanno l'impronta della vecchia password e cadono alla richiesta successiva, i cookie
+        // remember-me ne avevano la firma. Questa resta: il token in sessione porta l'utente aggiornato. Id di sessione
+        // nuovo (attributi conservati, org attiva compresa) e cookie remember-me nuovo, firmato con la password nuova.
+        $request->getSession()->migrate(true);
+        $this->rememberMe->clearRememberMeCookie();
+        $this->rememberMe->createRememberMeCookie($user);
+        $this->forgetDevices($user);
 
-        return $this->buildAuthResponse(
-            $user,
-            $this->resolveClientType($request),
-            existingRefresh: $this->refreshTokens->issue($user, $activeOrgId),
-        );
+        return new JsonResponse(null, 204);
     }
 
     #[OA\Post(
@@ -695,7 +578,7 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Reset password with a token from the email',
-        description: 'Consumes a valid (unexpired, unused) token, sets the new password, invalidates every access token and refresh token of the user and deletes the push subscriptions.',
+        description: 'Consumes a valid (unexpired, unused) token, sets the new password (every session and remember-me cookie of the user stops working) and deletes the push subscriptions.',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
@@ -730,15 +613,16 @@ final class AuthController extends AbstractController
         $user->markEmailVerified();
         $this->em->flush();
 
-        // Tutte le sessioni esistenti vanno invalidate dopo un reset.
-        $this->endAllSessions($user);
+        // Le sessioni esistenti cadono da sole (la password è cambiata); le push dei dispositivi vanno cancellate.
+        $this->forgetDevices($user);
+        $this->endCurrentSessionOf($user);
 
         return new JsonResponse(null, 204);
     }
 
     #[OA\Post(
         summary: 'Confirm email address with a token from the verification email',
-        description: 'Consumes a valid (unexpired, unused) token. With a pending email change it makes `pendingEmail` the account email (verified), invalidates reset tokens and ends every session of the user (access and refresh tokens, push subscriptions): `emailChanged: true`, log in again with the new address. If the address got an account in the meantime: 409 auth.email_taken and the pending change is dropped. Otherwise it marks the current email as verified (`emailChanged: false`).',
+        description: 'Consumes a valid (unexpired, unused) token. With a pending email change it makes `pendingEmail` the account email (verified), invalidates reset tokens and ends every session of the user (sessions, remember-me cookies, push subscriptions): `emailChanged: true`, log in again with the new address. If the address got an account in the meantime: 409 auth.email_taken and the pending change is dropped. Otherwise it marks the current email as verified (`emailChanged: false`).',
         security: [],
         requestBody: new OA\RequestBody(
             required: true,
@@ -786,7 +670,8 @@ final class AuthController extends AbstractController
             // Un link di reset già spedito al vecchio indirizzo non deve restare spendibile dopo il cambio; le
             // sessioni aperte (potenzialmente di chi aveva accesso prima) decadono.
             $this->resetTokenRepo->invalidateAllForUser($user);
-            $this->endAllSessions($user);
+            $this->forgetDevices($user);
+            $this->endCurrentSessionOf($user);
 
             return $this->json(['emailChanged' => true]);
         }
@@ -900,21 +785,19 @@ final class AuthController extends AbstractController
 
     #[OA\Post(
         summary: 'Register a new account from an invitation and accept it',
-        description: 'Public. Creates the user (email taken from the invitation, marked verified), a personal organization, and the accepted membership in the inviting org. Issues JWT.',
+        description: 'Public. Creates the user (email taken from the invitation, marked verified) and the accepted membership in the inviting org, then signs the user in (session + brumy_remember cookie).',
         security: [],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: new Model(type: RegisterInvitedRequest::class))),
         responses: [
-            new OA\Response(response: 201, description: 'User created + joined + JWT issued'),
+            new OA\Response(response: 201, description: '{user}; user created, joined and signed in'),
             new OA\Response(response: 400, description: 'invitation.invalid'),
             new OA\Response(response: 409, description: 'auth.email_taken (account exists → log in instead)'),
             new OA\Response(response: 422, description: 'validation_failed'),
         ],
     )]
     #[Route('/invitation/register', name: 'invitation_register', methods: ['POST'])]
-    public function registerInvited(
-        Request $request,
-        #[MapRequestPayload] RegisterInvitedRequest $payload,
-    ): JsonResponse {
+    public function registerInvited(#[MapRequestPayload] RegisterInvitedRequest $payload): JsonResponse
+    {
         if ($this->throttled($this->tokenActionsLimiter)) {
             return $this->problem('auth.too_many_attempts', 429);
         }
@@ -947,7 +830,7 @@ final class AuthController extends AbstractController
         // Niente org personale: l'invitato ENTRA nell'organizzazione che lo ha
         // invitato (modello family-sharing self-host) col ruolo dell'invito, non
         // ne possiede una propria. Resta quindi un'unica membership → l'org attiva
-        // (JWT active_org_id e display frontend) è sempre quella dell'invito.
+        // della sessione è sempre quella dell'invito.
         // Claim dell'invito, utente e membership in un'unica transazione: un invito non si usa due volte
         // e un errore a metà non lascia un utente senza organizzazione.
         try {
@@ -968,7 +851,7 @@ final class AuthController extends AbstractController
             return $this->problem('invitation.invalid', 400);
         }
 
-        return $this->buildAuthResponse($user, $this->resolveClientType($request), statusCode: 201);
+        return $this->signIn($user);
     }
 
     // ----- helpers -----
@@ -1060,7 +943,7 @@ final class AuthController extends AbstractController
     }
 
     /**
-     * @return array{id: int|null, email: string, pendingEmail: string|null, firstName: string, lastName: string, locale: string, hasAvatar: bool, emailVerified: bool}
+     * @return array{id: int|null, email: string, pendingEmail: string|null, firstName: string, lastName: string, locale: string, hasAvatar: bool, emailVerified: bool, isInstanceAdmin: bool, twoFactorEnabled: bool, backupCodesRemaining: int}
      */
     private function userPayload(User $user): array
     {
@@ -1079,101 +962,44 @@ final class AuthController extends AbstractController
             // basarsi (erroneamente) sul ruolo OWNER, che chiunque si registri
             // ottiene sulla propria org personale.
             'isInstanceAdmin' => $this->userRepo->isInstanceAdmin($user),
+            'twoFactorEnabled' => $user->isTotpAuthenticationEnabled(),
+            'backupCodesRemaining' => $user->backupCodesRemaining(),
         ];
     }
 
     /**
-     * Transizione di credenziali (reset/cambio password, cambio email): chiude ogni sessione dell'utente, refresh e
-     * access token, e cancella le push subscription di tutti i dispositivi. Chi aveva accesso prima non riceve più
-     * né dati né notifiche; il client corrente riceve una sessione nuova (con la `token_version` aggiornata) e
-     * ri-registra da solo la propria subscription. Le modifiche all'entity `User` vanno flushate prima.
+     * Transizione di credenziali (reset/cambio password, cambio email): cancella le push subscription di tutti i
+     * dispositivi, così chi aveva accesso prima non riceve più notifiche. Le sessioni e i cookie remember-me cadono da
+     * soli, perché password o email non coincidono più ({@see User::isEqualTo()}); il client corrente ri-registra la
+     * propria subscription.
      */
-    private function endAllSessions(User $user): void
+    private function forgetDevices(User $user): void
     {
-        $this->refreshTokens->revokeAllForUser($user);
         $this->pushSubscriptions->deleteAllForUser($user);
     }
 
     /**
-     * Riemette l'access token della richiesta (nuovo `active_org_id`) SENZA estenderne la durata: stesso `exp` del
-     * token presentato. Una scadenza nuova arriva solo da una sessione refresh o da una credenziale
-     * ({@see self::buildAuthResponse()}), altrimenti un access token rubato si rinnoverebbe da solo all'infinito.
-     * Se `exp` non è leggibile si rifiuta con 401: mai una scadenza nuova come ripiego.
+     * Reset della password e conferma del cambio email chiudono ogni sessione dell'utente. Le altre cadono da sole alla
+     * richiesta successiva; quella che fa la richiesta, se è dello stesso utente, porta già l'utente aggiornato e
+     * resterebbe valida: si chiude con il logout del firewall (sessione, cookie e serie remember-me).
      */
-    private function reissueAccessToken(User $user, ?int $activeOrgId): string
+    private function endCurrentSessionOf(User $user): void
     {
-        $token = $this->security->getToken();
-        $exp = null;
-        if ($token instanceof JWTPostAuthenticationToken) {
-            try {
-                $exp = $this->jwtManager->parse($token->getCredentials())['exp'] ?? null;
-            } catch (JWTDecodeFailureException) {
-                $exp = null;
-            }
+        $current = $this->getUser();
+        if ($current instanceof User && $current->getId() === $user->getId()) {
+            $this->security->logout(validateCsrfToken: false);
         }
-        if (!is_int($exp)) {
-            throw new UnauthorizedHttpException('Bearer');
-        }
-
-        $payload = ['exp' => $exp];
-        if ($activeOrgId !== null) {
-            $payload['active_org_id'] = $activeOrgId;
-        }
-
-        return $this->jwtManager->createFromPayload($user, $payload);
-    }
-
-    private function buildAuthResponse(
-        User $user,
-        string $clientType,
-        ?RefreshToken $existingRefresh = null,
-        int $statusCode = 200,
-    ): JsonResponse {
-        $refresh = $existingRefresh ?? $this->refreshTokens->issue($user);
-
-        // Sessione con org attiva già scelta (refresh): la manteniamo se l'utente è ancora membro.
-        $activeOrgId = $refresh->getActiveOrganizationId();
-        $activeOrg = $activeOrgId !== null ? $this->orgRepo->find($activeOrgId) : null;
-        $membership = $activeOrg !== null ? $this->memberRepo->findMembership($user, $activeOrg) : null;
-        $accessToken = $membership !== null && $membership->isAccepted()
-            ? $this->jwtManager->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $activeOrgId])
-            : $this->jwtManager->create($user);
-
-        $body = [
-            'access_token' => $accessToken,
-            'user' => $this->userPayload($user),
-        ];
-
-        if ($clientType === 'mobile') {
-            $body['refresh_token'] = $refresh->getPlainToken();
-            return new JsonResponse($body, $statusCode);
-        }
-
-        // Web: refresh nel cookie HttpOnly
-        $response = new JsonResponse($body, $statusCode);
-        $response->headers->setCookie(Cookie::create(
-            name: RefreshTokenService::COOKIE_NAME,
-            value: $refresh->getPlainToken(),
-            expire: $refresh->getExpiresAt(),
-            path: '/api/auth',
-            secure: $this->getParameter('kernel.environment') !== 'dev',
-            httpOnly: true,
-            sameSite: Cookie::SAMESITE_LAX,
-        ));
-        return $response;
     }
 
     /**
-     * True se l'IP ha già esaurito i tentativi, SENZA consumarne uno. Il limiter di login per solo IP
-     * conta i fallimenti (vedi {@see self::throttled()} nei rami di errore): tanti login riusciti
-     * dietro lo stesso NAT non devono bloccare nessuno.
+     * Apre la sessione per un utente appena registrato (registrazione del primo utente o da invito), come un login:
+     * id di sessione nuovo e cookie remember-me (always_remember_me).
      */
-    private function isBlocked(RateLimiterFactory $factory): bool
+    private function signIn(User $user): JsonResponse
     {
-        $ip = $this->requestStack->getCurrentRequest()?->getClientIp() ?? 'unknown';
+        $this->security->login($user, 'json_login', 'api', [new RememberMeBadge()]);
 
-        // consume(0) risulta sempre "accettato": si guarda quanti tentativi restano.
-        return $factory->create($ip)->consume(0)->getRemainingTokens() <= 0;
+        return new JsonResponse(['user' => $this->userPayload($user)], 201);
     }
 
     /** Consuma un tentativo per l'IP del client; true se con questo il limite è superato. */
@@ -1182,16 +1008,5 @@ final class AuthController extends AbstractController
         $ip = $this->requestStack->getCurrentRequest()?->getClientIp() ?? 'unknown';
 
         return !$factory->create($ip)->consume()->isAccepted();
-    }
-
-    private function resolveClientType(Request $request): string
-    {
-        $header = strtolower((string) $request->headers->get('X-Client-Type', 'web'));
-        return in_array($header, ['web', 'mobile'], true) ? $header : 'web';
-    }
-
-    private function loginLimiterKey(Request $request, string $email): string
-    {
-        return 'login-'.strtolower($email).'-'.$request->getClientIp();
     }
 }

@@ -19,7 +19,6 @@ use App\Tests\Factory\UserFactory;
 use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 /**
  * Un veicolo condiviso in sola lettura (share `viewer`) si può guardare e basta:
@@ -40,7 +39,7 @@ final class ReadOnlyShareTest extends ApiTestCase
         $this->vehicle = VehicleFactory::createOne(['organization' => $this->org]);
 
         $viewer = $this->memberWithShare(ShareRole::VIEWER);
-        $this->viewerToken = $this->tokenFor($viewer);
+        $this->viewerToken = $this->sessionFor($viewer);
     }
 
     public function testViewerCanReadEverythingOnTheSharedVehicle(): void
@@ -63,7 +62,7 @@ final class ReadOnlyShareTest extends ApiTestCase
             '/api/reminders?vehicleId='.$vid,
             '/api/reminders/'.$reminder->getId(),
         ] as $url) {
-            $this->jsonRequest('GET', $url, accessToken: $this->viewerToken);
+            $this->jsonRequest('GET', $url, session: $this->viewerToken);
             self::assertResponseIsSuccessful("GET $url deve funzionare per il viewer");
         }
     }
@@ -88,7 +87,7 @@ final class ReadOnlyShareTest extends ApiTestCase
             $body['vehicleId'] = (int) $body['vehicleId'];
         }
 
-        $this->jsonRequest($method, $url, $body === [] ? null : $body, accessToken: $this->viewerToken);
+        $this->jsonRequest($method, $url, $body === [] ? null : $body, session: $this->viewerToken);
 
         self::assertResponseStatusCodeSame(403, "$method $url deve essere vietato al viewer");
     }
@@ -147,20 +146,18 @@ final class ReadOnlyShareTest extends ApiTestCase
     public function testViewerCannotUploadOrDeleteAttachments(): void
     {
         // L'owner carica un allegato: il viewer può scaricarlo ma non cancellarlo né aggiungerne.
-        $server = ['HTTP_AUTHORIZATION' => 'Bearer '.$this->ownerToken, 'HTTP_X_CLIENT_TYPE' => 'mobile'];
+        $this->useSession($this->ownerToken);
         $this->client->request(
             'POST',
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $this->vehicle->getId()],
             files: ['file' => $this->makeUploadedFile('a.png', $this->pngBytes(), 'image/png')],
-            server: $server,
         );
         self::assertResponseStatusCodeSame(201);
         $attachmentId = $this->jsonBody()['id'];
 
-        $viewerServer = ['HTTP_AUTHORIZATION' => 'Bearer '.$this->viewerToken, 'HTTP_X_CLIENT_TYPE' => 'mobile'];
-
-        $this->client->request('GET', '/api/attachments/'.$attachmentId, server: $viewerServer);
+        $this->useSession($this->viewerToken);
+        $this->client->request('GET', '/api/attachments/'.$attachmentId);
         self::assertResponseIsSuccessful();
 
         $this->client->request(
@@ -168,11 +165,10 @@ final class ReadOnlyShareTest extends ApiTestCase
             '/api/attachments',
             parameters: ['entityType' => 'vehicle', 'entityId' => (string) $this->vehicle->getId()],
             files: ['file' => $this->makeUploadedFile('b.png', $this->pngBytes(), 'image/png')],
-            server: $viewerServer,
         );
         self::assertResponseStatusCodeSame(403);
 
-        $this->jsonRequest('DELETE', '/api/attachments/'.$attachmentId, accessToken: $this->viewerToken);
+        $this->jsonRequest('DELETE', '/api/attachments/'.$attachmentId, session: $this->viewerToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -190,18 +186,18 @@ final class ReadOnlyShareTest extends ApiTestCase
             'km' => 1,
             'type' => 'oil_change',
             'description' => 'Manomessa',
-        ], accessToken: $this->viewerToken);
+        ], session: $this->viewerToken);
         self::assertResponseStatusCodeSame(403);
 
-        $this->jsonRequest('GET', '/api/maintenances/'.$maintenance->getId(), accessToken: $this->ownerToken);
+        $this->jsonRequest('GET', '/api/maintenances/'.$maintenance->getId(), session: $this->ownerToken);
         self::assertSame('Originale', $this->jsonBody()['description']);
     }
 
     public function testLegacyEditorShareIsReadOnlyToo(): void
     {
-        $editorToken = $this->tokenFor($this->memberWithShare(ShareRole::EDITOR));
+        $editorToken = $this->sessionFor($this->memberWithShare(ShareRole::EDITOR));
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), accessToken: $editorToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$this->vehicle->getId(), session: $editorToken);
         self::assertResponseIsSuccessful();
         self::assertSame(['canEdit' => false, 'canDelete' => false, 'canShare' => false], $this->jsonBody()['permissions']);
 
@@ -211,16 +207,16 @@ final class ReadOnlyShareTest extends ApiTestCase
             'category' => 'parking',
             'description' => 'Parcheggio',
             'amount' => '5.00',
-        ], accessToken: $editorToken);
+        ], session: $editorToken);
         self::assertResponseStatusCodeSame(403, 'Una condivisione non aggiunge dati');
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$this->vehicle->getId().'/shares', ['userIds' => [1]], accessToken: $editorToken);
+        $this->jsonRequest('POST', '/api/vehicles/'.$this->vehicle->getId().'/shares', ['userIds' => [1]], session: $editorToken);
         self::assertResponseStatusCodeSame(403, 'Una condivisione non allarga né gestisce le condivisioni');
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$this->vehicle->getId(), accessToken: $editorToken);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$this->vehicle->getId(), session: $editorToken);
         self::assertResponseStatusCodeSame(403);
 
-        $this->jsonRequest('POST', '/api/vehicles/'.$this->vehicle->getId().'/archive', accessToken: $editorToken);
+        $this->jsonRequest('POST', '/api/vehicles/'.$this->vehicle->getId().'/archive', session: $editorToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -228,10 +224,10 @@ final class ReadOnlyShareTest extends ApiTestCase
     {
         $private = VehicleFactory::createOne(['organization' => $this->org]);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$private->getId(), accessToken: $this->viewerToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$private->getId(), session: $this->viewerToken);
         self::assertResponseStatusCodeSame(403);
 
-        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$private->getId(), accessToken: $this->viewerToken);
+        $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$private->getId(), session: $this->viewerToken);
         self::assertResponseStatusCodeSame(403);
 
         $this->jsonRequest('POST', '/api/expenses', [
@@ -240,7 +236,7 @@ final class ReadOnlyShareTest extends ApiTestCase
             'category' => 'parking',
             'description' => 'x',
             'amount' => '5.00',
-        ], accessToken: $this->viewerToken);
+        ], session: $this->viewerToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -253,11 +249,4 @@ final class ReadOnlyShareTest extends ApiTestCase
         return $user;
     }
 
-    private function tokenFor(User $user): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)->createFromPayload($user, [
-            'user_id' => $user->getId(),
-            'active_org_id' => $this->org->getId(),
-        ]);
-    }
 }

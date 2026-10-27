@@ -79,7 +79,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed();
 
-        $this->jsonRequest('GET', '/api/fuel-prices/status', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/status', session: $token);
 
         self::assertResponseIsSuccessful();
         self::assertSame(['enabled' => true, 'extractedOn' => '2026-10-25'], $this->jsonBody());
@@ -91,8 +91,8 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed(new \DateTimeImmutable('-2 days'));
 
-        $this->jsonRequest('GET', '/api/fuel-prices/status', accessToken: $token);
-        $this->jsonRequest('GET', '/api/fuel-prices/status', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/status', session: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/status', session: $token);
 
         $sent = $this->asyncTransport()->getSent();
         self::assertCount(1, $sent, 'al massimo un import in coda all\'ora');
@@ -104,7 +104,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed();
 
-        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=diesel', self::LAT, self::LNG), accessToken: $token);
+        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=diesel', self::LAT, self::LNG), session: $token);
 
         self::assertResponseIsSuccessful();
         $rows = $this->rows();
@@ -121,10 +121,10 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed();
 
-        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=hybrid', self::LAT, self::LNG), accessToken: $token);
+        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=hybrid', self::LAT, self::LNG), session: $token);
         self::assertSame('1.849', $this->rows()[0]['prices']['self']['price']);
 
-        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=electric', self::LAT, self::LNG), accessToken: $token);
+        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F&fuel=electric', self::LAT, self::LNG), session: $token);
         self::assertSame(['self' => null, 'served' => null], $this->rows()[0]['prices']);
     }
 
@@ -132,11 +132,11 @@ final class FuelPriceControllerTest extends ApiTestCase
     {
         [, , $token] = $this->createAuthenticatedUser();
 
-        $this->jsonRequest('GET', '/api/fuel-prices/nearby?lat=abc&lng=10', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/nearby?lat=abc&lng=10', session: $token);
         self::assertResponseStatusCodeSame(400);
         self::assertSame('fuel_prices.invalid_query', $this->jsonBody()['title']);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/nearby?lat=95&lng=10', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/nearby?lat=95&lng=10', session: $token);
         self::assertResponseStatusCodeSame(400);
     }
 
@@ -145,7 +145,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed();
 
-        $this->jsonRequest('GET', '/api/fuel-prices/search?q='.rawurlencode('emilia modena').'&fuel=gasoline', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/search?q='.rawurlencode('emilia modena').'&fuel=gasoline', session: $token);
 
         self::assertResponseIsSuccessful();
         $rows = $this->rows();
@@ -153,10 +153,10 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertNull($rows[0]['distanceKm']);
         self::assertSame('1.849', $rows[0]['prices']['self']['price']);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/search?q=100%25', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/search?q=100%25', session: $token);
         self::assertSame([], $this->jsonBody(), 'i caratteri jolly di LIKE si cercano alla lettera');
 
-        $this->jsonRequest('GET', '/api/fuel-prices/search?q=a', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/search?q=a', session: $token);
         self::assertResponseStatusCodeSame(400);
     }
 
@@ -165,11 +165,11 @@ final class FuelPriceControllerTest extends ApiTestCase
         [, , $token] = $this->createAuthenticatedUser();
         $this->seed();
 
-        $this->jsonRequest('GET', '/api/fuel-prices/stations/2?fuel=gasoline', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/stations/2?fuel=gasoline', session: $token);
         self::assertResponseIsSuccessful();
         self::assertSame('1.809', $this->jsonBody()['prices']['self']['price']);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/stations/99', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/stations/99', session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('fuel_prices.station_not_found', $this->jsonBody()['title']);
     }
@@ -187,10 +187,10 @@ final class FuelPriceControllerTest extends ApiTestCase
         // Letta all'avvio di ogni richiesta (il client riavvia il kernel): vale da qui in poi
         $_ENV['FUEL_PRICES_ENABLED'] = $_SERVER['FUEL_PRICES_ENABLED'] = '0';
 
-        $this->jsonRequest('GET', '/api/fuel-prices/status', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/status', session: $token);
         self::assertSame(['enabled' => false, 'extractedOn' => null], $this->jsonBody());
 
-        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F', self::LAT, self::LNG), accessToken: $token);
+        $this->jsonRequest('GET', sprintf('/api/fuel-prices/nearby?lat=%F&lng=%F', self::LAT, self::LNG), session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('fuel_prices.disabled', $this->jsonBody()['title']);
     }
@@ -205,7 +205,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertSame(1, $this->jsonBody()['fuelStationId']);
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         $row = array_values(array_filter($this->rows(), static fn (array $r): bool => $r['name'] === 'Q8 sotto casa'))[0];
         self::assertSame(1, $row['fuelStationId']);
 
@@ -237,9 +237,9 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertResponseStatusCodeSame(422);
         self::assertSame('user_value.not_a_station', $this->jsonBody()['errors'][0]['message']);
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         self::assertNotContains('Fantasma', array_column($this->rows(), 'name'), 'un collegamento rifiutato non crea la voce');
-        $this->jsonRequest('GET', '/api/values/shop', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/shop', session: $token);
         self::assertNotContains('Ricambi Bianchi', array_column($this->rows(), 'name'));
     }
 
@@ -294,7 +294,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertSame([['day' => '2026-10-25', 'price' => '1.729']], $this->historyOf(1, 'diesel'));
         self::assertSame([['day' => '2026-10-25', 'price' => '1.849']], $this->historyOf(1, 'gasoline'));
 
-        $this->jsonRequest('GET', '/api/values/station', accessToken: $token);
+        $this->jsonRequest('GET', '/api/values/station', session: $token);
         $row = array_values(array_filter($this->rows(), static fn (array $r): bool => $r['name'] === 'Q8 sotto casa'))[0];
         self::assertTrue($row['followsPrice']);
 
@@ -357,7 +357,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         // Il GPL del distributore 2 è solo al servito, come quasi ovunque
         $connection->insert('fuel_price_history', ['station_id' => 2, 'fuel' => 'lpg', 'is_self' => 0, 'price' => '0.749', 'day' => $today->format('Y-m-d')]);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=diesel', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=diesel', session: $token);
 
         self::assertResponseIsSuccessful();
         $rows = $this->rows();
@@ -372,17 +372,17 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertSame([['day' => $today->format('Y-m-d'), 'price' => '1.899']], $rows[1]['served']);
         self::assertSame(1, $rows[1]['fuelStationId']);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=lpg', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=lpg', session: $token);
         $rows = $this->rows();
         self::assertSame([], $rows[0]['self']);
         self::assertSame([['day' => $today->format('Y-m-d'), 'price' => '0.749']], $rows[0]['served']);
 
-        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=gasoline', accessToken: $token);
+        $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel=gasoline', session: $token);
         self::assertSame([[], []], array_column($this->rows(), 'self'));
         self::assertSame([[], []], array_column($this->rows(), 'served'));
 
         foreach (['', 'hybrid', 'electric', 'kerosene'] as $fuel) {
-            $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel='.$fuel, accessToken: $token);
+            $this->jsonRequest('GET', '/api/fuel-prices/followed?fuel='.$fuel, session: $token);
             self::assertResponseStatusCodeSame(400);
         }
     }
@@ -404,7 +404,7 @@ final class FuelPriceControllerTest extends ApiTestCase
             'fullTank' => true,
             'station' => 'Q8 · Via Emilia Est 1420, Modena',
             'fuelStationId' => 1,
-        ], accessToken: $token);
+        ], session: $token);
 
         self::assertResponseStatusCodeSame(201);
         $entry = static::getContainer()->get('doctrine')->getRepository(UserValue::class)

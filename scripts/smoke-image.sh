@@ -4,7 +4,7 @@
 #   scripts/smoke-image.sh <immagine>        es. scripts/smoke-image.sh brumy-smoke:local
 #
 # Perché esiste: la CI costruiva e pubblicava l'immagine senza mai avviarla, quindi un'estensione PHP
-# mancante, un entrypoint rotto, un Caddyfile sbagliato, le chiavi JWT che non si generano, le migrazioni
+# mancante, un entrypoint rotto, un Caddyfile sbagliato, le sessioni che non si salvano, le migrazioni
 # che falliscono o la SPA assente arrivavano fino a chi fa `docker compose pull`. Qui l'immagine parte
 # davvero, con un MariaDB usa-e-getta, e si guarda cosa serve a un deploy reale.
 #
@@ -48,7 +48,6 @@ APP="brumy-smoke-app-$SUFFIX"
 APP_DOC="brumy-smoke-doc-$SUFFIX"   # seconda istanza, con la documentazione API accesa (fase 7)
 DB_PASSWORD="$(random_hex 16)"
 APP_SECRET_VALUE="$(random_hex 32)"
-JWT_PASSPHRASE_VALUE="$(random_hex 32)"
 USER_EMAIL="smoke-$SUFFIX@example.test"
 USER_PASSWORD="$(random_hex 12)"
 
@@ -194,8 +193,7 @@ assert_eq "/app contiene solo l'applicazione (nessun tests, .git, frontend, node
 dev_tools="$(in_image 'for p in vendor/phpunit vendor/phpstan/phpstan vendor/bin/phpunit vendor/bin/phpstan public/frontend/node_modules; do [ -e "/app/$p" ] && echo "$p"; done; for b in composer git xdebug; do command -v "$b"; done; true')"
 assert_eq "nessuna dipendenza né strumento di sviluppo (phpunit, phpstan, composer, git, xdebug)" "" "$dev_tools"
 
-assert_eq "config/jwt vuota (nessuna chiave cotta nell'immagine)" "" "$(in_image 'ls -A /app/config/jwt')"
-assert_eq ".env senza segreti valorizzati" "" "$(in_image 'grep -E "^(APP_SECRET|JWT_PASSPHRASE|MARIADB_PASSWORD)=." /app/.env || true')"
+assert_eq ".env senza segreti valorizzati" "" "$(in_image 'grep -E "^(APP_SECRET|MARIADB_PASSWORD)=." /app/.env || true')"
 assert_eq "SPA presente (public/frontend/index.html)" "present" "$(in_image '[ -s /app/public/frontend/index.html ] && echo present || echo missing')"
 assert_eq "script di Scalar presenti (public/bundles/nelmioapidoc, per /api/doc)" "present" "$(in_image '[ -s /app/public/bundles/nelmioapidoc/scalar/scalar.standalone.js ] && echo present || echo missing')"
 assert_eq "mariadb-dump disponibile (backup)" "present" "$(in_image 'command -v mariadb-dump >/dev/null && echo present || echo missing')"
@@ -226,14 +224,12 @@ until docker exec "$DB" healthcheck.sh --connect --innodb_initialized >/dev/null
 done
 ok "MariaDB pronto"
 
-# Stesse variabili obbligatorie di compose.yml (APP_ENV, AUTO_MIGRATE, DOMAIN, APP_SECRET, JWT_PASSPHRASE,
-# DATABASE_URL). FRONTEND_URL/DEFAULT_URI/CORS_ALLOW_ORIGIN li ricava l'entrypoint da DOMAIN.
+# Stesse variabili obbligatorie di compose.yml (APP_ENV, AUTO_MIGRATE, DOMAIN, APP_SECRET, DATABASE_URL). FRONTEND_URL/DEFAULT_URI/CORS_ALLOW_ORIGIN li ricava l'entrypoint da DOMAIN.
 docker run -d --name "$APP" --network "$NET" --label brumy-smoke=1 \
     -e APP_ENV=prod \
     -e AUTO_MIGRATE=true \
     -e DOMAIN=brumy.smoke.test \
     -e APP_SECRET="$APP_SECRET_VALUE" \
-    -e JWT_PASSPHRASE="$JWT_PASSPHRASE_VALUE" \
     -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
     "$IMAGE" >/dev/null
 
@@ -330,40 +326,77 @@ for doc in /api/doc /api/doc.json; do
 done
 
 # ---------------------------------------------------------------------------------------------
-# 4. Chiavi JWT, migrazioni, database: registrazione del primo utente, login e /me
+# 4. Migrazioni, database, sessioni: registrazione del primo utente, login, /me, CSRF
 # ---------------------------------------------------------------------------------------------
 
-section "Primo avvio: migrazioni, chiavi JWT, registrazione e login"
+section "Primo avvio: migrazioni, registrazione, login a sessione e CSRF"
+
+# Le scritture devono venire dalla stessa origine (come fa il browser con la SPA): Sec-Fetch-Site.
+SAME_ORIGIN=(-H 'Sec-Fetch-Site: same-origin')
+
+# Valore del cookie <nome> dagli header di risposta (vuoto se assente). Il cookie si rimanda a mano con
+# -H "Cookie: ...": il cookie è Secure e qui si parla HTTP, curl non lo rimanderebbe da solo.
+set_cookie() {
+    awk -v n="$1" 'tolower($0) ~ /^set-cookie:/ { sub(/^[^:]*: */, ""); split($0, kv, ";"); split(kv[1], p, "="); if (p[1] == n) { print substr(kv[1], length(n) + 2); exit } }' <<<"$RESP_HEADERS"
+}
+set_cookie_line() {
+    awk -v n="$1" 'tolower($0) ~ /^set-cookie:/ { sub(/^[^:]*: */, ""); if (index($0, n "=") == 1) { print; exit } }' <<<"$RESP_HEADERS"
+}
 
 fetch http://127.0.0.1/api/auth/registration
 assert_contains "registrazione aperta su istanza vuota" "$RESP_BODY" '"open":true'
 
 credentials="{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\",\"firstName\":\"Smoke\",\"lastName\":\"Test\"}"
-fetch -X POST -H 'Content-Type: application/json' -H 'X-Client-Type: mobile' -d "$credentials" http://127.0.0.1/api/auth/register
+fetch -X POST -H 'Content-Type: application/json' "${SAME_ORIGIN[@]}" -d "$credentials" http://127.0.0.1/api/auth/register
 assert_eq "POST /api/auth/register -> 201" "201" "$RESP_STATUS"
-assert_contains "register: access_token nel corpo" "$RESP_BODY" '"access_token"'
+assert_not_contains "register: nessun token nel corpo" "$RESP_BODY" 'token'
+if [ -n "$(set_cookie brumy_session)" ]; then ok "register: apre la sessione (cookie brumy_session)"; else ko "register: cookie di sessione mancante"; fi
 
-fetch -X POST -H 'Content-Type: application/json' -H 'X-Client-Type: mobile' -d "$credentials" http://127.0.0.1/api/auth/login
+fetch -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" http://127.0.0.1/api/auth/login
+assert_eq "POST /api/auth/login senza origine -> 403 (CSRF)" "403" "$RESP_STATUS"
+assert_contains "403 CSRF: auth.csrf_invalid" "$RESP_BODY" '"title":"auth.csrf_invalid"'
+
+fetch -X POST -H 'Content-Type: application/json' -H 'Origin: https://evil.example' -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" http://127.0.0.1/api/auth/login
+assert_eq "POST /api/auth/login da un'altra origine -> 403" "403" "$RESP_STATUS"
+
+fetch -X POST -H 'Content-Type: application/json' "${SAME_ORIGIN[@]}" -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" http://127.0.0.1/api/auth/login
 assert_eq "POST /api/auth/login -> 200" "200" "$RESP_STATUS"
-ACCESS_TOKEN="$(json_field access_token "$RESP_BODY")"
-if [ -n "$ACCESS_TOKEN" ]; then ok "login: access_token firmato con le chiavi generate dall'entrypoint"; else ko "login: access_token mancante"; fi
+assert_contains "login: twoFactorRequired false" "$RESP_BODY" '"twoFactorRequired":false'
+SESSION_ID="$(set_cookie brumy_session)"
+session_cookie="$(set_cookie_line brumy_session)"
+remember_cookie="$(set_cookie_line brumy_remember)"
+if [ -n "$SESSION_ID" ]; then ok "login: cookie brumy_session"; else ko "login: cookie brumy_session mancante"; fi
+assert_contains "brumy_session HttpOnly" "$session_cookie" "httponly"
+assert_contains "brumy_session Secure" "$session_cookie" "secure"
+assert_contains "brumy_session SameSite=Lax" "$session_cookie" "samesite=lax"
+assert_contains "brumy_session path /api" "$session_cookie" "path=/api"
+assert_contains "login: cookie brumy_remember (7 giorni)" "$remember_cookie" "brumy_remember="
+assert_contains "brumy_remember HttpOnly" "$remember_cookie" "httponly"
+assert_contains "brumy_remember Secure" "$remember_cookie" "secure"
 
-fetch -H "Authorization: Bearer $ACCESS_TOKEN" http://127.0.0.1/api/auth/me
-assert_eq "GET /api/auth/me con il token -> 200" "200" "$RESP_STATUS"
+fetch -H "Cookie: brumy_session=$SESSION_ID" http://127.0.0.1/api/auth/me
+assert_eq "GET /api/auth/me con il cookie di sessione -> 200" "200" "$RESP_STATUS"
 assert_contains "/me: utente registrato" "$RESP_BODY" "$USER_EMAIL"
+assert_contains "/me: org attiva della sessione" "$RESP_BODY" '"activeOrganizationId":'
 
 fetch http://127.0.0.1/api/auth/me
-assert_eq "GET /api/auth/me senza token -> 401" "401" "$RESP_STATUS"
-assert_contains "401 in formato Problem Details" "$RESP_BODY" '"status":401'
+assert_eq "GET /api/auth/me senza sessione -> 401" "401" "$RESP_STATUS"
+assert_contains "401 in formato Problem Details" "$RESP_BODY" '"title":"http.401"'
+
+fetch -X POST -H 'Content-Type: application/json' "${SAME_ORIGIN[@]}" -H "Cookie: brumy_session=$SESSION_ID" -d '{}' http://127.0.0.1/api/auth/refresh
+assert_eq "POST /api/auth/refresh non esiste più -> 404" "404" "$RESP_STATUS"
 
 fetch http://127.0.0.1/api/auth/registration
 assert_contains "dopo il primo utente la registrazione si chiude" "$RESP_BODY" '"open":false'
 
 sql() { docker exec -e MYSQL_PWD="$DB_PASSWORD" "$DB" mariadb -uroot -N -B brumy -e "$1"; }
 tables="$(sql 'SHOW TABLES' || true)"
-for table in users organizations organization_members vehicles reminders messenger_messages doctrine_migration_versions; do
+for table in users organizations organization_members vehicles reminders messenger_messages doctrine_migration_versions sessions rememberme_token; do
     assert_contains "tabella $table creata dalle migrazioni" "$tables" "$table"
 done
+assert_not_contains "tabella refresh_tokens eliminata" "$tables" "refresh_tokens"
+sessions_rows="$(sql 'SELECT COUNT(*) FROM sessions' || echo 0)"
+if [ "${sessions_rows:-0}" -ge 1 ]; then ok "le sessioni sono salvate in MariaDB ($sessions_rows righe)"; else ko "nessuna riga in sessions dopo il login"; fi
 expected_migrations="$(in_image 'ls /app/migrations/Version*.php | wc -l' | tr -d ' ')"
 applied_migrations="$(sql 'SELECT COUNT(*) FROM doctrine_migration_versions' || echo '?')"
 assert_eq "tutte le migrazioni dell'immagine sono applicate" "$expected_migrations" "$applied_migrations"
@@ -381,15 +414,16 @@ assert_eq "il server gira come www-data (non root)" "www-data" "$server_user"
 
 # Gli stessi comandi che compose.yml affida a Ofelia e al worker, eseguiti come www-data
 commands="$(docker exec -u www-data "$APP" php bin/console list --raw 2>/dev/null || true)"
-for cmd in app:reminders:dispatch app:backup:create app:refresh-tokens:cleanup messenger:consume messenger:failed:retry; do
+for cmd in app:reminders:dispatch app:backup:create app:tokens:cleanup app:user:2fa-reset messenger:consume messenger:failed:retry; do
     assert_contains "comando $cmd registrato" "$commands" "$cmd"
 done
-if docker exec -u www-data "$APP" php bin/console app:refresh-tokens:cleanup --no-interaction >/dev/null 2>&1; then ok "app:refresh-tokens:cleanup eseguito"; else ko "app:refresh-tokens:cleanup fallito"; fi
+# Il vecchio nome resta come alias: un compose.yml non aggiornato lo lancia ancora.
+if docker exec -u www-data "$APP" php bin/console app:refresh-tokens:cleanup --no-interaction >/dev/null 2>&1; then ok "alias app:refresh-tokens:cleanup eseguito"; else ko "alias app:refresh-tokens:cleanup fallito"; fi
 if docker exec -u www-data "$APP" php bin/console app:reminders:dispatch --no-interaction >/dev/null 2>&1; then ok "app:reminders:dispatch eseguito"; else ko "app:reminders:dispatch fallito"; fi
 # Le righe esatte dei job Ofelia, lette da compose.yml: un'opzione inesistente o un comando che rifiuta
 # --no-interaction farebbero fallire il job a ogni esecuzione senza che nessuno se ne accorga.
 # Per messenger-retry, --time-limit=2 in coda sostituisce quello del job (vince l'ultimo): a coda vuota consume aspetta.
-for job in messenger-retry cache-prune; do
+for job in messenger-retry cache-prune tokens-cleanup; do
     job_cmd="$(sed -n "s/^ *ofelia\\.job-exec\\.$job\\.command: \"\\(.*\\)\"\$/\\1/p" "$(dirname "$0")/../compose.yml")"
     extra=""
     [ "$job" = "messenger-retry" ] && extra=" --time-limit=2"
@@ -409,16 +443,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 6. Riavvio: entrypoint idempotente (chiavi JWT e migrazioni già presenti)
+# 6. Riavvio: entrypoint idempotente (migrazioni già presenti), sessioni conservate in MariaDB
 # ---------------------------------------------------------------------------------------------
 
 section "Riavvio"
 
 docker restart "$APP" >/dev/null
 if wait_ready; then
-    ok "l'app riparte dopo un restart (migrazioni già applicate, chiavi esistenti)"
-    fetch -H "Authorization: Bearer $ACCESS_TOKEN" http://127.0.0.1/api/auth/me
-    assert_eq "il token emesso prima del restart è ancora valido (chiavi JWT conservate)" "200" "$RESP_STATUS"
+    ok "l'app riparte dopo un restart (migrazioni già applicate)"
+    fetch -H "Cookie: brumy_session=$SESSION_ID" http://127.0.0.1/api/auth/me
+    assert_eq "la sessione aperta prima del restart è ancora valida (sessioni in MariaDB)" "200" "$RESP_STATUS"
 else
     ko "l'app non riparte dopo il restart"
 fi
@@ -429,14 +463,15 @@ fi
 
 section "Documentazione API accesa (API_DOC_ENABLED=true)"
 
-# Stesso DB e stessa rete: le migrazioni sono già applicate e le chiavi JWT sono di questo container.
+# Stesso DB e stessa rete: le migrazioni sono già applicate. Con un JWT_PASSPHRASE rimasto nell'ambiente (il .env di
+# un'installazione precedente alle sessioni) l'avvio non deve rompersi: la variabile non è più letta.
 docker run -d --name "$APP_DOC" --network "$NET" --label brumy-smoke=1 \
     -e APP_ENV=prod \
     -e AUTO_MIGRATE=true \
     -e API_DOC_ENABLED=true \
     -e DOMAIN=brumy.smoke.test \
     -e APP_SECRET="$APP_SECRET_VALUE" \
-    -e JWT_PASSPHRASE="$JWT_PASSPHRASE_VALUE" \
+    -e JWT_PASSPHRASE=residuo-di-una-versione-precedente \
     -e "DATABASE_URL=mysql://root:${DB_PASSWORD}@${DB}:3306/brumy?serverVersion=mariadb-11.4.0&charset=utf8mb4" \
     "$IMAGE" >/dev/null
 

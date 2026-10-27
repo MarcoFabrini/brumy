@@ -35,7 +35,18 @@
       "password": "Password",
       "submit": "Sign in",
       "no_account": "No account yet?",
-      "register": "Sign up"
+      "register": "Sign up",
+      "two_factor": {
+        "title": "Two-step verification",
+        "description": "Enter the 6-digit code from your authenticator app",
+        "code": "Code",
+        "recovery_description": "Enter one of the recovery codes you saved",
+        "recovery_code": "Recovery code",
+        "use_recovery": "Use a recovery code",
+        "use_app": "Use the authenticator app",
+        "submit": "Verify",
+        "cancel": "Cancel and go back to sign in"
+      }
     },
     "register": {
       "title": "Create account",
@@ -383,6 +394,43 @@
       "invite_description": "They get an email with the link to join the organization."
     },
     "large_text": "Large text"
+  },
+  "security": {
+    "title": "Security",
+    "two_factor": {
+      "label": "Two-step verification",
+      "on": "On",
+      "off": "Off",
+      "setup_title": "Turn on two-step verification",
+      "scan": "Scan the QR code with an authenticator app (Google Authenticator, Authy, 1Password…)",
+      "qr_alt": "QR code for the authenticator app",
+      "manual_key": "Or enter this key manually",
+      "copy_key": "Copy the key",
+      "key_copied": "Key copied",
+      "open_app": "Open in the authenticator app",
+      "confirm_code": "Confirmation code",
+      "confirm_description": "Enter your password and the 6-digit code shown by the app",
+      "code": "App code or recovery code",
+      "enable": "Turn on",
+      "disable": "Turn off",
+      "enabled_toast": "Two-step verification turned on",
+      "disabled_toast": "Two-step verification turned off",
+      "disable_title": "Turn off two-step verification",
+      "disable_description": "Enter your password and a code from the app or a recovery code"
+    },
+    "backup_codes": {
+      "title": "Recovery codes",
+      "description": "Each one works once. Keep them somewhere safe: you won't see them again",
+      "remaining_one": "{{count}} code left",
+      "remaining_other": "{{count}} codes left",
+      "copy": "Copy",
+      "copied": "Codes copied",
+      "download": "Download",
+      "file_name": "brumy-recovery-codes.txt",
+      "regenerate": "Generate new codes",
+      "regenerate_description": "Your current codes will stop working",
+      "done": "I saved them"
+    }
   },
   "reminder": {
     "new": "New reminder",
@@ -768,15 +816,16 @@
       "invalid_reset_token": "The reset link is expired or invalid",
       "registration_closed": "Open registration is closed on this instance: ask the administrator for an invite",
       "try_again": "The server is busy, try again in a moment.",
-      "invalid_refresh_token": "Session expired, please sign in again",
       "invalid_verification_token": "The verification link is expired or invalid",
       "no_avatar": "There is no profile photo to remove",
       "not_authenticated": "Sign in to continue",
       "not_member": "You are not a member of this organization",
-      "refresh_token_required": "Session expired, please sign in again",
       "no_active_organization": "No active organization: sign in again or pick one",
       "organization_not_found": "Organization not found",
-      "not_member_of_organization": "You are no longer a member of this organization: sign in again"
+      "not_member_of_organization": "You are no longer a member of this organization: sign in again",
+      "invalid_two_factor_code": "Invalid code",
+      "two_factor_required": "Enter the verification code to finish signing in",
+      "csrf_invalid": "Request rejected for security reasons: reload the page and try again"
     },
     "access": {
       "org_admin_required": "Only organization admins can perform this action."
@@ -1004,6 +1053,14 @@
       "invalid_query": "Invalid fuel station search",
       "station_not_found": "Fuel station not found",
       "not_linked": "Link the entry to a fuel station first"
+    },
+    "two_factor": {
+      "already_enabled": "Two-step verification is already on",
+      "not_enabled": "Two-step verification is not on",
+      "setup_required": "Setup expired: start again",
+      "invalid_code": "Invalid code",
+      "code_format": "The code has 6 digits",
+      "recovery_code_format": "The recovery code has 12 characters"
     }
   },
   "account": {

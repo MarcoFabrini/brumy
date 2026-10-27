@@ -13,8 +13,8 @@ export async function unsubscribeThisDevice(): Promise<void> {
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
     try {
-      // Il refresh è consentito: l'access token dura 15 minuti e a logout scaduto la chiamata darebbe
-      // 401, lasciando viva la riga sul server (e il push al prossimo utente di questo dispositivo).
+      // Con la sessione ancora aperta: dopo il logout la chiamata darebbe 401, lasciando viva la riga sul server
+      // (e il push al prossimo utente di questo dispositivo).
       await authFetch<void>('/api/push-subscriptions/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

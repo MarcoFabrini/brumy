@@ -14,6 +14,7 @@ import {
 import i18n from '@/i18n';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
 import { authFetch } from '@/api/client';
+import { testMe, testUser } from '@/test/authFixtures';
 import { resyncThisDevice } from '@/lib/pushResync';
 
 vi.mock('@/api/client', () => ({ authFetch: vi.fn() }));
@@ -29,26 +30,14 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function userFixture(overrides: Partial<User> = {}): User {
-  return {
-    id: 1,
-    email: 'a@b.it',
-    firstName: 'A',
-    lastName: 'B',
-    locale: 'it',
-    hasAvatar: false,
-    emailVerified: true,
-    pendingEmail: null,
-    isInstanceAdmin: false,
-    memberships: [],
-    ...overrides,
-  };
+  return testUser({ email: 'a@b.it', firstName: 'A', lastName: 'B', memberships: [], ...overrides });
 }
 
 describe('useAccount mutations', () => {
   beforeEach(() => {
     mockedAuthFetch.mockReset();
     mockedResync.mockReset().mockResolvedValue(undefined);
-    useAuthStore.setState({ user: null });
+    useAuthStore.setState({ user: null, activeOrgId: null });
   });
 
   it('useVerifyEmail posts the token to the verify endpoint', async () => {
@@ -66,7 +55,7 @@ describe('useAccount mutations', () => {
   });
 
   it('useVerifyEmail chiude la sessione locale quando il link confermava un cambio email', async () => {
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok-vecchio', user: userFixture() });
+    useAuthStore.setState({ status: 'authenticated', user: userFixture(), activeOrgId: 3 });
     mockedAuthFetch.mockResolvedValue({ emailChanged: true });
     const { result } = renderHook(() => useVerifyEmail(), { wrapper });
 
@@ -74,7 +63,7 @@ describe('useAccount mutations', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(useAuthStore.getState().status).toBe('unauthenticated');
-    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
     expect(mockedAuthFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -101,10 +90,11 @@ describe('useAccount mutations', () => {
   });
 
   it('useAcceptInvitation accepts then reloads /me into the store', async () => {
-    const me = userFixture();
+    useAuthStore.setState({ status: 'authenticated', user: userFixture(), activeOrgId: 3 });
+    const me = testMe({ email: 'a@b.it', activeOrganizationId: 7 });
     mockedAuthFetch
       .mockResolvedValueOnce({ status: 'ok', organizationId: 7 })
-      .mockResolvedValueOnce({ access_token: 'token-org-7' })
+      .mockResolvedValueOnce({ activeOrganizationId: 7 })
       .mockResolvedValueOnce(me);
     const { result } = renderHook(() => useAcceptInvitation(), { wrapper });
 
@@ -122,19 +112,20 @@ describe('useAccount mutations', () => {
       '/api/auth/switch-org',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 7 }) }),
     );
-    expect(mockedAuthFetch).toHaveBeenNthCalledWith(3, '/api/auth/me');
-    expect(useAuthStore.getState().accessToken).toBe('token-org-7');
-    expect(useAuthStore.getState().user).toBe(me);
+    expect(mockedAuthFetch).toHaveBeenNthCalledWith(3, '/api/auth/me', expect.anything());
+    expect(useAuthStore.getState().activeOrgId).toBe(7);
+    expect(useAuthStore.getState().user).toMatchObject({ email: 'a@b.it', memberships: me.memberships });
   });
 
   it("useAcceptInvitation svuota la cache della vecchia organizzazione ma tiene l'anteprima dell'invito", async () => {
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     qc.setQueryData(['invitation', 'inv-1'], { organizationName: 'Officina' });
     qc.setQueryData(['vehicles', 'list'], [{ id: 1 }]);
+    useAuthStore.setState({ status: 'authenticated', user: userFixture(), activeOrgId: 3 });
     mockedAuthFetch
       .mockResolvedValueOnce({ organizationId: 7 })
-      .mockResolvedValueOnce({ access_token: 'token-org-7' })
-      .mockResolvedValueOnce({ id: 1 });
+      .mockResolvedValueOnce({ activeOrganizationId: 7 })
+      .mockResolvedValueOnce(testMe({ activeOrganizationId: 7 }));
     const { result } = renderHook(() => useAcceptInvitation(), {
       wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
     });
@@ -160,8 +151,8 @@ describe('useAccount mutations', () => {
   ])('useRegisterInvited con UI in %s invia locale %s e non cambia la lingua', async (language, expected) => {
     await i18n.changeLanguage(language);
     mockedAuthFetch.mockImplementation(async (path) => {
-      if (path === '/api/auth/invitation/register') return { access_token: 'tok' };
-      if (path === '/api/auth/me') return { id: 1, locale: expected, memberships: [] };
+      if (path === '/api/auth/invitation/register') return { user: {} };
+      if (path === '/api/auth/me') return testMe({ locale: expected === 'en' ? 'en' : 'it' });
       throw new Error(`unexpected fetch ${path}`);
     });
     const { result } = renderHook(() => useRegisterInvited(), { wrapper });
@@ -172,24 +163,23 @@ describe('useAccount mutations', () => {
     const body = JSON.parse(String(mockedAuthFetch.mock.calls[0]?.[1]?.body)) as { locale: string };
     expect(body.locale).toBe(expected);
     expect(i18n.language.startsWith(language)).toBe(true);
+    // Il backend ha aperto la sessione: si entra con l'utente e l'org di /me
+    expect(useAuthStore.getState().status).toBe('authenticated');
+    expect(useAuthStore.getState().activeOrgId).toBe(10);
   });
   describe('ri-registrazione della subscription push dopo una transizione di credenziali', () => {
     const storeUser = userFixture({ email: 'anna@test.it', firstName: 'Anna' });
     const profile = (email: string) => ({ email, firstName: 'Anna', lastName: 'Rossi', locale: 'it' as const });
 
-    it('useChangePassword la chiede dopo il successo, col nuovo access token già nello store', async () => {
-      let tokenAtResync: string | null = null;
-      mockedResync.mockImplementation(async () => {
-        tokenAtResync = useAuthStore.getState().accessToken;
-      });
-      mockedAuthFetch.mockResolvedValue({ access_token: 'tok-dopo-cambio', user: {} });
+    it('useChangePassword la chiede dopo il successo (204: la sessione resta questa)', async () => {
+      mockedAuthFetch.mockResolvedValue(undefined);
       const { result } = renderHook(() => useChangePassword(), { wrapper });
 
       result.current.mutate({ currentPassword: 'vecchia-123', newPassword: 'nuova-12345' });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(mockedResync).toHaveBeenCalledTimes(1);
-      expect(tokenAtResync).toBe('tok-dopo-cambio');
+      expect(mockedAuthFetch).toHaveBeenCalledWith('/api/auth/password', expect.objectContaining({ method: 'PUT' }));
     });
 
     it('useChangePassword non la chiede se il cambio fallisce', async () => {
@@ -205,8 +195,8 @@ describe('useAccount mutations', () => {
     it("useUpdateProfile non la chiede alla richiesta di cambio email: la sessione non cambia finché il link non viene aperto", async () => {
       useAuthStore.setState({ user: storeUser });
       mockedAuthFetch.mockImplementation(async (path) => {
-        if (path === '/api/auth/profile') return { access_token: 'tok-stessa-scadenza', user: { email: 'anna@test.it', pendingEmail: 'nuova@test.it' } };
-        if (path === '/api/auth/me') return { id: 1, email: 'anna@test.it', pendingEmail: 'nuova@test.it', locale: 'it', memberships: [] };
+        if (path === '/api/auth/profile') return { user: { email: 'anna@test.it', pendingEmail: 'nuova@test.it' } };
+        if (path === '/api/auth/me') return testMe({ email: 'anna@test.it', pendingEmail: 'nuova@test.it' });
         throw new Error(`unexpected fetch ${path}`);
       });
       const { result } = renderHook(() => useUpdateProfile(), { wrapper });
@@ -221,8 +211,8 @@ describe('useAccount mutations', () => {
     it("useUpdateProfile non la chiede se l'email non cambia", async () => {
       useAuthStore.setState({ user: storeUser });
       mockedAuthFetch.mockImplementation(async (path) => {
-        if (path === '/api/auth/profile') return { access_token: 'tok-stessa-scadenza', user: { email: 'anna@test.it' } };
-        if (path === '/api/auth/me') return { id: 1, email: 'anna@test.it', locale: 'it', memberships: [] };
+        if (path === '/api/auth/profile') return { user: { email: 'anna@test.it' } };
+        if (path === '/api/auth/me') return testMe({ email: 'anna@test.it', firstName: 'Anna' });
         throw new Error(`unexpected fetch ${path}`);
       });
       const { result } = renderHook(() => useUpdateProfile(), { wrapper });
@@ -230,7 +220,7 @@ describe('useAccount mutations', () => {
       result.current.mutate(profile('anna@test.it'));
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(useAuthStore.getState().accessToken).toBe('tok-stessa-scadenza');
+      expect(useAuthStore.getState().user?.firstName).toBe('Anna');
       expect(mockedResync).not.toHaveBeenCalled();
     });
   });

@@ -13,7 +13,6 @@ use App\Tests\Factory\VehicleFactory;
 use App\Tests\Factory\VehicleShareFactory;
 use App\Tests\Support\ApiTestCase;
 use Doctrine\DBAL\Connection;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 /**
  * Revoca di una condivisione: dev'essere effettiva (chi la perde non vede più il veicolo) e legata al
@@ -29,17 +28,17 @@ final class VehicleShareRevocationTest extends ApiTestCase
         $viewer = UserFactory::createOne();
         OrganizationMemberFactory::createOne(['organization' => $org, 'user' => $viewer, 'role' => OrgRole::MEMBER]);
         $share = VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $viewer]);
-        $viewerToken = $this->tokenFor($viewer, $org);
+        $viewerToken = $this->sessionFor($viewer, $org);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $viewerToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $viewerToken);
         self::assertResponseIsSuccessful();
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$share->getId(), accessToken: $ownerToken);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$share->getId(), session: $ownerToken);
         self::assertResponseStatusCodeSame(204);
 
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), accessToken: $viewerToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId(), session: $viewerToken);
         self::assertResponseStatusCodeSame(403, 'Con lo stesso token il veicolo non è più raggiungibile');
-        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', accessToken: $viewerToken);
+        $this->jsonRequest('GET', '/api/vehicles/'.$vehicle->getId().'/stats', session: $viewerToken);
         self::assertResponseStatusCodeSame(403);
     }
 
@@ -51,7 +50,7 @@ final class VehicleShareRevocationTest extends ApiTestCase
         $someoneElsesVehicle = VehicleFactory::createOne(['organization' => $org]);
         $foreignShare = VehicleShareFactory::createOne(['vehicle' => $someoneElsesVehicle]);
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$mine->getId().'/shares/'.$foreignShare->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$mine->getId().'/shares/'.$foreignShare->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame('share.not_found', $this->jsonBody()['title']);
@@ -65,7 +64,7 @@ final class VehicleShareRevocationTest extends ApiTestCase
         VehicleShareFactory::createOne(['vehicle' => $vehicle, 'user' => $viewer]);
         $other = VehicleShareFactory::createOne(['vehicle' => $vehicle]);
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$other->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$other->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(403);
         self::assertSame(1, (int) static::getContainer()->get(Connection::class)->fetchOne('SELECT COUNT(*) FROM vehicle_shares WHERE id = ?', [$other->getId()]));
@@ -78,15 +77,10 @@ final class VehicleShareRevocationTest extends ApiTestCase
         $vehicle = VehicleFactory::createOne(['organization' => $otherOrg]);
         $share = VehicleShareFactory::createOne(['vehicle' => $vehicle]);
 
-        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$share->getId(), accessToken: $token);
+        $this->jsonRequest('DELETE', '/api/vehicles/'.$vehicle->getId().'/shares/'.$share->getId(), session: $token);
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame(1, (int) static::getContainer()->get(Connection::class)->fetchOne('SELECT COUNT(*) FROM vehicle_shares WHERE id = ?', [$share->getId()]));
     }
 
-    private function tokenFor(User $user, Organization $org): string
-    {
-        return static::getContainer()->get(JWTTokenManagerInterface::class)
-            ->createFromPayload($user, ['user_id' => $user->getId(), 'active_org_id' => $org->getId()]);
-    }
 }

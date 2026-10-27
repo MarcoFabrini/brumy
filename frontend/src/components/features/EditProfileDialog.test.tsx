@@ -25,6 +25,8 @@ const baseUser: User = {
   emailVerified: true,
   pendingEmail: null,
   isInstanceAdmin: false,
+  twoFactorEnabled: false,
+  backupCodesRemaining: 0,
   memberships: [],
 };
 
@@ -56,7 +58,7 @@ describe('EditProfileDialog', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
     await i18n.changeLanguage('it');
-    useAuthStore.setState({ status: 'authenticated', accessToken: 'tok', user: baseUser });
+    useAuthStore.setState({ status: 'authenticated', activeOrgId: 1, user: baseUser });
   });
 
   it("caricare la foto non cancella il nome digitato e non ancora salvato", async () => {
@@ -119,8 +121,8 @@ describe('EditProfileDialog', () => {
 
   it("salvare una nuova email la lascia in attesa: l'email dell'account non cambia", async () => {
     mockedAuthFetch.mockImplementation(async (path) => {
-      if (path === '/api/auth/profile') return { access_token: 'tok-stessa-scadenza', user: { ...baseUser, pendingEmail: 'nuova@test.it' } };
-      if (path === '/api/auth/me') return { ...baseUser, pendingEmail: 'nuova@test.it' };
+      if (path === '/api/auth/profile') return { user: { ...baseUser, pendingEmail: 'nuova@test.it' } };
+      if (path === '/api/auth/me') return { ...baseUser, pendingEmail: 'nuova@test.it', activeOrganizationId: null };
       throw new Error(`unexpected fetch ${String(path)}`);
     });
     const user = userEvent.setup();

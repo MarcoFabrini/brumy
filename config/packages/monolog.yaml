@@ -40,13 +40,14 @@ when@prod:
             # stdout JSON formatter — log aggregator-friendly (#3.4).
             # Output: { "datetime": "...", "level_name": "ERROR", "message": "...", "context": {...}, "extra": {...} }
             # Docker raccoglie da stdout → driver (json-file, fluentd, gelf, ecc).
-            # Eventi di sicurezza (es. riuso di un refresh token): un warning da solo non farebbe scattare il
-            # fingers_crossed di `main` (solo da error in su), quindi andrebbe perso. Questo handler li scrive
-            # sempre e subito, e `main` li esclude per non duplicarli.
+            # Eventi di sicurezza (riuso di un cookie remember-me, attivazione/disattivazione della verifica in due
+            # passaggi, reset da comando): un notice o un warning da soli non farebbero scattare il fingers_crossed di
+            # `main` (solo da error in su), quindi andrebbero persi. Questo handler li scrive sempre e subito, e
+            # `main` li esclude per non duplicarli.
             security:
                 type: stream
                 path: "php://stdout"
-                level: warning
+                level: notice
                 channels: [security]
                 formatter: monolog.formatter.json
             main:

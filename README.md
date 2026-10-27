@@ -55,7 +55,7 @@ curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
 curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/.env
 ```
 
-Open `.env`, set `DOMAIN` and generate the 3 secrets (DB password, `APP_SECRET`, `JWT_PASSPHRASE`):
+Open `.env`, set `DOMAIN` and generate the 2 secrets (DB password, `APP_SECRET`):
 
 ```bash
 openssl rand -hex 32
@@ -111,6 +111,15 @@ docker compose pull && docker compose up -d
 
 DB migrations run automatically on startup, so an update can change the schema: take a backup first. To stay on a known version set `BRUMY_TAG` in `.env` to a release without the `v` (e.g. `0.1.2`, or `0.1` for its latest patch) instead of the default `latest`, which follows the newest release.
 
+#### Upgrading to sessions and two-step verification
+
+From this release sign-in uses server sessions instead of JWT tokens, and every user can turn on two-step verification (authenticator app + recovery codes) in Profile › Security.
+
+- After the update **everyone signs in once more**: the old tokens are not valid any longer.
+- `./brumy/jwt` and `JWT_PASSPHRASE` in `.env` are no longer used and can be deleted. Downloading the new `compose.yml` is recommended (it drops the JWT variable and the `./brumy/jwt` volume), but the old one keeps working.
+- Changing `APP_SECRET` signs everyone out and makes the stored two-step verification secrets unreadable: the users who had it on can still sign in with a recovery code, or the admin turns it off with `docker compose exec -u www-data api php bin/console app:user:2fa-reset <email> --confirm`. The same command helps a user who lost both phone and recovery codes.
+- Behind a reverse proxy, `TRUSTED_PROXIES` and the `X-Forwarded-*` headers must be right: writes are accepted only from the same origin as the API (see `SECURITY.md`).
+
 <!-- TEMPORARY: guide for installs created before the rename to Brumy. Remove it in a later release. -->
 #### Upgrading an install created before the rename (temporary)
 
@@ -141,7 +150,7 @@ docker compose pull && docker compose up -d
 docker compose ps && docker compose logs --tail 50 api
 ```
 
-Before step 5, check your reverse proxy: the Docker network is now called `brumy`, so anything attached to the old network name must be updated. After the update, reinstall the PWA on your phone (new name) and expect the saved theme to reset once. Sessions stay valid because the JWT keys move with the folder.
+Before step 5, check your reverse proxy: the Docker network is now called `brumy`, so anything attached to the old network name must be updated. After the update, reinstall the PWA on your phone (new name) and expect the saved theme to reset once. Sessions stay valid: they live in the database, which moves with the folder.
 
 Once everything works, remove `./brumy/db.pre-rename`, `.env.pre-rename`, `.env.old` and `compose.yml.old`.
 
@@ -158,7 +167,7 @@ If you run the script from an older copy and it stops with `Permission denied` o
 
 ### Backup
 
-Data (DB, attachments, JWT keys) lives in `./brumy/`, but **don't copy `./brumy/db` while the stack is running**: a live copy of a database directory can be inconsistent. A nightly job writes a DB dump (`db-<date>.sql.gz`) and an uploads archive (`uploads-<date>.tar.gz`) to `./brumy/backups` (readable only by the app user): copy those, plus your `.env`, to another machine. The backups contain the database and the attachments only, **not the JWT keys** (see Restore). To copy the whole folder, stop the stack first (`docker compose down`).
+Data (DB, attachments) lives in `./brumy/`, but **don't copy `./brumy/db` while the stack is running**: a live copy of a database directory can be inconsistent. A nightly job writes a DB dump (`db-<date>.sql.gz`) and an uploads archive (`uploads-<date>.tar.gz`) to `./brumy/backups` (readable only by the app user): copy those, plus your `.env`, to another machine. The backups contain the database (sessions included) and the attachments. To copy the whole folder, stop the stack first (`docker compose down`).
 
 To take a backup by hand, run it as the app user (`-u www-data`), otherwise the files end up owned by root:
 
@@ -168,7 +177,7 @@ docker compose exec -u www-data api php bin/console app:backup:create
 
 ### Restore
 
-You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `uploads-<date>.tar.gz`) from `./brumy/backups`, and the **same `.env`** as the instance that produced them. Keep the same `APP_SECRET`: the Web Push (VAPID) private key is stored encrypted with a key derived from it, so with a different `APP_SECRET` the push settings can no longer be decrypted.
+You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `uploads-<date>.tar.gz`) from `./brumy/backups`, and the **same `.env`** as the instance that produced them. Keep the same `APP_SECRET`: the Web Push (VAPID) private key and the two-step verification secrets are stored encrypted with a key derived from it, so with a different `APP_SECRET` they can no longer be decrypted (and everyone is signed out).
 
 1. Put `compose.yml`, `.env` and the backup files in `./brumy/backups/` on the target machine. On an existing install stop the app, leaving the database up; on a new machine just start the database:
 
@@ -196,7 +205,7 @@ You need the `db-<date>.sql.gz` (and, if you have attachments, the matching `upl
    docker compose up -d
    ```
 
-The JWT keys are **not** in the backups: if `./brumy/jwt` is empty the app generates a new pair at startup, which signs out every user (they just log in again). Migrations run on startup, so restoring a dump from an older version and then pulling a newer image works.
+Migrations run on startup, so restoring a dump from an older version and then pulling a newer image works.
 
 ### Settings worth knowing
 
@@ -272,7 +281,7 @@ curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/compose.yml
 curl -O https://raw.githubusercontent.com/MarcoFabrini/brumy/main/.env
 ```
 
-Apri `.env`, imposta `DOMAIN` e genera i 3 secret (password DB, `APP_SECRET`, `JWT_PASSPHRASE`):
+Apri `.env`, imposta `DOMAIN` e genera i 2 secret (password DB, `APP_SECRET`):
 
 ```bash
 openssl rand -hex 32
@@ -328,6 +337,15 @@ docker compose pull && docker compose up -d
 
 Le migrazioni DB girano da sole all'avvio, quindi un aggiornamento può cambiare lo schema: fai prima un backup. Per restare su una versione precisa imposta `BRUMY_TAG` in `.env` a una release senza la `v` (es. `0.1.2`, oppure `0.1` per la sua ultima patch) invece del default `latest`, che segue l'ultima release.
 
+#### Aggiornare alle sessioni e alla verifica in due passaggi
+
+Da questa release l'accesso usa sessioni sul server al posto dei token JWT, e ogni utente può attivare la verifica in due passaggi (app di autenticazione + codici di recupero) da Profilo › Sicurezza.
+
+- Dopo l'aggiornamento **tutti rifanno il login una volta**: i vecchi token non valgono più.
+- `./brumy/jwt` e `JWT_PASSPHRASE` nel `.env` non servono più e si possono cancellare. Conviene riscaricare `compose.yml` (toglie la variabile JWT e il volume `./brumy/jwt`), ma quello vecchio continua a funzionare.
+- Cambiare `APP_SECRET` disconnette tutti e rende illeggibili i segreti della verifica in due passaggi: chi l'aveva attiva entra con un codice di recupero, oppure l'amministratore la spegne con `docker compose exec -u www-data api php bin/console app:user:2fa-reset <email> --confirm`. Lo stesso comando serve a chi ha perso telefono e codici di recupero.
+- Dietro un reverse proxy `TRUSTED_PROXIES` e gli header `X-Forwarded-*` devono essere corretti: le scritture si accettano solo dalla stessa origine dell'API (vedi `SECURITY.md`).
+
 <!-- TEMPORANEA: guida per le installazioni create prima del rename in Brumy. Da togliere in un rilascio successivo. -->
 #### Aggiornare un'installazione creata prima del rename (temporanea)
 
@@ -358,7 +376,7 @@ docker compose pull && docker compose up -d
 docker compose ps && docker compose logs --tail 50 api
 ```
 
-Prima del passo 5 controlla il reverse proxy: la rete Docker ora si chiama `brumy`, quindi ciò che è collegato al vecchio nome va aggiornato. Dopo l'aggiornamento reinstalla la PWA sul telefono (nome nuovo) e aspettati che il tema salvato si azzeri una volta. Le sessioni restano valide perché le chiavi JWT si spostano con la cartella.
+Prima del passo 5 controlla il reverse proxy: la rete Docker ora si chiama `brumy`, quindi ciò che è collegato al vecchio nome va aggiornato. Dopo l'aggiornamento reinstalla la PWA sul telefono (nome nuovo) e aspettati che il tema salvato si azzeri una volta. Le sessioni restano valide: stanno nel database, che si sposta con la cartella.
 
 Quando tutto funziona, elimina `./brumy/db.pre-rename`, `.env.pre-rename`, `.env.old` e `compose.yml.old`.
 
@@ -375,7 +393,7 @@ Se lanci lo script da una copia più vecchia e si ferma con `Permission denied` 
 
 ### Backup
 
-I dati (DB, allegati, chiavi JWT) sono in `./brumy/`, ma **non copiare `./brumy/db` a stack acceso**: la copia a caldo di una cartella di database può essere incoerente. Un job notturno scrive un dump del DB (`db-<data>.sql.gz`) e un archivio degli upload (`uploads-<data>.tar.gz`) in `./brumy/backups` (leggibile solo dall'utente dell'app): copia quelli, più il tuo `.env`, su un'altra macchina. I backup contengono solo database e allegati, **non le chiavi JWT** (vedi Ripristino). Per copiare l'intera cartella ferma prima lo stack (`docker compose down`).
+I dati (DB, allegati) sono in `./brumy/`, ma **non copiare `./brumy/db` a stack acceso**: la copia a caldo di una cartella di database può essere incoerente. Un job notturno scrive un dump del DB (`db-<data>.sql.gz`) e un archivio degli upload (`uploads-<data>.tar.gz`) in `./brumy/backups` (leggibile solo dall'utente dell'app): copia quelli, più il tuo `.env`, su un'altra macchina. I backup contengono database (sessioni comprese) e allegati. Per copiare l'intera cartella ferma prima lo stack (`docker compose down`).
 
 Per fare un backup a mano eseguilo come utente dell'app (`-u www-data`), altrimenti i file risultano di proprietà di root:
 
@@ -385,7 +403,7 @@ docker compose exec -u www-data api php bin/console app:backup:create
 
 ### Ripristino
 
-Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.tar.gz`) di `./brumy/backups` e lo **stesso `.env`** dell'istanza che li ha prodotti. Mantieni lo stesso `APP_SECRET`: la chiave privata VAPID del Web Push è salvata cifrata con una chiave derivata da quello, quindi con un `APP_SECRET` diverso le impostazioni push non sono più decifrabili.
+Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.tar.gz`) di `./brumy/backups` e lo **stesso `.env`** dell'istanza che li ha prodotti. Mantieni lo stesso `APP_SECRET`: la chiave privata VAPID del Web Push e i segreti della verifica in due passaggi sono salvati cifrati con una chiave derivata da quello, quindi con un `APP_SECRET` diverso non sono più decifrabili (e tutti vengono disconnessi).
 
 1. Metti `compose.yml`, `.env` e i file di backup in `./brumy/backups/` sulla macchina di destinazione. Su un'installazione esistente ferma l'app lasciando acceso il database; su una macchina nuova avvia solo il database:
 
@@ -413,7 +431,7 @@ Servono il `db-<data>.sql.gz` (e, se hai allegati, il relativo `uploads-<data>.t
    docker compose up -d
    ```
 
-Le chiavi JWT **non** sono nei backup: se `./brumy/jwt` è vuota l'app ne genera una nuova coppia all'avvio e tutti gli utenti vengono disconnessi (basta rifare il login). Le migrazioni girano all'avvio, quindi si può ripristinare un dump di una versione precedente e poi scaricare un'immagine più recente.
+Le migrazioni girano all'avvio, quindi si può ripristinare un dump di una versione precedente e poi scaricare un'immagine più recente.
 
 ### Impostazioni da conoscere
 
