@@ -41,7 +41,7 @@ export function UserValuesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('values.title')} description={t('values.description')} onBack={() => void navigate('/settings')} />
+      <PageHeader title={t('values.title')} onBack={() => void navigate('/settings')} />
       <ListSection>
         {USER_VALUE_KINDS.map((kind) => (
           <KindRow key={kind} kind={kind} />

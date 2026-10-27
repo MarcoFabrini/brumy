@@ -51,7 +51,7 @@ export function TransferVehicleDialog({ open, onOpenChange, vehicleId, orgRole, 
       <DialogContent mobileFullScreen>
         <DialogHeader>
           <DialogTitle>{t('vehicle.transfer.title')}</DialogTitle>
-          <DialogDescription>{t('vehicle.transfer.description')}</DialogDescription>
+          <DialogDescription className="sr-only">{t('vehicle.transfer.description')}</DialogDescription>
         </DialogHeader>
         <TransferForm
           vehicleId={vehicleId}

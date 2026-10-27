@@ -119,7 +119,7 @@ export function EditProfileDialog({ open, onOpenChange, user }: EditProfileDialo
       <DialogContent mobileFullScreen>
         <DialogHeader>
           <DialogTitle>{t('account.edit_profile')}</DialogTitle>
-          <DialogDescription>{t('account.edit_profile_description')}</DialogDescription>
+          <DialogDescription className="sr-only">{t('account.edit_profile_description')}</DialogDescription>
         </DialogHeader>
 
         {/* Foto profilo: upload/rimozione immediati, indipendenti dal salvataggio del form */}

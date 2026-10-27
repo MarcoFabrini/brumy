@@ -126,7 +126,6 @@
     "owned_only_hint_other": "{{count}} veicoli che vedi ma non sono tuoi sono nella tab Veicoli.",
     "charts": {
       "title": "Andamento",
-      "subtitle": "Ultimi {{months}} mesi, solo i tuoi veicoli",
       "monthly_spending": "Spese mensili",
       "spending_by_category": "Spese per categoria",
       "km_driven": "Km percorsi",
@@ -228,9 +227,7 @@
   },
   "maintenance": {
     "new": "Nuova manutenzione",
-    "new_description": "Registra una manutenzione effettuata.",
     "edit": "Modifica manutenzione",
-    "info_description": "Informazioni intervento.",
     "type": "Tipo intervento",
     "category": "Categoria",
     "section": "Sezione",
@@ -249,9 +246,6 @@
       "title": "Eliminare manutenzione?",
       "description": "Operazione irreversibile.",
       "action": "Elimina manutenzione"
-    },
-    "list": {
-      "description": "Storia manutenzioni del veicolo."
     },
     "empty": {
       "title": "Nessuna manutenzione",
@@ -286,7 +280,6 @@
   },
   "values": {
     "title": "Elenchi personali",
-    "description": "Distributori, officine, negozi, categorie, tipi di tassa e compagnie che ti vengono suggeriti mentre scrivi.",
     "kind": {
       "station": "Distributori",
       "workshop": "Officine",
@@ -318,9 +311,7 @@
     "delete_confirm": "«{{name}}» sparisce dall'elenco e dai suggerimenti. I record già salvati mantengono questo nome."
   },
   "settings": {
-    "description": "Account, preferenze e notifiche.",
     "account": "Account",
-    "account_description": "I tuoi dati.",
     "name": "Nome",
     "email": "Email",
     "organization": "Organizzazione",
@@ -331,18 +322,17 @@
     "theme_dark": "Scuro",
     "theme_system": "Sistema",
     "notifications": "Notifiche",
-    "notifications_description": "Ricevi avvisi per le scadenze dei veicoli.",
-    "source_db": "Sorgente attiva: questa interfaccia",
-    "source_none": "Non configurata",
+    "source_db": "Attivo",
+    "source_none": "Disattivo",
     "push": {
       "enable": "Abilita notifiche",
       "disable": "Disabilita notifiche",
-      "unsupported": "Notifiche push non supportate da questo browser. Su iPhone/iPad aggiungi prima l'app alla schermata Home.",
+      "unsupported": "Non supportate qui. Su smartphone aggiungi prima l'app alla Home.",
       "sw_unavailable": "Il service worker non si è attivato: servono HTTPS con un certificato valido (in sviluppo: fida la CA di Lando) e un ricaricamento della pagina.",
       "not_configured": "Notifiche push non configurate dal server (VAPID mancante).",
       "denied": "Permesso notifiche negato. Abilitalo dalle impostazioni del browser.",
       "card_title": "Notifiche push (VAPID)",
-      "card_description": "Chiavi VAPID per inviare le notifiche push. Vale per tutta l'istanza; finché non generi una coppia, le notifiche push restano disattivate.",
+      "card_description": "Servono per inviare le notifiche push a tutta l'istanza.",
       "no_keys": "Nessuna coppia VAPID configurata. Generane una per abilitare le notifiche push.",
       "generate": "Genera chiavi VAPID",
       "regenerate": "Rigenera chiavi",
@@ -359,11 +349,7 @@
       "server_title": "Notifiche push del server"
     },
     "profile": "Profilo",
-    "profile_description": "I tuoi dati personali.",
     "security": "Sicurezza",
-    "security_description": "Gestisci la password del tuo account.",
-    "organization_description": "L'organizzazione a cui appartieni.",
-    "preferences_description": "Personalizza l'aspetto dell'app.",
     "role": {
       "owner": "Proprietario",
       "admin": "Amministratore",
@@ -396,12 +382,10 @@
       "role_updated": "Ruolo aggiornato.",
       "invite_description": "Riceve un'email con il link per entrare nell'organizzazione."
     },
-    "large_text": "Testo grande",
-    "large_text_hint": "Ingrandisce i testi in tutta l'app. Su iPhone segue anche la dimensione del testo di iOS."
+    "large_text": "Testo grande"
   },
   "reminder": {
     "new": "Nuovo promemoria",
-    "new_description": "Crea una scadenza da monitorare.",
     "edit": "Modifica promemoria",
     "type": "Tipo",
     "description": "Descrizione",
@@ -447,9 +431,6 @@
       "description": "Operazione irreversibile.",
       "action": "Elimina promemoria"
     },
-    "list": {
-      "description": "Scadenze del veicolo."
-    },
     "empty": {
       "title": "Nessun promemoria",
       "description": "Crea la prima scadenza."
@@ -493,7 +474,6 @@
   },
   "expense": {
     "new": "Nuova spesa",
-    "new_description": "Registra una spesa del veicolo.",
     "edit": "Modifica spesa",
     "occurred_at": "Data",
     "category": "Categoria",
@@ -515,9 +495,6 @@
       "title": "Eliminare spesa?",
       "description": "Operazione irreversibile.",
       "action": "Elimina spesa"
-    },
-    "list": {
-      "description": "Spese del veicolo."
     },
     "empty": {
       "title": "Nessuna spesa",
@@ -570,9 +547,7 @@
   },
   "refueling": {
     "new": "Nuovo rifornimento",
-    "new_description": "Registra un rifornimento.",
     "edit": "Modifica rifornimento",
-    "info_description": "Dati pieno.",
     "detail_title": "Rifornimento {{liters}} L",
     "refueled_at": "Data",
     "km": "Km al momento",
@@ -592,9 +567,6 @@
       "description": "Operazione irreversibile. Il calcolo consumi cambierà.",
       "action": "Elimina rifornimento"
     },
-    "list": {
-      "description": "Storico rifornimenti del veicolo."
-    },
     "empty": {
       "title": "Nessun rifornimento",
       "description": "Registra il primo pieno."
@@ -608,9 +580,7 @@
   },
   "vehicle": {
     "new": "Nuovo veicolo",
-    "new_description": "Inserisci i dati base del veicolo.",
     "edit": "Modifica veicolo",
-    "info_description": "Informazioni anagrafica del veicolo.",
     "name": "Nome",
     "brand": "Marca",
     "model": "Modello",
@@ -630,9 +600,6 @@
     "delete": {
       "title": "Eliminare veicolo?",
       "description": "Operazione irreversibile. Tutti i dati associati (manutenzioni, rifornimenti, ecc.) saranno eliminati."
-    },
-    "list": {
-      "description": "I tuoi veicoli registrati."
     },
     "empty": {
       "title": "Nessun veicolo",
@@ -663,7 +630,7 @@
     },
     "share": {
       "title": "Condivisione",
-      "description": "Condividi questo veicolo in sola lettura con altri membri dell'organizzazione, scelti dall'elenco. Chi lo riceve lo vede ma non può modificarlo.",
+      "description": "In sola lettura: chi lo riceve lo vede ma non può modificarlo.",
       "empty": "Non ancora condiviso con nessuno.",
       "you": "tu",
       "invite_title": "Condividi in sola lettura",
@@ -726,8 +693,7 @@
     "shared_read_only": "Condiviso · sola lettura",
     "read_only_no_changes": "Questo veicolo è condiviso con te in sola lettura: puoi vederne i dati ma non modificarli.",
     "charts": {
-      "title": "Grafici del veicolo",
-      "subtitle": "Ultimi {{months}} mesi di questo veicolo"
+      "title": "Grafici del veicolo"
     },
     "add_record": "Aggiungi",
     "summary": {
@@ -1113,7 +1079,6 @@
     "proposed": "Prezzo del distributore, comunicato il {{date}}",
     "no_price_for_fuel": "Il distributore non ha un prezzo per questo carburante",
     "linked_station": "Distributore per i prezzi",
-    "not_linked": "Non collegato: il prezzo non viene proposto",
     "station_gone": "Distributore non più nei dati del Ministero",
     "link": "Collega a un distributore",
     "change_link": "Cambia distributore",

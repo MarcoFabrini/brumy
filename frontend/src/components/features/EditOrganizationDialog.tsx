@@ -73,7 +73,7 @@ export function EditOrganizationDialog({
       <DialogContent mobileFullScreen>
         <DialogHeader>
           <DialogTitle>{t('account.edit_organization')}</DialogTitle>
-          <DialogDescription>{t('account.edit_organization_description')}</DialogDescription>
+          <DialogDescription className="sr-only">{t('account.edit_organization_description')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>

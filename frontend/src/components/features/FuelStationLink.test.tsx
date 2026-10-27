@@ -76,8 +76,7 @@ describe('FuelStationLink', () => {
     const user = userEvent.setup();
     renderLink(null);
 
-    expect(await screen.findByText(/Non collegato/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Collega a un distributore' }));
+    await user.click(await screen.findByRole('button', { name: 'Collega a un distributore' }));
     await user.type(await screen.findByRole('searchbox'), 'q8 modena');
     await user.click(await screen.findByRole('button', { name: /Q8 · Via Emilia Est 1420/ }));
 
@@ -101,7 +100,8 @@ describe('FuelStationLink', () => {
   it('senza collegamento non si può seguire il prezzo', async () => {
     renderLink(null);
 
-    expect(await screen.findByText(/Non collegato/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Collega a un distributore' })).toBeInTheDocument();
+    expect(screen.queryByText(/Non collegato/)).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Segui il prezzo' })).not.toBeInTheDocument();
   });
 

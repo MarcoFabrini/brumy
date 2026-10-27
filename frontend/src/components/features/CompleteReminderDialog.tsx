@@ -48,7 +48,7 @@ export function CompleteReminderDialog({ open, onOpenChange, reminder, onComplet
       <DialogContent mobileFullScreen>
         <DialogHeader>
           <DialogTitle>{t('reminder.complete_dialog.title')}</DialogTitle>
-          <DialogDescription>{t('reminder.complete_dialog.description')}</DialogDescription>
+          <DialogDescription className="sr-only">{t('reminder.complete_dialog.description')}</DialogDescription>
         </DialogHeader>
         {/* Il contenuto si monta a ogni apertura: data di oggi, km attuali ed errori sempre freschi. */}
         <CompleteReminderForm

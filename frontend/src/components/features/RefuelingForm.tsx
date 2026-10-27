@@ -132,7 +132,7 @@ export function RefuelingForm({
   const stations = useValueSuggestions(vehicleId, 'station');
 
   // Prezzo proposto dal distributore: scelto dai vicini/dalla ricerca (fuelStationId) o voce dell'elenco collegata.
-  // Solo per un rifornimento di oggi o di ieri, e mai sopra un prezzo scritto dall'utente.
+  // Solo per un rifornimento di oggi o di ieri.
   const queryClient = useQueryClient();
   const fuelPrices = useFuelPricesStatus();
   const pricesEnabled = fuelPrices.data?.enabled === true;
@@ -150,17 +150,31 @@ export function RefuelingForm({
   const priceMode = stationPrices ? pricedMode(stationPrices, mode) : mode;
   const proposal = stationPrices?.[priceMode] ?? null;
 
+  /**
+   * Distributore, carburante o self/servito appena scelti dall'utente: il prezzo segue la nuova scelta (o si svuota se
+   * lì non c'è), anche sopra un prezzo scritto prima. Scrivere il prezzo dopo la scelta lo azzera: vince l'ultima mossa.
+   */
+  const choiceChanged = useRef(false);
+
   useEffect(() => {
-    if (!proposal) return;
+    const prices = priceStation.data?.prices;
+    if (!prices) return;
+    const followChoice = choiceChanged.current;
+    choiceChanged.current = false;
     const current = form.getValues('pricePerLiter');
-    if (current === '' || current === proposedPrice.current) {
-      form.setValue('pricePerLiter', proposal.price, { shouldValidate: !!form.formState.errors.pricePerLiter });
-      proposedPrice.current = proposal.price;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proposal?.price]);
+    if (!followChoice && current !== '' && current !== proposedPrice.current) return;
+    const next = prices[pricedMode(prices, mode)]?.price ?? '';
+    form.setValue('pricePerLiter', next, { shouldValidate: !!form.formState.errors.pricePerLiter });
+    proposedPrice.current = next;
+  }, [priceStation.data, mode, form]);
+
+  function chooseMode(next: FuelServiceMode) {
+    choiceChanged.current = true;
+    setMode(next);
+  }
 
   function pickStation(station: FuelStation) {
+    choiceChanged.current = true;
     // Il foglio ha già i prezzi: niente seconda richiesta per lo stesso distributore
     queryClient.setQueryData(fuelPriceKeys.station(station.id, fuelType), station);
     form.setValue('station', station.label, { shouldDirty: true });
@@ -202,7 +216,13 @@ export function RefuelingForm({
                 // Veicolo a un solo carburante: già impostato, niente da scegliere
                 <Input id={id} readOnly value={t(`vehicle.fuel.${field.value}`)} />
               ) : (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    choiceChanged.current = true;
+                    field.onChange(v);
+                  }}
+                >
                   <SelectTrigger id={id}>
                     <SelectValue />
                   </SelectTrigger>
@@ -245,7 +265,11 @@ export function RefuelingForm({
               inputMode="decimal"
               placeholder="0.000"
               invalid={!!errors.pricePerLiter}
-              {...form.register('pricePerLiter')}
+              {...form.register('pricePerLiter', {
+                onChange: () => {
+                  choiceChanged.current = false;
+                },
+              })}
             />
           )}
         </FormField>
@@ -258,7 +282,7 @@ export function RefuelingForm({
               ? t('fuel_prices.proposed', { date: fmt.date(proposal.communicatedAt) })
               : t('fuel_prices.no_price_for_fuel')}
           </Text>
-          <FuelModeToggle mode={priceMode} onChange={setMode} compact />
+          <FuelModeToggle mode={priceMode} onChange={chooseMode} compact />
         </div>
       )}
 
@@ -279,6 +303,7 @@ export function RefuelingForm({
                 id={id}
                 value={field.value ?? ''}
                 onChange={(v) => {
+                  choiceChanged.current = true;
                   field.onChange(v === '' ? null : v);
                   // Scritto a mano: non è più il distributore scelto dalla lista dei prezzi
                   form.setValue('fuelStationId', null);
@@ -305,7 +330,7 @@ export function RefuelingForm({
             onSelect={pickStation}
             fuel={fuelType}
             mode={mode}
-            onModeChange={setMode}
+            onModeChange={chooseMode}
           />
         </>
       )}

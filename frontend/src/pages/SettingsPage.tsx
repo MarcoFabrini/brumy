@@ -236,7 +236,6 @@ export function SettingsPage() {
           icon={<Type />}
           iconClassName="bg-[#007aff]"
           label={<span id={largeTextLabelId}>{t('settings.large_text')}</span>}
-          description={t('settings.large_text_hint')}
           value={<Switch checked={largeText} onCheckedChange={setLargeText} aria-labelledby={largeTextLabelId} />}
         />
       </ListSection>

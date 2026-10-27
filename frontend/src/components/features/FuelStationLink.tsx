@@ -34,9 +34,9 @@ export function FuelStationLink({ value }: { value: ManagedUserValue }) {
   return (
     <div className="space-y-2">
       <Label>{t('fuel_prices.linked_station')}</Label>
-      <Text variant={value.fuelStationId ? undefined : 'muted'} className="text-sm">
-        {value.fuelStationId ? (linked.data?.label ?? (linked.isError ? t('fuel_prices.station_gone') : '…')) : t('fuel_prices.not_linked')}
-      </Text>
+      {value.fuelStationId && (
+        <Text className="text-sm">{linked.data?.label ?? (linked.isError ? t('fuel_prices.station_gone') : '…')}</Text>
+      )}
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="flex-1" disabled={link.isPending} onClick={() => setPickerOpen(true)}>
           <MapPin aria-hidden="true" className="size-4" />

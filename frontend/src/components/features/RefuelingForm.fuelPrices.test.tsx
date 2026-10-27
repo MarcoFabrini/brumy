@@ -97,15 +97,70 @@ describe('RefuelingForm — prezzi del carburante', () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ pricePerLiter: '1.899', station: 'Q8 sotto casa', fuelStationId: null });
   });
 
-  it('non sovrascrive un prezzo scritto dall\'utente', async () => {
+  it('un prezzo scritto dopo la scelta del distributore resta; una scelta fatta dopo lo sostituisce', async () => {
     const user = userEvent.setup();
     renderForm();
 
     await user.type(screen.getByLabelText(/€\/L/), '1,7');
     await user.type(screen.getByLabelText(/Distributore/), 'Q8 sotto casa');
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.729'));
 
-    expect(await screen.findByText(/Prezzo del distributore/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/€\/L/));
+    await user.type(screen.getByLabelText(/€\/L/), '1,7');
+    await user.click(screen.getByRole('button', { name: 'Servito' }));
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.899'));
+
+    await user.clear(screen.getByLabelText(/€\/L/));
+    await user.type(screen.getByLabelText(/€\/L/), '1,7');
+    await fillRequired(user);
     expect(screen.getByLabelText(/€\/L/)).toHaveValue('1,7');
+  });
+
+  it('cambiando distributore cambia anche il prezzo', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: {
+        getCurrentPosition: (ok: PositionCallback) => ok({ coords: { latitude: 44.6471, longitude: 10.9252 } } as GeolocationPosition),
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(/Distributore/), 'Q8 sotto casa');
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.729'));
+
+    await user.click(screen.getByRole('button', { name: /Distributori vicini/ }));
+    await user.click(await screen.findByRole('button', { name: /Eni · Via Giardini 300/ }));
+
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.759'));
+  });
+
+  it('cambiando carburante il prezzo segue il carburante, e si svuota se il distributore non ha quel prezzo', async () => {
+    // Radix Select in jsdom: mancano alcune API del puntatore
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.setPointerCapture = () => undefined;
+    Element.prototype.releasePointerCapture = () => undefined;
+    Element.prototype.scrollIntoView = () => undefined;
+    const fallback = mockedAuthFetch.getMockImplementation()!;
+    mockedAuthFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/vehicles/7') return { ...(await fallback(path, init)), secondaryFuelType: 'lpg' };
+      if (path === '/api/fuel-prices/stations/59183?fuel=lpg') return station(59183, 'Q8 · Via Emilia Est 1420, Modena', null, null);
+      return fallback(path, init);
+    });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(/Distributore/), 'Q8 sotto casa');
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.729'));
+
+    await user.click(await screen.findByRole('combobox', { name: /Carburante/ }));
+    await user.click(await screen.findByRole('option', { name: 'GPL' }));
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue(''));
+    expect(await screen.findByText(/non ha un prezzo/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: /Carburante/ }));
+    await user.click(await screen.findByRole('option', { name: 'Diesel' }));
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.729'));
   });
 
   it('per un rifornimento di giorni fa non propone il prezzo di oggi', async () => {

@@ -126,7 +126,6 @@
     "owned_only_hint_other": "{{count}} vehicles you can see but don't own are in the Vehicles tab.",
     "charts": {
       "title": "Trends",
-      "subtitle": "Last {{months}} months, your vehicles only",
       "monthly_spending": "Monthly spending",
       "spending_by_category": "Spending by category",
       "km_driven": "Distance driven",
@@ -228,9 +227,7 @@
   },
   "maintenance": {
     "new": "New maintenance",
-    "new_description": "Log a maintenance task performed.",
     "edit": "Edit maintenance",
-    "info_description": "Job information.",
     "type": "Type",
     "category": "Category",
     "section": "Section",
@@ -249,9 +246,6 @@
       "title": "Delete maintenance?",
       "description": "This is irreversible.",
       "action": "Delete maintenance"
-    },
-    "list": {
-      "description": "Maintenance history for vehicle."
     },
     "empty": {
       "title": "No maintenance entries",
@@ -286,7 +280,6 @@
   },
   "values": {
     "title": "Personal lists",
-    "description": "Stations, workshops, shops, categories, tax types and insurers suggested while you type.",
     "kind": {
       "station": "Stations",
       "workshop": "Workshops",
@@ -318,9 +311,7 @@
     "delete_confirm": "“{{name}}” disappears from the list and the suggestions. Records already saved keep this name."
   },
   "settings": {
-    "description": "Account, preferences and notifications.",
     "account": "Account",
-    "account_description": "Your details.",
     "name": "Name",
     "email": "Email",
     "organization": "Organization",
@@ -331,18 +322,17 @@
     "theme_dark": "Dark",
     "theme_system": "System",
     "notifications": "Notifications",
-    "notifications_description": "Get alerts for vehicle deadlines.",
-    "source_db": "Active source: this interface",
-    "source_none": "Not configured",
+    "source_db": "Active",
+    "source_none": "Inactive",
     "push": {
       "enable": "Enable notifications",
       "disable": "Disable notifications",
-      "unsupported": "Push notifications are not supported by this browser. On iPhone/iPad, add the app to the Home Screen first.",
+      "unsupported": "Not supported here. On smartphones, add the app to the Home Screen first.",
       "sw_unavailable": "The service worker did not activate: it needs HTTPS with a valid certificate (in development: trust the Lando CA) and a page reload.",
       "not_configured": "Push notifications not configured by the server (VAPID missing).",
       "denied": "Notification permission denied. Enable it from browser settings.",
       "card_title": "Push notifications (VAPID)",
-      "card_description": "VAPID keys used to send push notifications. Applies to the whole instance; until you generate a pair, push notifications stay off.",
+      "card_description": "Needed to send push notifications across the instance.",
       "no_keys": "No VAPID keypair configured yet. Generate one to enable push notifications.",
       "generate": "Generate VAPID keys",
       "regenerate": "Regenerate keys",
@@ -359,11 +349,7 @@
       "server_title": "Server push notifications"
     },
     "profile": "Profile",
-    "profile_description": "Your personal details.",
     "security": "Security",
-    "security_description": "Manage your account password.",
-    "organization_description": "The organization you belong to.",
-    "preferences_description": "Customize the app appearance.",
     "role": {
       "owner": "Owner",
       "admin": "Admin",
@@ -396,12 +382,10 @@
       "role_updated": "Role updated.",
       "invite_description": "They get an email with the link to join the organization."
     },
-    "large_text": "Large text",
-    "large_text_hint": "Makes text larger across the app. On iPhone it also follows the iOS text size."
+    "large_text": "Large text"
   },
   "reminder": {
     "new": "New reminder",
-    "new_description": "Create a deadline to track.",
     "edit": "Edit reminder",
     "type": "Type",
     "description": "Description",
@@ -447,9 +431,6 @@
       "description": "This is irreversible.",
       "action": "Delete reminder"
     },
-    "list": {
-      "description": "Vehicle deadlines."
-    },
     "empty": {
       "title": "No reminders",
       "description": "Create the first deadline."
@@ -493,7 +474,6 @@
   },
   "expense": {
     "new": "New expense",
-    "new_description": "Log a vehicle expense.",
     "edit": "Edit expense",
     "occurred_at": "Date",
     "category": "Category",
@@ -515,9 +495,6 @@
       "title": "Delete expense?",
       "description": "This is irreversible.",
       "action": "Delete expense"
-    },
-    "list": {
-      "description": "Vehicle expenses."
     },
     "empty": {
       "title": "No expenses",
@@ -570,9 +547,7 @@
   },
   "refueling": {
     "new": "New refueling",
-    "new_description": "Log a refueling.",
     "edit": "Edit refueling",
-    "info_description": "Fill data.",
     "detail_title": "Refueling {{liters}} L",
     "refueled_at": "Date",
     "km": "Mileage",
@@ -592,9 +567,6 @@
       "description": "Irreversible. Consumption calc will change.",
       "action": "Delete refueling"
     },
-    "list": {
-      "description": "Refueling history for vehicle."
-    },
     "empty": {
       "title": "No refuelings",
       "description": "Log the first fill-up."
@@ -608,9 +580,7 @@
   },
   "vehicle": {
     "new": "New vehicle",
-    "new_description": "Enter basic vehicle data.",
     "edit": "Edit vehicle",
-    "info_description": "Vehicle base information.",
     "name": "Name",
     "brand": "Brand",
     "model": "Model",
@@ -630,9 +600,6 @@
     "delete": {
       "title": "Delete vehicle?",
       "description": "This is irreversible. All related data (maintenance, refueling, etc.) will be deleted."
-    },
-    "list": {
-      "description": "Your registered vehicles."
     },
     "empty": {
       "title": "No vehicles",
@@ -663,7 +630,7 @@
     },
     "share": {
       "title": "Sharing",
-      "description": "Share this vehicle read-only with other organization members, picked from the list. Recipients can view it but not change it.",
+      "description": "Read-only: recipients can view it but not change it.",
       "empty": "Not shared with anyone yet.",
       "you": "you",
       "invite_title": "Share read-only",
@@ -726,8 +693,7 @@
     "shared_read_only": "Shared · read-only",
     "read_only_no_changes": "This vehicle is shared with you read-only: you can see its data but not change it.",
     "charts": {
-      "title": "Vehicle charts",
-      "subtitle": "Last {{months}} months of this vehicle"
+      "title": "Vehicle charts"
     },
     "add_record": "Add",
     "summary": {
@@ -1113,7 +1079,6 @@
     "proposed": "Station price, reported on {{date}}",
     "no_price_for_fuel": "The station has no price for this fuel",
     "linked_station": "Station for prices",
-    "not_linked": "Not linked: no price is proposed",
     "station_gone": "Station no longer in the Ministry data",
     "link": "Link to a fuel station",
     "change_link": "Change station",

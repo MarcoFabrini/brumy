@@ -223,9 +223,7 @@ function NewStationLink({ picked, onPick }: { picked: FuelStation | null; onPick
   return (
     <div className="space-y-2">
       <Label>{t('fuel_prices.linked_station')}</Label>
-      <Text variant={picked ? undefined : 'muted'} className="text-sm">
-        {picked ? picked.label : t('fuel_prices.not_linked')}
-      </Text>
+      {picked && <Text className="text-sm">{picked.label}</Text>}
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="flex-1" onClick={() => setPickerOpen(true)}>
           <MapPin aria-hidden="true" className="size-4" />
