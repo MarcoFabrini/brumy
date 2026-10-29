@@ -8,6 +8,9 @@ use App\Entity\Component;
 use App\Entity\Maintenance;
 use App\Entity\Organization;
 use App\Entity\Vehicle;
+use App\Repository\Search\ListSearchFields;
+use App\Repository\Search\ListSearchFilter;
+use App\Service\Search\ListSearch;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -36,16 +39,23 @@ class ComponentRepository extends ServiceEntityRepository
     /**
      * Componenti (non eliminati) del veicolo per nome, con il negozio già caricato.
      *
+     * @param ListSearch|null $search ricerca dell'elenco; null = nessun filtro
+     *
      * @return list<Component>
      */
-    public function findByVehicle(Vehicle $vehicle): array
+    public function findByVehicle(Vehicle $vehicle, ?ListSearch $search = null): array
     {
-        /** @var list<Component> */
-        return $this->createQueryBuilder('c')
+        $qb = $this->createQueryBuilder('c')
             ->addSelect('s')
             ->leftJoin('c.shop', 's')
             ->where('c.vehicle = :vehicle AND c.deletedAt IS NULL')
-            ->setParameter('vehicle', $vehicle)
+            ->setParameter('vehicle', $vehicle);
+        if ($search !== null) {
+            ListSearchFilter::apply($qb, $search, self::searchFields());
+        }
+
+        /** @var list<Component> */
+        return $qb
             ->orderBy('c.name', 'ASC')
             ->addOrderBy('c.id', 'ASC')
             ->getQuery()
@@ -76,5 +86,16 @@ class ComponentRepository extends ServiceEntityRepository
             ->addOrderBy('m.id', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /** Dove cerca la ricerca dell'elenco dei componenti: testi, codici, negozio (già unito). */
+    private static function searchFields(): ListSearchFields
+    {
+        return new ListSearchFields(
+            text: ['c.name', 'c.code', 'c.serialNumber', 'c.notes', 's.name'],
+            joins: ['s' => 'c.shop'],
+            date: 'c.purchasedAt',
+            amount: 'c.price',
+        );
     }
 }

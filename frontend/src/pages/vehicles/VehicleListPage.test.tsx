@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -108,5 +108,105 @@ describe('VehicleListPage', () => {
     const h1 = screen.getAllByRole('heading', { level: 1 });
     expect(h1).toHaveLength(1);
     expect(h1[0]).toHaveTextContent('Veicoli');
+  });
+});
+
+describe('VehicleListPage — ricerca', () => {
+  beforeEach(async () => {
+    mockedAuthFetch.mockReset();
+    await i18n.changeLanguage('it');
+  });
+
+  /** Attivi e archiviati per `q` (null = senza ricerca). */
+  function renderSearch(url: string, results: Record<string, { active: Vehicle[]; archived: Vehicle[] }>) {
+    mockedAuthFetch.mockImplementation(async (path: string) => {
+      const params = new URLSearchParams(path.split('?')[1] ?? '');
+      const found = results[params.get('q') ?? ''];
+      if (!path.startsWith('/api/vehicles') || !found) throw new Error(`unexpected fetch ${path}`);
+      return params.get('archived') === '1' ? found.archived : found.active;
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[url]}>
+          <VehicleListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  const old = vehicle(7, 'Vecchia Panda', '2026-09-01T10:00:00+02:00');
+
+  it('cerca anche tra gli archiviati, mostrati senza doverli aprire, con il tipo tradotto', async () => {
+    renderSearch('/vehicles', {
+      '': { active: [vehicle(1, 'Golf'), vehicle(2, 'Panda')], archived: [old] },
+      panda: { active: [vehicle(2, 'Panda')], archived: [old] },
+    });
+    const user = userEvent.setup();
+    expect(await screen.findByText('Golf')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('searchbox', { name: "Cerca nell'elenco" }), 'panda');
+
+    await waitFor(() => expect(screen.queryByText('Golf')).not.toBeInTheDocument());
+    expect(screen.getByText('Panda')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Veicoli archiviati (1)' })).toHaveTextContent('Vecchia Panda');
+    const searched = mockedAuthFetch.mock.calls.map(([path]) => path).filter((path) => path.includes('q=panda'));
+    expect(searched).toHaveLength(2);
+    expect(searched.every((path) => new URLSearchParams(path.split('?')[1]).getAll('hint[0][]').length === 0)).toBe(true);
+  });
+
+  it('manda il tipo e il carburante tradotti', async () => {
+    renderSearch('/vehicles?q=moto', { moto: { active: [], archived: [] } });
+
+    await screen.findByRole('status');
+    const path = mockedAuthFetch.mock.calls.map(([p]) => p).find((p) => p.startsWith('/api/vehicles?q=moto'));
+    expect(new URLSearchParams(path?.split('?')[1]).getAll('hint[0][]')).toEqual(['vehicle_type:motorcycle']);
+  });
+
+  it('"Nessun risultato" solo se non c\'è niente né tra gli attivi né tra gli archiviati', async () => {
+    renderSearch('/vehicles?q=vecchia', { vecchia: { active: [], archived: [old] } });
+
+    expect(await screen.findByText('Vecchia Panda')).toBeInTheDocument();
+    expect(screen.queryByText(/Nessun risultato/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Nessun veicolo')).not.toBeInTheDocument();
+  });
+
+  it('senza risultati lo dice e "Cancella ricerca" torna all\'elenco completo', async () => {
+    renderSearch('/vehicles?q=zzz', {
+      zzz: { active: [], archived: [] },
+      '': { active: [vehicle(1, 'Golf')], archived: [] },
+    });
+    const user = userEvent.setup();
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Nessun risultato per «zzz»');
+    const clearButtons = screen.getAllByRole('button', { name: 'Cancella ricerca' });
+    await user.click(clearButtons[clearButtons.length - 1]!);
+
+    expect(await screen.findByText('Golf')).toBeInTheDocument();
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+  });
+
+  it('se gli archiviati non arrivano, una ricerca senza attivi dice comunque "Nessun risultato"', async () => {
+    mockedAuthFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/vehicles?q=zzz')) return [];
+      throw new Error(`boom ${path}`);
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/vehicles?q=zzz']}>
+          <VehicleListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Nessun risultato per «zzz»');
+  });
+
+  it('senza veicoli né ricerca resta solo lo stato vuoto, senza campo', async () => {
+    renderSearch('/vehicles', { '': { active: [], archived: [] } });
+
+    expect(await screen.findByText('Nessun veicolo')).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 });

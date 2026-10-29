@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { authFetch } from '@/api/client';
+import { listUrl } from '@/api/endpoints/listUrl';
 import {
   adaptComponent,
   adaptComponentDetail,
@@ -16,9 +17,9 @@ const jsonInit = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-/** Componenti del veicolo, per nome. */
-export async function listComponents(vehicleId: number): Promise<Component[]> {
-  const raw = await authFetch<unknown>(`/api/components?vehicleId=${vehicleId}`);
+/** Componenti del veicolo, per nome; `search`: query string di `buildSearchQuery`. */
+export async function listComponents(vehicleId: number, search?: string): Promise<Component[]> {
+  const raw = await authFetch<unknown>(listUrl('/api/components', { vehicleId }, search));
   return z.array(componentSchema).parse(raw).map(adaptComponent);
 }
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useListReturnState } from '@/hooks/useListReturnState';
 import { useTranslation } from 'react-i18next';
 import { ListRow } from '@/components/ui';
 import { MetaLine } from './MetaLine';
@@ -12,6 +13,7 @@ export interface MaintenanceCardProps {
 
 /** Un lavoro come riga di lista iOS: descrizione, poi tipo, data, km e officina; costo a destra. Icona della sezione. */
 export function MaintenanceCard({ maintenance: m }: MaintenanceCardProps) {
+  const returnState = useListReturnState();
   const { t } = useTranslation();
   const fmt = useFormat();
   const { Icon, iconClassName } = sectionOf(maintenanceKind(m.category));
@@ -20,6 +22,7 @@ export function MaintenanceCard({ maintenance: m }: MaintenanceCardProps) {
     <ListRow
       as={Link}
       to={`/maintenance/${m.id}`}
+      state={returnState}
       icon={<Icon />}
       iconClassName={iconClassName}
       label={m.description}

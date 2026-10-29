@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 import { Alert, Button, Skeleton } from '@/components/ui';
@@ -21,6 +21,7 @@ import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 export function ReminderDetailPage() {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ export function ReminderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const reminderId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -49,6 +51,8 @@ export function ReminderDetailPage() {
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
 
+  // All'elenco da cui si è arrivati (promemoria del veicolo o "Scadenze", con la ricerca), altrimenti al veicolo
+  const listPath = listReturnPath(location.state, '/reminders', `/reminders?vehicleId=${data.vehicleId}`);
   const isDone = data.completedAt !== null;
 
   return (
@@ -61,7 +65,7 @@ export function ReminderDetailPage() {
             ? t(`reminder.type_options.${data.type}`)
             : undefined
         }
-        onBack={() => navigate(`/reminders?vehicleId=${data.vehicleId}`)}
+        onBack={() => navigate(listPath)}
         action={canEdit ? <EditLink to={`/reminders/${data.id}/edit`} /> : undefined}
       />
 
@@ -99,7 +103,7 @@ export function ReminderDetailPage() {
         reminder={data}
         onCompleted={({ next }) => {
           // Il ricorrente continua nel successore; una tantum resta qui, ora completato.
-          if (next) navigate(`/reminders/${next.id}`, { replace: true });
+          if (next) navigate(`/reminders/${next.id}`, { replace: true, state: location.state });
         }}
       />
 
@@ -114,7 +118,7 @@ export function ReminderDetailPage() {
           deleteMutation.mutate(reminderId, {
             onSuccess: () => {
               toast({ title: t('reminder.deleted'), variant: 'success' });
-              navigate(`/reminders?vehicleId=${data.vehicleId}`, { replace: true });
+              navigate(listPath, { replace: true });
             },
             onError: (e) => toast({ title: errorMessage(e), variant: 'error' }),
           })

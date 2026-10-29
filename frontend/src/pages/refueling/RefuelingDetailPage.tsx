@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -18,6 +18,7 @@ import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 export function RefuelingDetailPage() {
   const { t } = useTranslation();
@@ -25,6 +26,7 @@ export function RefuelingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const refuelingId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -45,6 +47,8 @@ export function RefuelingDetailPage() {
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
 
+  // All'elenco da cui si è arrivati (con la sua ricerca), altrimenti ai rifornimenti del veicolo
+  const listPath = listReturnPath(location.state, '/refueling', `/refueling?vehicleId=${data.vehicleId}`);
   const litersNum = Number.parseFloat(data.liters);
 
   return (
@@ -54,7 +58,7 @@ export function RefuelingDetailPage() {
           liters: fmt.decimal(litersNum, 2),
         })}
         description={data.description ?? fmt.date(data.refueledAt)}
-        onBack={() => navigate(`/refueling?vehicleId=${data.vehicleId}`)}
+        onBack={() => navigate(listPath)}
         action={canEdit ? <EditLink to={`/refueling/${data.id}/edit`} /> : undefined}
       />
 
@@ -92,7 +96,7 @@ export function RefuelingDetailPage() {
           deleteMutation.mutate(refuelingId, {
             onSuccess: () => {
               toast({ title: t('refueling.deleted'), variant: 'success' });
-              navigate(`/refueling?vehicleId=${data.vehicleId}`, { replace: true });
+              navigate(listPath, { replace: true });
             },
             onError: (e) => toast({ title: errorMessage(e), variant: 'error' }),
           })

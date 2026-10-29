@@ -17,6 +17,7 @@ use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
 use App\Service\RecordReminders;
+use App\Service\Search\ListSearch;
 use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -53,9 +54,14 @@ final class ExpenseController extends AbstractController
             new OA\Parameter(name: 'section', in: 'query', description: 'tax, insurance or other; omitted = all', schema: new OA\Schema(type: 'string', enum: ['tax', 'insurance', 'other'])),
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20, maximum: 100)),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Expense::class, groups: ['expense:list', 'vehicle:nested', 'user_value:nested'])))),
+            new OA\Response(response: 400, description: 'query.vehicle_id_required; http.400 for a malformed q/hint'),
+            new OA\Response(response: 403, description: 'No access to the vehicle'),
+            new OA\Response(response: 404, description: 'vehicle.not_found'),
         ],
     )]
     #[Route('', name: 'list', methods: ['GET'])]
@@ -75,8 +81,9 @@ final class ExpenseController extends AbstractController
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
 
         $section = ExpenseSection::tryFrom((string) $request->query->get('section', ''));
+        $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
 
-        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $section), context: ['groups' => ['expense:list', 'vehicle:nested', 'user_value:nested']]);
+        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $section, $search), context: ['groups' => ['expense:list', 'vehicle:nested', 'user_value:nested']]);
     }
 
     #[OA\Get(

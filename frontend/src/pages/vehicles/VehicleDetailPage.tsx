@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Archive, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react';
 import {
@@ -50,6 +50,7 @@ import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 /**
  * VehicleDetailPage — scheda del veicolo in stile iOS: in cima i numeri che servono (km, consumo, spesa del mese) e la
@@ -63,6 +64,9 @@ export function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const vehicleId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
+  // All'elenco dei veicoli da cui si è arrivati, con la sua ricerca (altrimenti quello di sempre)
+  const listPath = listReturnPath(location.state, '/vehicles', '/vehicles');
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -120,7 +124,7 @@ export function VehicleDetailPage() {
       <PageHeader
         title={data.name}
         description={[`${data.brand} ${data.model} · ${data.year}`, data.licensePlate].filter(Boolean).join(' · ')}
-        onBack={() => navigate('/vehicles')}
+        onBack={() => navigate(listPath)}
         action={
           canEdit || canDelete ? (
             <>
@@ -149,7 +153,7 @@ export function VehicleDetailPage() {
                 <DropdownMenuContent align="end">
                   {canEdit && (
                     <DropdownMenuItem asChild>
-                      <Link to={`/vehicles/${data.id}/edit`}>
+                      <Link to={`/vehicles/${data.id}/edit`} state={location.state}>
                         <Pencil />
                         {t('actions.edit')}
                       </Link>
@@ -277,7 +281,7 @@ export function VehicleDetailPage() {
           archive.mutate(vehicleId, {
             onSuccess: () => {
               toast({ title: t('vehicle.archive.done'), variant: 'success' });
-              navigate('/vehicles', { replace: true });
+              navigate(listPath, { replace: true });
             },
             onError: (e) => {
               setArchiveOpen(false);
@@ -297,7 +301,7 @@ export function VehicleDetailPage() {
           deleteMutation.mutate(vehicleId, {
             onSuccess: () => {
               toast({ title: t('vehicle.deleted'), variant: 'success' });
-              navigate('/vehicles', { replace: true });
+              navigate(listPath, { replace: true });
             },
             onError: (e) =>
               toast({ title: errorMessage(e), variant: 'error' }),

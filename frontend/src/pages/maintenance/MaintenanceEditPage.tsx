@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -13,6 +13,8 @@ export function MaintenanceEditPage() {
   const { id } = useParams<{ id: string }>();
   const maintenanceId = Number(id);
   const navigate = useNavigate();
+  // Lo state del dettaglio (elenco di provenienza con la ricerca) torna al dettaglio, per il suo "‹ Indietro"
+  const { state: returnState } = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -36,7 +38,7 @@ export function MaintenanceEditPage() {
       <PageHeader
         title={t('maintenance.edit')}
         description={data.category === 'inspection' ? t('sections.inspection.title') : t(`maintenance.type_options.${data.type}`)}
-        onBack={() => navigate(`/maintenance/${maintenanceId}`)}
+        onBack={() => navigate(`/maintenance/${maintenanceId}`, { state: returnState })}
       />
 
       <VehicleUsableGate vehicleId={data.vehicleId}>
@@ -46,12 +48,12 @@ export function MaintenanceEditPage() {
           defaultValues={data}
           isPending={updateMutation.isPending}
           error={updateMutation.error}
-          onCancel={() => navigate(`/maintenance/${maintenanceId}`)}
+          onCancel={() => navigate(`/maintenance/${maintenanceId}`, { state: returnState })}
           onSubmit={(form, { newComponents }) =>
             updateMutation.mutate(form, {
               onSuccess: (saved) => {
                 toast({ title: t('maintenance.updated'), variant: 'success' });
-                followUp(saved, newComponents, `/maintenance/${maintenanceId}`);
+                followUp(saved, newComponents, `/maintenance/${maintenanceId}`, returnState);
               },
             })
           }

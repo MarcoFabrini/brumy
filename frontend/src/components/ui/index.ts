@@ -77,6 +77,7 @@ export {
   SheetTrigger,
   type SheetContentProps,
 } from './Sheet';
+export { SearchInput, type SearchInputProps } from './SearchInput';
 export { Skeleton } from './Skeleton';
 export { SuggestInput, type SuggestInputProps } from './SuggestInput';
 export { Spinner, type SpinnerProps } from './Spinner';

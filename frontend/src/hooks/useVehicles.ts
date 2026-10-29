@@ -13,6 +13,7 @@ import {
 } from '@/api/endpoints/vehicles';
 import type { CreateVehicleDto, UpdateVehicleDto } from '@/api/types/vehicle';
 import { DASHBOARD_CHART_MONTHS, dashboardKeys } from '@/hooks/useDashboardCharts';
+import { keepPreviousOf, searchKeyPart } from '@/lib/pagination';
 
 /**
  * Query keys factory — single source of truth per cache invalidation.
@@ -30,18 +31,24 @@ export const vehicleKeys = {
   detail: (id: number) => [...vehicleKeys.details(), id] as const,
 };
 
-export function useVehicles() {
+/**
+ * Veicoli attivi accessibili. Con `search` (query string di `buildSearchQuery`, solo la pagina Veicoli) la chiave è
+ * figlia di `lists()`; senza è esattamente `lists()`, quella di selettori, aggiunta rapida e dashboard.
+ */
+export function useVehicles(search?: string) {
   return useQuery({
-    queryKey: vehicleKeys.lists(),
-    queryFn: listVehicles,
+    queryKey: [...vehicleKeys.lists(), ...searchKeyPart(search)],
+    queryFn: () => listVehicles(search),
+    placeholderData: keepPreviousOf(vehicleKeys.lists()),
   });
 }
 
 /** Veicoli archiviati accessibili all'utente: per la sezione "archiviati" della lista, da cui si ripristinano. */
-export function useArchivedVehicles() {
+export function useArchivedVehicles(search?: string) {
   return useQuery({
-    queryKey: vehicleKeys.archivedList(),
-    queryFn: listArchivedVehicles,
+    queryKey: [...vehicleKeys.archivedList(), ...searchKeyPart(search)],
+    queryFn: () => listArchivedVehicles(search),
+    placeholderData: keepPreviousOf(vehicleKeys.archivedList()),
   });
 }
 

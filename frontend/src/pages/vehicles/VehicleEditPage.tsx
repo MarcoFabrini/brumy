@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -15,6 +15,8 @@ export function VehicleEditPage() {
   const { id } = useParams<{ id: string }>();
   const vehicleId = Number(id);
   const navigate = useNavigate();
+  // Lo state del dettaglio (elenco di provenienza con la ricerca) torna al dettaglio, per il suo "‹ Indietro"
+  const { state: returnState } = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -39,19 +41,19 @@ export function VehicleEditPage() {
       <PageHeader
         title={t('vehicle.edit')}
         description={data.name}
-        onBack={() => navigate(`/vehicles/${vehicleId}`)}
+        onBack={() => navigate(`/vehicles/${vehicleId}`, { state: returnState })}
       />
 
       <VehicleForm
         defaultValues={data}
         isPending={updateMutation.isPending}
         error={updateMutation.error}
-        onCancel={() => navigate(`/vehicles/${vehicleId}`)}
+        onCancel={() => navigate(`/vehicles/${vehicleId}`, { state: returnState })}
         onSubmit={(form) =>
           updateMutation.mutate(form, {
             onSuccess: () => {
               toast({ title: t('vehicle.updated'), variant: 'success' });
-              navigate(`/vehicles/${vehicleId}`, { replace: true });
+              navigate(`/vehicles/${vehicleId}`, { replace: true, state: returnState });
             },
           })
         }

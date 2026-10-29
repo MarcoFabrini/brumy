@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createExpense,
   deleteExpense,
@@ -10,6 +10,7 @@ import type { CreateExpenseDto, ExpenseSection, UpdateExpenseDto } from '@/api/t
 import { reminderKeys } from '@/hooks/useReminders';
 import { userValueKeys } from '@/hooks/userValueKeys';
 import { invalidateVehicleStats } from '@/hooks/useVehicles';
+import { keepPreviousOf, nextListPage, searchKeyPart } from '@/lib/pagination';
 
 export const expenseKeys = {
   all: ['expenses'] as const,
@@ -17,11 +18,19 @@ export const expenseKeys = {
   detail: (id: number) => [...expenseKeys.all, 'detail', id] as const,
 };
 
-export function useExpenses(vehicleId: number, section?: ExpenseSection) {
-  return useQuery({
-    queryKey: [...expenseKeys.byVehicle(vehicleId), section ?? 'all'],
-    queryFn: () => listExpenses(vehicleId, section),
+/**
+ * Spese del veicolo a pagine (si caricano scorrendo), di una sezione o di tutte, con la ricerca `search`. La chiave
+ * resta figlia di `byVehicle(id)`: le invalidazioni esistenti ricaricano tutte le pagine già caricate.
+ */
+export function useExpenses(vehicleId: number, section?: ExpenseSection, search?: string) {
+  const base = [...expenseKeys.byVehicle(vehicleId), section ?? 'all'] as const;
+  return useInfiniteQuery({
+    queryKey: [...base, ...searchKeyPart(search)],
+    queryFn: ({ pageParam }) => listExpenses(vehicleId, { section, page: pageParam, search }),
+    initialPageParam: 1,
+    getNextPageParam: nextListPage,
     enabled: vehicleId > 0,
+    placeholderData: keepPreviousOf(base),
   });
 }
 

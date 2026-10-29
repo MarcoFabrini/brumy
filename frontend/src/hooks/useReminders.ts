@@ -14,6 +14,7 @@ import type {
   CreateReminderDto,
   UpdateReminderDto,
 } from '@/api/types/reminder';
+import { keepPreviousOf, searchKeyPart } from '@/lib/pagination';
 
 export const reminderKeys = {
   all: ['reminders'] as const,
@@ -22,20 +23,27 @@ export const reminderKeys = {
   overview: () => [...reminderKeys.all, 'overview'] as const,
 };
 
-/** Scadenze di tutti i veicoli propri, con urgenza: la tab "Scadenze". */
-export function useReminderOverview(options: { enabled?: boolean } = {}) {
+/**
+ * Scadenze di tutti i veicoli propri, con urgenza: la tab "Scadenze". Con `search` (query string di
+ * `buildSearchQuery`) la chiave è figlia di `overview()`.
+ */
+export function useReminderOverview(options: { enabled?: boolean; search?: string } = {}) {
+  const { enabled = true, search } = options;
   return useQuery({
-    queryKey: reminderKeys.overview(),
-    queryFn: listReminderOverview,
-    enabled: options.enabled ?? true,
+    queryKey: [...reminderKeys.overview(), ...searchKeyPart(search)],
+    queryFn: () => listReminderOverview(search),
+    enabled,
+    placeholderData: keepPreviousOf(reminderKeys.overview()),
   });
 }
 
-export function useReminders(vehicleId: number) {
+/** Promemoria attivi del veicolo; con `search` la chiave è figlia di `byVehicle(id)`. */
+export function useReminders(vehicleId: number, search?: string) {
   return useQuery({
-    queryKey: reminderKeys.byVehicle(vehicleId),
-    queryFn: () => listReminders(vehicleId),
+    queryKey: [...reminderKeys.byVehicle(vehicleId), ...searchKeyPart(search)],
+    queryFn: () => listReminders(vehicleId, search),
     enabled: vehicleId > 0,
+    placeholderData: keepPreviousOf(reminderKeys.byVehicle(vehicleId)),
   });
 }
 

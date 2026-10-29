@@ -1,15 +1,21 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Trash2 } from 'lucide-react';
 import { Button, ListRow, ListSection } from '@/components/ui';
 
-/** "Modifica" come nella navigation bar iOS: testo blu, non un'icona in un riquadro. */
+/**
+ * "Modifica" come nella navigation bar iOS: testo blu, non un'icona in un riquadro. Porta con sé lo `state` del
+ * dettaglio (l'elenco di provenienza con la sua ricerca), che la pagina di modifica riconsegna tornando al dettaglio.
+ */
 export function EditLink({ to }: { to: string }) {
   const { t } = useTranslation();
+  const { state } = useLocation();
   return (
     <Button asChild variant="ghost" className="-mr-3 px-3 text-[1.0625rem] font-normal text-primary hover:bg-transparent">
-      <Link to={to}>{t('actions.edit')}</Link>
+      <Link to={to} state={state}>
+        {t('actions.edit')}
+      </Link>
     </Button>
   );
 }

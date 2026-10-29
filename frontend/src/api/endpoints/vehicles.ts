@@ -1,4 +1,5 @@
 import { authFetch } from '@/api/client';
+import { listUrl } from '@/api/endpoints/listUrl';
 import type { CreateVehicleDto, UpdateVehicleDto, Vehicle } from '@/api/types/vehicle';
 import type { VehicleStats } from '@/api/types/vehicleStats';
 import { dashboardChartsSchema, type DashboardCharts } from '@/api/types/dashboardCharts';
@@ -13,13 +14,14 @@ import {
  * Restituisce dati typed senza side-effect.
  */
 
-export function listVehicles() {
-  return authFetch<Vehicle[]>('/api/vehicles');
+/** Veicoli attivi accessibili; `search`: query string di `buildSearchQuery`. */
+export function listVehicles(search?: string) {
+  return authFetch<Vehicle[]>(listUrl('/api/vehicles', {}, search));
 }
 
 /** Solo i veicoli archiviati a cui l'utente ha accesso (stesse regole della lista normale). */
-export function listArchivedVehicles() {
-  return authFetch<Vehicle[]>('/api/vehicles?archived=1');
+export function listArchivedVehicles(search?: string) {
+  return authFetch<Vehicle[]>(listUrl('/api/vehicles', { archived: 1 }, search));
 }
 
 export function getVehicle(id: number) {

@@ -1,4 +1,6 @@
 import { authFetch } from '@/api/client';
+import { listUrl } from '@/api/endpoints/listUrl';
+import { LIST_PAGE_SIZE } from '@/lib/pagination';
 import {
   adaptExpense,
   type CreateExpenseDto,
@@ -8,10 +10,16 @@ import {
   type UpdateExpenseDto,
 } from '@/api/types/expense';
 
-/** Spese del veicolo (le più recenti), di una sezione o di tutte. */
-export async function listExpenses(vehicleId: number, section?: ExpenseSection): Promise<Expense[]> {
-  const query = new URLSearchParams({ vehicleId: String(vehicleId), ...(section ? { section } : {}) });
-  const raw = await authFetch<ExpenseResponse[]>(`/api/expenses?${query}`);
+/**
+ * Una pagina ({@link LIST_PAGE_SIZE} record, dalle più recenti) delle spese del veicolo, di una sezione o di tutte,
+ * con la ricerca `search` (query string di `buildSearchQuery`).
+ */
+export async function listExpenses(
+  vehicleId: number,
+  { section, page = 1, search }: { section?: ExpenseSection; page?: number; search?: string } = {},
+): Promise<Expense[]> {
+  const url = listUrl('/api/expenses', { vehicleId, section, page, limit: LIST_PAGE_SIZE }, search);
+  const raw = await authFetch<ExpenseResponse[]>(url);
   return raw.map(adaptExpense);
 }
 

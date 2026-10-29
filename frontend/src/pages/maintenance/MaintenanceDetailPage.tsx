@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -18,6 +18,7 @@ import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 export function MaintenanceDetailPage() {
   const { t } = useTranslation();
@@ -25,6 +26,7 @@ export function MaintenanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const maintenanceId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -46,7 +48,8 @@ export function MaintenanceDetailPage() {
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
   const section = sectionOf(maintenanceKind(data.category));
-  const listPath = withVehicle(section.listPath, data.vehicleId);
+  // All'elenco da cui si è arrivati (con la sua ricerca), altrimenti alla sezione del veicolo
+  const listPath = listReturnPath(location.state, '/maintenance', withVehicle(section.listPath, data.vehicleId));
 
   return (
     <div className="space-y-6">

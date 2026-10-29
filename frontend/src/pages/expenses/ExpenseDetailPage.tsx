@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -17,6 +17,7 @@ import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 export function ExpenseDetailPage() {
   const { t } = useTranslation();
@@ -24,6 +25,7 @@ export function ExpenseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const expenseId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -44,7 +46,8 @@ export function ExpenseDetailPage() {
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
   const section = sectionOf(expenseKind(data.section));
-  const listPath = withVehicle(section.listPath, data.vehicleId);
+  // All'elenco da cui si è arrivati (con la sua ricerca), altrimenti alla sezione del veicolo
+  const listPath = listReturnPath(location.state, '/expenses', withVehicle(section.listPath, data.vehicleId));
 
   return (
     <div className="space-y-6">

@@ -8,6 +8,9 @@ use App\Entity\Organization;
 use App\Entity\User;
 use App\Entity\Vehicle;
 use App\Enum\ShareRole;
+use App\Repository\Search\ListSearchFields;
+use App\Repository\Search\ListSearchFilter;
+use App\Service\Search\ListSearch;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -27,6 +30,7 @@ class VehicleRepository extends ServiceEntityRepository
      * - se è member → solo quelli con uno share esplicito
      *
      * Di default solo i veicoli attivi; con `$archivedOnly` SOLO gli archiviati (stesse regole di accesso).
+     * `$search` (ricerca dell'elenco) restringe ancora; null = nessun filtro.
      *
      * @return list<Vehicle>
      */
@@ -35,6 +39,7 @@ class VehicleRepository extends ServiceEntityRepository
         Organization $org,
         bool $archivedOnly = false,
         bool $isOrgAdmin = false,
+        ?ListSearch $search = null,
     ): array {
         $qb = $this->createQueryBuilder('v')
             ->where('v.organization = :org')
@@ -46,6 +51,9 @@ class VehicleRepository extends ServiceEntityRepository
         if (!$isOrgAdmin) {
             $qb->innerJoin('v.shares', 'vs', 'WITH', 'vs.user = :user AND vs.acceptedAt IS NOT NULL')
                 ->setParameter('user', $user);
+        }
+        if ($search !== null) {
+            ListSearchFilter::apply($qb, $search, self::searchFields());
         }
 
         return $qb->getQuery()->getResult();
@@ -109,5 +117,16 @@ class VehicleRepository extends ServiceEntityRepository
     public function findOneInOrganization(int $id, Organization $org): ?Vehicle
     {
         return $this->findOneBy(['id' => $id, 'organization' => $org]);
+    }
+
+    /** Dove cerca la ricerca dell'elenco dei veicoli: nomi e identificativi, tipo, carburanti, anno, km iniziali. */
+    private static function searchFields(): ListSearchFields
+    {
+        return new ListSearchFields(
+            text: ['v.name', 'v.brand', 'v.model', 'v.licensePlate', 'v.vin', 'v.notes'],
+            families: ['vehicle_type' => ['v.type'], 'fuel_type' => ['v.fuelType', 'v.secondaryFuelType']],
+            year: 'v.year',
+            km: ['v.initialKm'],
+        );
     }
 }

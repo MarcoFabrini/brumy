@@ -7,12 +7,14 @@ import { EmptyState } from './EmptyState';
 import { VehiclePicker } from './VehiclePicker';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
+import { cn } from '@/lib/utils';
 
 /**
  * VehicleScopedList — scaffold comune delle liste per-veicolo
  * (manutenzioni/rifornimenti/spese/scadenze):
  * - vehicleId === 0 → griglia VehiclePicker (con skeleton e empty "nessun veicolo");
- * - vehicleId > 0   → skeleton/errore/empty/lista.
+ * - vehicleId > 0   → `toolbar` (es. il campo di ricerca), poi skeleton/errore/empty/lista e `footer`
+ *   (es. "Mostra altri"). Nella griglia di scelta del veicolo né toolbar né footer.
  * Il veicolo attivo e l'azione "cambia veicolo" sono nel PageHeader della pagina
  * (titolo + freccia back). La pagina fornisce query, empty state e render della card.
  */
@@ -26,6 +28,12 @@ export interface VehicleScopedListProps<T> {
   empty: ReactNode;
   /** Render della card; includere `key` sull'elemento. */
   renderItem: (item: T) => ReactNode;
+  /** Sopra l'elenco del veicolo (campo di ricerca). */
+  toolbar?: ReactNode;
+  /** Sotto l'elenco del veicolo (caricamento della pagina successiva). */
+  footer?: ReactNode;
+  /** Sta arrivando un nuovo risultato e si vede ancora il precedente: `aria-busy` e opacità ridotta. */
+  busy?: boolean;
 }
 
 export function VehicleScopedList<T>({
@@ -36,6 +44,9 @@ export function VehicleScopedList<T>({
   error,
   empty,
   renderItem,
+  toolbar,
+  footer,
+  busy = false,
 }: VehicleScopedListProps<T>) {
   const { t } = useTranslation();
   const errorMessage = useApiErrorMessage();
@@ -77,6 +88,8 @@ export function VehicleScopedList<T>({
 
   return (
     <>
+      {toolbar}
+
       {isLoading && (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -87,9 +100,12 @@ export function VehicleScopedList<T>({
 
       {error && <Alert variant="error">{errorMessage(error)}</Alert>}
 
-      {items && items.length === 0 && empty}
-
-      {items && items.length > 0 && <ListSection>{items.map(renderItem)}</ListSection>}
+      {items && (
+        <div aria-busy={busy || undefined} className={cn('space-y-6 transition-opacity', busy && 'opacity-60')}>
+          {items.length === 0 ? empty : <ListSection>{items.map(renderItem)}</ListSection>}
+          {footer}
+        </div>
+      )}
     </>
   );
 }

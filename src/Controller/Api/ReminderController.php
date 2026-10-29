@@ -18,6 +18,7 @@ use App\Service\AttachmentCleaner;
 use App\Service\ReminderAlreadyCompletedException;
 use App\Service\ReminderCompletion;
 use App\Service\ReminderOverview;
+use App\Service\Search\ListSearch;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -54,8 +55,15 @@ final class ReminderController extends AbstractController
         parameters: [
             new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
             new OA\Parameter(name: 'onlyActive', in: 'query', schema: new OA\Schema(type: 'boolean', default: true)),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
         ],
-        responses: [new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Reminder::class, groups: ['reminder:list', 'vehicle:nested']))))],
+        responses: [
+            new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Reminder::class, groups: ['reminder:list', 'vehicle:nested'])))),
+            new OA\Response(response: 400, description: 'query.vehicle_id_required; http.400 for a malformed q/hint'),
+            new OA\Response(response: 403, description: 'No access to the vehicle'),
+            new OA\Response(response: 404, description: 'vehicle.not_found'),
+        ],
     )]
     #[Route('', name: 'list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
@@ -71,7 +79,9 @@ final class ReminderController extends AbstractController
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $vehicle);
 
         $onlyActive = filter_var($request->query->get('onlyActive', 'true'), FILTER_VALIDATE_BOOLEAN);
-        return $this->json($this->repo->findByVehicle($vehicle, $onlyActive), context: ['groups' => ['reminder:list', 'vehicle:nested']]);
+        $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
+
+        return $this->json($this->repo->findByVehicle($vehicle, $onlyActive, $search), context: ['groups' => ['reminder:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(
@@ -102,14 +112,22 @@ final class ReminderController extends AbstractController
     #[OA\Get(
         summary: 'All active reminders of the vehicles the caller owns, with their urgency',
         description: 'Date- and km-based reminders of the caller\'s own active vehicles (not shared ones, nor, for org owner/admin, the other members\'), each with `urgency` (ok | soon | overdue, date and km together, like notifications) and the vehicle `currentKm`. Sorted: overdue, soon, ok; then nearest date, then fewest km left.',
-        responses: [new OA\Response(response: 200, description: 'Array of reminders (reminder:list + vehicle:nested) with urgency and currentKm')],
+        parameters: [
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Array of reminders (reminder:list + vehicle:nested) with urgency and currentKm'),
+            new OA\Response(response: 400, description: 'http.400 for a malformed q/hint'),
+        ],
     )]
     #[Route('/overview', name: 'overview', methods: ['GET'])]
-    public function overview(): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
-        $items = $this->overview->forOwner($this->orgResolver->resolve(), $user);
+        $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
+        $items = $this->overview->forOwner($this->orgResolver->resolve(), $user, $search);
 
         return $this->json(array_map(fn (array $item): array => [
             ...(array) $this->normalizer->normalize($item['reminder'], 'json', ['groups' => ['reminder:list', 'vehicle:nested']]),

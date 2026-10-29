@@ -1,4 +1,5 @@
 import { authFetch } from '@/api/client';
+import { listUrl } from '@/api/endpoints/listUrl';
 import { z } from 'zod';
 import {
   adaptReminder,
@@ -14,14 +15,15 @@ import {
   type UpdateReminderDto,
 } from '@/api/types/reminder';
 
-export async function listReminders(vehicleId: number): Promise<Reminder[]> {
-  const raw = await authFetch<ReminderResponse[]>(`/api/reminders?vehicleId=${vehicleId}`);
+/** Promemoria attivi del veicolo; `search`: query string di `buildSearchQuery`. */
+export async function listReminders(vehicleId: number, search?: string): Promise<Reminder[]> {
+  const raw = await authFetch<ReminderResponse[]>(listUrl('/api/reminders', { vehicleId }, search));
   return raw.map(adaptReminder);
 }
 
 /** Tutte le scadenze attive dei veicoli propri, con urgenza (data e km) e in ordine: la tab "Scadenze". */
-export async function listReminderOverview(): Promise<ReminderOverviewItem[]> {
-  const raw = z.array(reminderOverviewItemSchema).parse(await authFetch<unknown>('/api/reminders/overview'));
+export async function listReminderOverview(search?: string): Promise<ReminderOverviewItem[]> {
+  const raw = z.array(reminderOverviewItemSchema).parse(await authFetch<unknown>(listUrl('/api/reminders/overview', {}, search)));
   return raw.map(adaptReminderOverviewItem);
 }
 

@@ -16,6 +16,7 @@ use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
 use App\Service\FuelPrices\FuelPrices;
+use App\Service\Search\ListSearch;
 use App\Service\UserValues;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -51,9 +52,14 @@ final class RefuelingController extends AbstractController
             new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20, maximum: 100)),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Refueling::class, groups: ['refueling:list', 'vehicle:nested'])))),
+            new OA\Response(response: 400, description: 'query.vehicle_id_required; http.400 for a malformed q/hint'),
+            new OA\Response(response: 403, description: 'No access to the vehicle'),
+            new OA\Response(response: 404, description: 'vehicle.not_found'),
         ],
     )]
     #[Route('', name: 'list', methods: ['GET'])]
@@ -72,8 +78,9 @@ final class RefuelingController extends AbstractController
 
         $page = min(100_000, max(1, (int) $request->query->get('page', 1)));
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
+        $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
 
-        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit), context: ['groups' => ['refueling:list', 'vehicle:nested']]);
+        return $this->json($this->repo->findByVehiclePaginated($vehicle, $page, $limit, $search), context: ['groups' => ['refueling:list', 'vehicle:nested']]);
     }
 
     #[OA\Get(

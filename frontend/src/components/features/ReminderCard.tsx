@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useListReturnState } from '@/hooks/useListReturnState';
 import { Bell } from 'lucide-react';
 import { ListRow } from '@/components/ui';
 import { MetaLine } from './MetaLine';
@@ -16,6 +17,7 @@ export interface ReminderCardProps {
 
 /** Un promemoria come riga di lista iOS: cosa, poi veicolo, data, km e ricorrenza; urgenza a destra. */
 export function ReminderCard({ reminder: r, showVehicleName }: ReminderCardProps) {
+  const returnState = useListReturnState();
   const fmt = useFormat();
   const vehicleName = useVehicleName(r.vehicleId);
 
@@ -23,6 +25,7 @@ export function ReminderCard({ reminder: r, showVehicleName }: ReminderCardProps
     <ListRow
       as={Link}
       to={`/reminders/${r.id}`}
+      state={returnState}
       icon={<Bell />}
       iconClassName="bg-[#ff3b30]"
       label={r.description}

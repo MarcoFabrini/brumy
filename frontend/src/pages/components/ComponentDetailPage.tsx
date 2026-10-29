@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, ListRow, ListSection, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -18,6 +18,7 @@ import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { useApiErrorMessage } from '@/hooks/useApiErrorMessage';
 import { useToast } from '@/hooks/useToast';
 import { useFormat } from '@/hooks/useFormat';
+import { listReturnPath } from '@/lib/listReturn';
 
 /** Scheda di un componente: i suoi dati, dove è stato comprato e in quali lavori è stato usato. */
 export function ComponentDetailPage() {
@@ -26,6 +27,7 @@ export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const componentId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -44,7 +46,8 @@ export function ComponentDetailPage() {
   }
   if (error) return <Alert variant="error">{errorMessage(error)}</Alert>;
   if (!data) return null;
-  const listPath = `/components?vehicleId=${data.vehicleId}`;
+  // All'elenco da cui si è arrivati (con la sua ricerca), altrimenti ai componenti del veicolo
+  const listPath = listReturnPath(location.state, '/components', `/components?vehicleId=${data.vehicleId}`);
 
   return (
     <div className="space-y-6">

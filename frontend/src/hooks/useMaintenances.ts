@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createMaintenance,
   deleteMaintenance,
@@ -15,6 +15,7 @@ import { componentKeys } from '@/hooks/componentKeys';
 import { reminderKeys } from '@/hooks/useReminders';
 import { userValueKeys } from '@/hooks/userValueKeys';
 import { invalidateVehicleStats } from '@/hooks/useVehicles';
+import { keepPreviousOf, nextListPage, searchKeyPart } from '@/lib/pagination';
 
 export const maintenanceKeys = {
   all: ['maintenances'] as const,
@@ -22,11 +23,19 @@ export const maintenanceKeys = {
   detail: (id: number) => [...maintenanceKeys.all, 'detail', id] as const,
 };
 
-export function useMaintenances(vehicleId: number, category?: MaintenanceCategory) {
-  return useQuery({
-    queryKey: [...maintenanceKeys.byVehicle(vehicleId), category ?? 'all'],
-    queryFn: () => listMaintenances(vehicleId, category),
+/**
+ * Lavori del veicolo a pagine (si caricano scorrendo), di una sezione o di tutte, con la ricerca `search`. La chiave
+ * resta figlia di `byVehicle(id)`: le invalidazioni esistenti ricaricano tutte le pagine già caricate.
+ */
+export function useMaintenances(vehicleId: number, category?: MaintenanceCategory, search?: string) {
+  const base = [...maintenanceKeys.byVehicle(vehicleId), category ?? 'all'] as const;
+  return useInfiniteQuery({
+    queryKey: [...base, ...searchKeyPart(search)],
+    queryFn: ({ pageParam }) => listMaintenances(vehicleId, { category, page: pageParam, search }),
+    initialPageParam: 1,
+    getNextPageParam: nextListPage,
     enabled: vehicleId > 0,
+    placeholderData: keepPreviousOf(base),
   });
 }
 

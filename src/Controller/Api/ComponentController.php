@@ -14,6 +14,7 @@ use App\Repository\VehicleRepository;
 use App\Security\Voter\VehicleVoter;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\UserValues;
+use App\Service\Search\ListSearch;
 use Doctrine\ORM\EntityManagerInterface;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
@@ -50,10 +51,15 @@ final class ComponentController extends AbstractController
 
     #[OA\Get(
         summary: 'Components of a vehicle, by name',
-        parameters: [new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [
+            new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
+        ],
         responses: [
             new OA\Response(response: 200, description: 'Array', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Component::class, groups: ['component:list', 'vehicle:nested', 'user_value:nested'])))),
-            new OA\Response(response: 400, description: 'query.vehicle_id_required'),
+            new OA\Response(response: 400, description: 'query.vehicle_id_required; http.400 for a malformed q/hint'),
+            new OA\Response(response: 403, description: 'No access to the vehicle'),
             new OA\Response(response: 404, description: 'vehicle.not_found'),
         ],
     )]
@@ -69,8 +75,9 @@ final class ComponentController extends AbstractController
             throw $this->createNotFoundException('vehicle.not_found');
         }
         $this->denyAccessUnlessGranted(VehicleVoter::VIEW, $vehicle);
+        $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
 
-        return new JsonResponse($this->normalizer->normalize($this->repo->findByVehicle($vehicle), 'json', ['groups' => ['component:list', 'vehicle:nested', 'user_value:nested']]));
+        return new JsonResponse($this->normalizer->normalize($this->repo->findByVehicle($vehicle, $search), 'json', ['groups' => ['component:list', 'vehicle:nested', 'user_value:nested']]));
     }
 
     #[OA\Get(

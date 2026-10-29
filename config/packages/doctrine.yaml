@@ -20,6 +20,10 @@ doctrine:
                 alias: App
         controller_resolver:
             auto_mapping: false
+        dql:
+            datetime_functions:
+                # Ricerca negli elenchi: "marzo" trova i record di marzo di ogni anno
+                MONTH: App\Doctrine\Dql\Month
 
 when@test:
     doctrine:

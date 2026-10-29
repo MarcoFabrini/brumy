@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useListReturnState } from '@/hooks/useListReturnState';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Bell, Clock } from 'lucide-react';
 import { ListRow, ListSection, SwipeActions } from '@/components/ui';
@@ -50,6 +51,7 @@ export interface ReminderOverviewSectionProps {
  * successiva). Usato dalla tab "Scadenze" e dal "Da fare" della Home.
  */
 export function ReminderOverviewSection({ title, items, after }: ReminderOverviewSectionProps) {
+  const returnState = useListReturnState();
   const { t } = useTranslation();
   const [completing, setCompleting] = useState<ReminderOverviewItem | null>(null);
 
@@ -72,6 +74,7 @@ export function ReminderOverviewSection({ title, items, after }: ReminderOvervie
               <ListRow
                 as={Link}
                 to={`/reminders/${r.id}`}
+                state={returnState}
                 icon={<Icon />}
                 iconClassName={iconClassName}
                 label={r.description}

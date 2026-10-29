@@ -10,12 +10,15 @@ import type { ComponentDto } from '@/api/types/component';
 import { componentKeys } from '@/hooks/componentKeys';
 import { maintenanceKeys } from '@/hooks/useMaintenances';
 import { userValueKeys } from '@/hooks/userValueKeys';
+import { keepPreviousOf, searchKeyPart } from '@/lib/pagination';
 
-export function useComponents(vehicleId: number) {
+/** Componenti del veicolo, per nome; con `search` la chiave è figlia di `byVehicle(id)`. */
+export function useComponents(vehicleId: number, search?: string) {
   return useQuery({
-    queryKey: componentKeys.byVehicle(vehicleId),
-    queryFn: () => listComponents(vehicleId),
+    queryKey: [...componentKeys.byVehicle(vehicleId), ...searchKeyPart(search)],
+    queryFn: () => listComponents(vehicleId, search),
     enabled: vehicleId > 0,
+    placeholderData: keepPreviousOf(componentKeys.byVehicle(vehicleId)),
   });
 }
 

@@ -1153,5 +1153,18 @@
     "trend_empty": "No {{fuel}} price in the last 30 days.",
     "trend_day": "Day",
     "followed_badge": "Followed"
+  },
+  "search": {
+    "label": "Search this list",
+    "placeholder": "Search",
+    "clear": "Clear search",
+    "no_results": {
+      "title": "No results for “{{query}}”",
+      "description": "Try other words or check the spelling."
+    }
+  },
+  "list": {
+    "load_more": "Show more",
+    "loading_more": "Loading…"
   }
 }

@@ -9,6 +9,7 @@ use App\Entity\Reminder;
 use App\Entity\User;
 use App\Enum\ReminderUrgency;
 use App\Repository\ReminderRepository;
+use App\Service\Search\ListSearch;
 
 /**
  * Le scadenze di tutti i veicoli propri, con l'urgenza già calcolata (data e km insieme, come le notifiche): la tab
@@ -25,16 +26,17 @@ final class ReminderOverview
 
     /**
      * Ordine: scadute, poi in scadenza, poi le altre; a parità la data più vicina, poi i km mancanti, poi l'id.
+     * `$search` (ricerca dell'elenco) restringe i promemoria; null = tutti.
      *
      * @return list<array{reminder: Reminder, urgency: ReminderUrgency, currentKm: int}>
      */
-    public function forOwner(Organization $org, User $owner): array
+    public function forOwner(Organization $org, User $owner, ?ListSearch $search = null): array
     {
         $today = $this->clock->today();
         /** @var array<int, int> $kmByVehicle */
         $kmByVehicle = [];
         $items = [];
-        foreach ($this->repo->findActiveForOwner($org, $owner) as $reminder) {
+        foreach ($this->repo->findActiveForOwner($org, $owner, $search) as $reminder) {
             $vehicle = $reminder->getVehicle();
             $vehicleId = (int) $vehicle->getId();
             $km = $kmByVehicle[$vehicleId] ??= $this->stats->currentKm($vehicle);

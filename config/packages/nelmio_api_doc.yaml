@@ -28,6 +28,34 @@ nelmio_api_doc:
                     required: false
                     description: 'Refueling fuel type: prices are for its base fuel (hybrid = gasoline); none for electric, hydrogen and the like'
                     schema: { type: string, enum: [gasoline, diesel, lpg, cng, electric, hybrid, hydrogen, ethanol, biodiesel] }
+                # Ricerca negli elenchi (docs/03-api-endpoints.md, "Ricerca negli elenchi")
+                ListSearchQ:
+                    name: q
+                    in: query
+                    required: false
+                    description: |
+                        List search. Trimmed, cut to 100 characters, split on spaces; the first 6 words count. Every
+                        word must match (AND) at least one field of the list (OR): text and linked names (partial,
+                        case- and accent-insensitive, `%` and `_` are literal), the values sent in `hint` for that word,
+                        and numbers read by the server: an integer finds amounts in [n, n+1) and exact km
+                        (`125000` or `125.000`), `120,50`/`120.5` the exact amount, `2025` the year, `03/2025` the
+                        month, `12/03/2025`, `1.3.25` or `2025-03-12` the day. Empty or missing = no filter.
+                    schema: { type: string, maxLength: 100 }
+                ListSearchHint:
+                    name: hint
+                    in: query
+                    required: false
+                    style: deepObject
+                    explode: true
+                    description: |
+                        Translated alternatives for word `i` (0-based) of `q`, as `family:value`, e.g.
+                        `hint[0][]=maintenance_type:inspection&hint[1][]=month:3`. Families: maintenance_type,
+                        maintenance_category, expense_section, recurring_period, fuel_type, vehicle_type, reminder_type
+                        (enum values), refueling_tank (full | partial), month (1-12). Unknown families, invalid values
+                        and indexes beyond the words are ignored; at most 30 values per word. A non-array `hint` → 400.
+                    schema:
+                        type: object
+                        additionalProperties: { type: array, items: { type: string } }
             schemas:
                 FuelPricePoint:
                     type: object

@@ -21,6 +21,7 @@ use App\Service\ActiveOrganizationResolver;
 use App\Service\AttachmentCleaner;
 use App\Service\DashboardChartsService;
 use App\Service\MemberNotifier;
+use App\Service\Search\ListSearch;
 use App\Service\VehicleAccessChecker;
 use App\Service\VehicleOwnershipTransfer;
 use App\Service\VehicleQuota;
@@ -69,6 +70,8 @@ final class VehicleController extends AbstractController
         description: 'Org admin/owner sees all. Plain member sees only vehicles with explicit VehicleShare. Excludes archived unless `?archived=1`, which returns ONLY the archived ones the caller can access (same access rules). Each item carries `ownership` (owned = the caller owns it; shared = read-only share; organization = visible through the org owner/admin role) and the caller\'s `permissions`. Dashboard totals, charts, upcoming reminders and notifications only cover `owned` vehicles.',
         parameters: [
             new OA\Parameter(name: 'archived', in: 'query', required: false, description: '1 = only archived vehicles (default: only active ones)', schema: new OA\Schema(type: 'boolean', default: false)),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
+            new OA\Parameter(ref: '#/components/parameters/ListSearchHint'),
         ],
         responses: [
             new OA\Response(
@@ -76,6 +79,7 @@ final class VehicleController extends AbstractController
                 description: 'Array of vehicles',
                 content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: new Model(type: Vehicle::class, groups: ['vehicle:list']))),
             ),
+            new OA\Response(response: 400, description: 'http.400 for a malformed q/hint'),
         ],
     )]
     #[Route('', name: 'list', methods: ['GET'])]
@@ -91,6 +95,7 @@ final class VehicleController extends AbstractController
             $org,
             archivedOnly: $request->query->getBoolean('archived'),
             isOrgAdmin: $isOrgAdmin,
+            search: ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint')),
         );
         // Una query per tutte le condivisioni dell'utente, non due per veicolo.
         $shareRoles = $this->shareRepo->findAcceptedRolesByUserInOrganization($user, $org);

@@ -11,7 +11,10 @@ use App\Entity\Vehicle;
 use App\Enum\ReminderType;
 use App\Enum\ReminderUrgency;
 use App\Enum\ShareRole;
+use App\Repository\Search\ListSearchFields;
+use App\Repository\Search\ListSearchFilter;
 use App\Service\AppClock;
+use App\Service\Search\ListSearch;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -33,8 +36,12 @@ class ReminderRepository extends ServiceEntityRepository
         return $this->findOneBy(['id' => $id, 'organization' => $org]);
     }
 
-    /** @return list<Reminder> */
-    public function findByVehicle(Vehicle $vehicle, bool $onlyActive = true): array
+    /**
+     * @param ListSearch|null $search ricerca dell'elenco; null = nessun filtro
+     *
+     * @return list<Reminder>
+     */
+    public function findByVehicle(Vehicle $vehicle, bool $onlyActive = true, ?ListSearch $search = null): array
     {
         $qb = $this->createQueryBuilder('r')
             ->where('r.vehicle = :vehicle')
@@ -45,6 +52,9 @@ class ReminderRepository extends ServiceEntityRepository
 
         if ($onlyActive) {
             $qb->andWhere('r.completedAt IS NULL');
+        }
+        if ($search !== null) {
+            ListSearchFilter::apply($qb, $search, self::searchFields());
         }
 
         return $qb->getQuery()->getResult();
@@ -114,11 +124,13 @@ class ReminderRepository extends ServiceEntityRepository
      * tab "Scadenze". Solo i veicoli propri, come {@see self::findUpcomingForOwner()}: non quelli condivisi in sola
      * lettura né, per owner/admin, quelli degli altri membri. L'ordine per urgenza lo decide chi conosce i km.
      *
+     * @param ListSearch|null $search ricerca dell'elenco; null = nessun filtro. Cerca anche nome e targa del veicolo.
+     *
      * @return list<Reminder>
      */
-    public function findActiveForOwner(Organization $org, User $owner): array
+    public function findActiveForOwner(Organization $org, User $owner, ?ListSearch $search = null): array
     {
-        return $this->createQueryBuilder('r')
+        $qb = $this->createQueryBuilder('r')
             ->addSelect('vehicle')
             ->innerJoin('r.vehicle', 'vehicle')
             ->innerJoin('vehicle.shares', 'vs', 'WITH', 'vs.user = :owner AND vs.role = :ownerRole AND vs.acceptedAt IS NOT NULL')
@@ -129,9 +141,12 @@ class ReminderRepository extends ServiceEntityRepository
             ->setParameter('org', $org)
             ->setParameter('owner', $owner)
             ->setParameter('ownerRole', ShareRole::ADMIN)
-            ->orderBy('r.id', 'ASC')
-            ->getQuery()
-            ->getResult();
+            ->orderBy('r.id', 'ASC');
+        if ($search !== null) {
+            ListSearchFilter::apply($qb, $search, self::searchFields(withVehicle: true));
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     /**
@@ -221,6 +236,23 @@ class ReminderRepository extends ServiceEntityRepository
             ->setParameter('vehicle', $vehicle)
             ->getQuery()
             ->execute();
+    }
+
+    /**
+     * Dove cerca la ricerca dei promemoria: testi, tipo, data e km di scadenza (e quelli del completamento e della
+     * ricorrenza). Non `notifyKmBefore`: è una soglia di avviso con un default su ogni riga, non i km del promemoria.
+     * `$withVehicle`: anche nome e targa del veicolo (alias `vehicle` già unito), per la panoramica di tutti i veicoli.
+     */
+    private static function searchFields(bool $withVehicle = false): ListSearchFields
+    {
+        return new ListSearchFields(
+            text: $withVehicle
+                ? ['r.description', 'r.notes', 'vehicle.name', 'vehicle.licensePlate']
+                : ['r.description', 'r.notes'],
+            families: ['reminder_type' => ['r.type']],
+            date: 'r.dueDate',
+            km: ['r.dueKm', 'r.completedKm', 'r.recurrenceKm'],
+        );
     }
 
     private function swapNotifiedUrgency(int $id, ?ReminderUrgency $from, ?ReminderUrgency $to, ?\DateTimeImmutable $notifiedAt): bool

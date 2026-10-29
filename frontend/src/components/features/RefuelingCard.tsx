@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useListReturnState } from '@/hooks/useListReturnState';
 import { useTranslation } from 'react-i18next';
 import { Fuel } from 'lucide-react';
 import { ListRow } from '@/components/ui';
@@ -12,6 +13,7 @@ export interface RefuelingCardProps {
 
 /** Un rifornimento come riga di lista iOS: data, poi km, litri e prezzo; importo a destra. Va dentro una ListSection. */
 export function RefuelingCard({ refueling: r }: RefuelingCardProps) {
+  const returnState = useListReturnState();
   const { t } = useTranslation();
   const fmt = useFormat();
 
@@ -19,6 +21,7 @@ export function RefuelingCard({ refueling: r }: RefuelingCardProps) {
     <ListRow
       as={Link}
       to={`/refueling/${r.id}`}
+      state={returnState}
       icon={<Fuel />}
       iconClassName="bg-[#34c759]"
       label={r.description ?? fmt.date(r.refueledAt)}

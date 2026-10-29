@@ -1,4 +1,4 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Alert, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout';
@@ -18,6 +18,8 @@ export function ComponentEditPage() {
   const componentId = Number(id);
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  // Lo state del dettaglio (elenco di provenienza con la ricerca) torna al dettaglio, per il suo "‹ Indietro"
+  const { state: returnState } = useLocation();
   const { toast } = useToast();
   const errorMessage = useApiErrorMessage();
 
@@ -28,7 +30,11 @@ export function ComponentEditPage() {
   const backParam = params.get('back');
   const back = backParam?.startsWith('/') && !backParam.startsWith('//') ? backParam : null;
   const queue = (params.get('next') ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
-  const leave = () => navigate((back && componentFollowUpPath(queue, back)) ?? back ?? `/components/${componentId}`, { replace: true });
+  const leave = () =>
+    navigate((back && componentFollowUpPath(queue, back)) ?? back ?? `/components/${componentId}`, {
+      replace: true,
+      state: back ? undefined : returnState,
+    });
 
   if (isLoading) {
     return (
