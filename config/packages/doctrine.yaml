@@ -30,6 +30,9 @@ when@test:
         dbal:
             # "TEST_TOKEN" is typically set by ParaTest
             dbname_suffix: '_test%env(default::TEST_TOKEN)%'
+            # Raccolta delle query anche con APP_DEBUG=0 (la CI): i test che contano le query leggono
+            # doctrine.debug_data_holder, che senza profiling non esiste.
+            profiling: true
 
 when@prod:
     doctrine:
