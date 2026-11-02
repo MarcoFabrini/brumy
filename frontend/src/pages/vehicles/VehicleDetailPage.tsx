@@ -108,6 +108,8 @@ export function VehicleDetailPage() {
   // di record a destra (dalle statistiche; i promemoria dalla loro lista).
   const counts: Partial<Record<VehicleRecordKind, number | undefined>> = {
     ...totals?.sections,
+    // Ordinari e imprevisti stanno nella stessa sezione "Lavori"
+    work: totals?.sections ? (totals.sections.scheduled ?? 0) + (totals.sections.unscheduled ?? 0) : undefined,
     refueling: totals?.refuelings,
     reminder: reminders.data?.length,
   };

@@ -195,6 +195,11 @@
       "new": "New refueling",
       "empty": "No refuelings"
     },
+    "work": {
+      "title": "Work",
+      "new": "New work",
+      "empty": "No work"
+    },
     "scheduled": {
       "title": "Scheduled work",
       "new": "New scheduled work",
@@ -287,7 +292,8 @@
       "scheduled": "Scheduled",
       "unscheduled": "Unscheduled"
     },
-    "notes": "Notes"
+    "notes": "Notes",
+    "work_kind": "Kind of work"
   },
   "values": {
     "title": "Personal lists",

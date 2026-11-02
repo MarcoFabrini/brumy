@@ -18,6 +18,7 @@ import {
 } from '@/components/ui';
 import {
   MAINTENANCE_TYPES,
+  WORK_CATEGORIES,
   type Maintenance,
   type MaintenanceCategory,
 } from '@/api/types/maintenance';
@@ -27,6 +28,7 @@ import { useServerFieldErrors } from '@/hooks/useServerFieldErrors';
 import { useValueSuggestions } from '@/hooks/useUserValues';
 import { useComponents } from '@/hooks/useComponents';
 import { nameKey } from '@/lib/componentNames';
+import { cn } from '@/lib/utils';
 import { ComponentsInput } from './ComponentsInput';
 import { NextDueReminder } from './NextDueReminder';
 import { useResyncPristineForm } from '@/hooks/useResyncPristineForm';
@@ -34,7 +36,10 @@ import { addMonthsIso, todayIso } from '@/lib/format';
 
 export interface MaintenanceFormProps {
   vehicleId: number;
-  /** Sezione: lavoro ordinario, imprevisto o revisione. Decide la categoria; la revisione non ha il tipo. */
+  /**
+   * Categoria iniziale: lavoro ordinario, imprevisto o revisione. Ordinario e imprevisto si scambiano nel modulo
+   * (una sola sezione "Lavori"); la revisione resta tale e non ha il tipo.
+   */
   category: MaintenanceCategory;
   /** Ultimo km noto del veicolo (da stats), usato per pre-compilare il campo km su una nuova manutenzione */
   defaultKm?: number;
@@ -124,6 +129,35 @@ export function MaintenanceForm({
   return (
     <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
       <input type="hidden" {...form.register('vehicleId', { valueAsNumber: true })} />
+
+      {category !== 'inspection' && (
+        <FormField label={t('maintenance.work_kind')} error={tErr(errors.category?.message)} required>
+          {(id) => (
+            <Controller
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <div id={id} role="group" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                  {WORK_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={field.value === c}
+                      onClick={() => field.onChange(c)}
+                      className={cn(
+                        'min-h-9 rounded-md text-sm font-medium text-muted-foreground transition-colors',
+                        field.value === c && 'bg-background text-foreground shadow-sm',
+                      )}
+                    >
+                      {t(`maintenance.category_options.${c}`)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          )}
+        </FormField>
+      )}
 
       {category !== 'inspection' && (
         <FormField label={t('maintenance.type')} error={tErr(errors.type?.message)} required>

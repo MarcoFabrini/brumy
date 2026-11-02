@@ -65,7 +65,7 @@ const stats = {
   consumption: { diesel: 12.5 },
   totals: {
     cost: '10.00', refuelings: 1, maintenances: 3, expenses: 2,
-    sections: { scheduled: 2, unscheduled: 0, inspection: 1, tax: 1, insurance: 0, expense: 1, component: 4 },
+    sections: { scheduled: 2, unscheduled: 1, inspection: 1, tax: 1, insurance: 0, expense: 1, component: 4 },
   },
   currentKm: 100,
   kmDriven: 100,
@@ -132,8 +132,8 @@ describe('VehicleDetailPage', () => {
     expect(refuelings).toHaveAttribute('href', '/refueling?vehicleId=1');
     await waitFor(() => expect(refuelings).toHaveTextContent('1'));
     const rows = [
-      ['Lavori ordinari', '/maintenance?category=scheduled&vehicleId=1', '2'],
-      ['Lavori imprevisti', '/maintenance?category=unscheduled&vehicleId=1', '0'],
+      // Ordinari e imprevisti in una sola sezione: il conteggio è la somma
+      ['Lavori', '/maintenance?category=work&vehicleId=1', '3'],
       ['Revisione', '/maintenance?category=inspection&vehicleId=1', '1'],
       ['Tasse', '/expenses?section=tax&vehicleId=1', '1'],
       ['Assicurazione', '/expenses?section=insurance&vehicleId=1', '0'],
@@ -193,7 +193,7 @@ describe('VehicleDetailPage', () => {
 
     const links = [
       ['Nuovo rifornimento', '/refueling/new?vehicleId=1'],
-      ['Nuovo lavoro ordinario', '/maintenance/new?category=scheduled&vehicleId=1'],
+      ['Nuovo lavoro', '/maintenance/new?category=work&vehicleId=1'],
       ['Nuova revisione', '/maintenance/new?category=inspection&vehicleId=1'],
       ['Nuova tassa', '/expenses/new?section=tax&vehicleId=1'],
       ['Nuova spesa', '/expenses/new?section=other&vehicleId=1'],

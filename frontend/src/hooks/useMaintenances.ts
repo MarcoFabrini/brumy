@@ -8,7 +8,7 @@ import {
 } from '@/api/endpoints/maintenances';
 import type {
   CreateMaintenanceDto,
-  MaintenanceCategory,
+  MaintenanceSection,
   UpdateMaintenanceDto,
 } from '@/api/types/maintenance';
 import { componentKeys } from '@/hooks/componentKeys';
@@ -27,11 +27,11 @@ export const maintenanceKeys = {
  * Lavori del veicolo a pagine (si caricano scorrendo), di una sezione o di tutte, con la ricerca `search`. La chiave
  * resta figlia di `byVehicle(id)`: le invalidazioni esistenti ricaricano tutte le pagine già caricate.
  */
-export function useMaintenances(vehicleId: number, category?: MaintenanceCategory, search?: string) {
-  const base = [...maintenanceKeys.byVehicle(vehicleId), category ?? 'all'] as const;
+export function useMaintenances(vehicleId: number, section?: MaintenanceSection, search?: string) {
+  const base = [...maintenanceKeys.byVehicle(vehicleId), section ?? 'all'] as const;
   return useInfiniteQuery({
     queryKey: [...base, ...searchKeyPart(search)],
-    queryFn: ({ pageParam }) => listMaintenances(vehicleId, { category, page: pageParam, search }),
+    queryFn: ({ pageParam }) => listMaintenances(vehicleId, { section, page: pageParam, search }),
     initialPageParam: 1,
     getNextPageParam: nextListPage,
     enabled: vehicleId > 0,

@@ -5,19 +5,21 @@ import {
   adaptMaintenance,
   type CreateMaintenanceDto,
   type Maintenance,
-  type MaintenanceCategory,
+  categoriesOf,
   type MaintenanceResponse,
+  type MaintenanceSection,
   type UpdateMaintenanceDto,
 } from '@/api/types/maintenance';
 
 /**
- * Una pagina ({@link LIST_PAGE_SIZE} record, dai più recenti) dei lavori del veicolo, di una sezione o di tutte,
- * con la ricerca `search` (query string di `buildSearchQuery`).
+ * Una pagina ({@link LIST_PAGE_SIZE} record, dai più recenti) dei lavori del veicolo, di una sezione (lavori =
+ * ordinari e imprevisti insieme, revisione) o di tutte, con la ricerca `search` (query string di `buildSearchQuery`).
  */
 export async function listMaintenances(
   vehicleId: number,
-  { category, page = 1, search }: { category?: MaintenanceCategory; page?: number; search?: string } = {},
+  { section, page = 1, search }: { section?: MaintenanceSection; page?: number; search?: string } = {},
 ): Promise<Maintenance[]> {
+  const category = section ? categoriesOf(section).join(',') : undefined;
   const url = listUrl('/api/maintenances', { vehicleId, category, page, limit: LIST_PAGE_SIZE }, search);
   const raw = await authFetch<MaintenanceResponse[]>(url);
   return raw.map(adaptMaintenance);

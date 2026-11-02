@@ -11,25 +11,25 @@ import {
   NoSearchResults,
   VehicleScopedList,
 } from '@/components/features';
-import { maintenanceKind, sectionOf, withVehicle } from '@/components/features/vehicleRecordActions';
+import { maintenanceSectionKind, sectionOf, withVehicle } from '@/components/features/vehicleRecordActions';
 import { useListSearch } from '@/hooks/useListSearch';
 import { useMaintenances } from '@/hooks/useMaintenances';
-import { useMaintenanceCategoryParam } from '@/hooks/useSectionParam';
+import { useMaintenanceSectionParam } from '@/hooks/useSectionParam';
 import { useVehicleIdParam } from '@/hooks/useVehicleIdParam';
 import { useVehicleName } from '@/hooks/useVehicleName';
 import { useCanEditVehicle } from '@/hooks/useVehicles';
 import { LIST_SEARCH_FAMILIES, shouldShowListSearch } from '@/lib/listSearch';
 
 /**
- * MaintenanceListPage — una sezione dei lavori (`?category=scheduled|unscheduled|inspection`): scelta veicolo via
+ * MaintenanceListPage — una sezione dei lavori (`?category=work`: ordinari e imprevisti insieme; `inspection`): scelta veicolo via
  * griglia di card (VehiclePicker); il click apre la lista di quella sezione per il veicolo (`?vehicleId=N`), con la
  * ricerca (`?q=`) e il caricamento delle pagine successive scorrendo.
  */
 export function MaintenanceListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const category = useMaintenanceCategoryParam();
-  const section = sectionOf(maintenanceKind(category));
+  const { section: category } = useMaintenanceSectionParam();
+  const section = sectionOf(maintenanceSectionKind(category));
   const { vehicleId, setParams } = useVehicleIdParam();
   const vehicleName = useVehicleName(vehicleId);
   // Veicolo condiviso in sola lettura: nessun "nuovo".

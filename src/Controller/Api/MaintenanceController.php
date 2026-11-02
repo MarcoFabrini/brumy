@@ -51,7 +51,7 @@ final class MaintenanceController extends AbstractController
         summary: 'List maintenances for a vehicle (paginated)',
         parameters: [
             new OA\Parameter(name: 'vehicleId', in: 'query', required: true, schema: new OA\Schema(type: 'integer')),
-            new OA\Parameter(name: 'category', in: 'query', description: 'Section: scheduled, unscheduled or inspection; omitted = all', schema: new OA\Schema(type: 'string', enum: ['scheduled', 'unscheduled', 'inspection'])),
+            new OA\Parameter(name: 'category', in: 'query', description: 'Comma-separated sections among scheduled, unscheduled and inspection (e.g. `scheduled,unscheduled` for the works); unknown values are ignored; omitted = all', schema: new OA\Schema(type: 'string', example: 'scheduled,unscheduled')),
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20, maximum: 100)),
             new OA\Parameter(ref: '#/components/parameters/ListSearchQ'),
@@ -81,10 +81,13 @@ final class MaintenanceController extends AbstractController
         $page = min(100_000, max(1, (int) $request->query->get('page', 1)));
         $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
 
-        $category = MaintenanceCategory::tryFrom((string) $request->query->get('category', ''));
+        $categories = array_values(array_filter(array_map(
+            static fn (string $c): ?MaintenanceCategory => MaintenanceCategory::tryFrom(trim($c)),
+            explode(',', (string) $request->query->get('category', '')),
+        )));
         $search = ListSearch::fromQuery((string) $request->query->get('q', ''), $request->query->all('hint'));
 
-        $items = $this->repo->findByVehiclePaginated($vehicle, $page, $limit, $category, $search);
+        $items = $this->repo->findByVehiclePaginated($vehicle, $page, $limit, $categories, $search);
         return $this->json($items, context: ['groups' => ['maintenance:list', 'vehicle:nested']]);
     }
 

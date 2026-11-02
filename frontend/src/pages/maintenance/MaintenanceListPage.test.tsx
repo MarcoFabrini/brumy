@@ -93,6 +93,31 @@ const byQuery: ListHandler = (params) => {
   return [];
 };
 
+describe('MaintenanceListPage — sezioni', () => {
+  beforeEach(async () => {
+    mockedAuthFetch.mockReset();
+    await i18n.changeLanguage('it');
+  });
+
+  it('"Lavori" chiede ordinari e imprevisti insieme, la revisione resta a sé', async () => {
+    renderPage('/maintenance?category=work&vehicleId=1', byQuery);
+    expect(await screen.findByRole('heading', { name: 'Lavori' })).toBeInTheDocument();
+    await waitFor(() => expect(listCalls().at(-1)?.get('category')).toBe('scheduled,unscheduled'));
+  });
+
+  it('i vecchi link degli ordinari o imprevisti aprono "Lavori"', async () => {
+    renderPage('/maintenance?category=unscheduled&vehicleId=1', byQuery);
+    expect(await screen.findByRole('heading', { name: 'Lavori' })).toBeInTheDocument();
+    await waitFor(() => expect(listCalls().at(-1)?.get('category')).toBe('scheduled,unscheduled'));
+  });
+
+  it('la revisione chiede solo le revisioni', async () => {
+    renderPage('/maintenance?category=inspection&vehicleId=1', byQuery);
+    expect(await screen.findByRole('heading', { name: 'Revisione' })).toBeInTheDocument();
+    await waitFor(() => expect(listCalls().at(-1)?.get('category')).toBe('inspection'));
+  });
+});
+
 describe('MaintenanceListPage — ricerca', () => {
   beforeEach(async () => {
     mockedAuthFetch.mockReset();
@@ -189,7 +214,7 @@ describe('MaintenanceListPage — ricerca', () => {
   it('un elenco vuoto senza ricerca mostra solo il suo stato vuoto, senza campo', async () => {
     renderPage('/maintenance?category=scheduled&vehicleId=1', () => []);
 
-    expect(await screen.findByText('Nessun lavoro ordinario')).toBeInTheDocument();
+    expect(await screen.findByText('Nessun lavoro')).toBeInTheDocument();
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 

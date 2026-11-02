@@ -9,7 +9,6 @@
 /config/reference.php
 /public/bundles/
 
-.lando.local.yml
 .lando.log
 
 frontend/node_modules/

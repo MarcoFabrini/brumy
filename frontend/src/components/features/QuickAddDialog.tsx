@@ -121,8 +121,14 @@ function QuickAddBody({
       {/* `key`: cambiando veicolo il modulo riparte con i valori predefiniti di quel veicolo (km, carburante…). */}
       <VehicleUsableGate key={vehicle.id} vehicleId={vehicle.id}>
         {kind === 'refueling' && <QuickRefueling vehicle={vehicle} onCancel={onDone} onSaved={done} />}
-        {(kind === 'scheduled' || kind === 'unscheduled' || kind === 'inspection') && (
-          <QuickMaintenance vehicleId={vehicle.id} category={kind} onCancel={onDone} onSaved={done} />
+        {/* Lavori: si parte da ordinario, imprevisto si sceglie nel modulo */}
+        {(kind === 'work' || kind === 'scheduled' || kind === 'unscheduled' || kind === 'inspection') && (
+          <QuickMaintenance
+            vehicleId={vehicle.id}
+            category={kind === 'work' ? 'scheduled' : kind}
+            onCancel={onDone}
+            onSaved={done}
+          />
         )}
         {(kind === 'tax' || kind === 'insurance' || kind === 'expense') && (
           <QuickExpense vehicleId={vehicle.id} section={kind === 'expense' ? 'other' : kind} onCancel={onDone} onSaved={done} />

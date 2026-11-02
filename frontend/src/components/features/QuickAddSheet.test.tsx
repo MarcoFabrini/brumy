@@ -99,8 +99,7 @@ describe('QuickAddSheet — "+" in due tocchi', () => {
     const actions = await screen.findAllByRole('button', { name: /^Nuov/ });
     expect(actions.map((b) => b.textContent)).toEqual([
       'Nuovo rifornimento',
-      'Nuovo lavoro ordinario',
-      'Nuovo lavoro imprevisto',
+      'Nuovo lavoro',
       'Nuova revisione',
       'Nuova tassa',
       'Nuova assicurazione',

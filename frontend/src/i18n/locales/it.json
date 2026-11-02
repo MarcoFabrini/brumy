@@ -195,6 +195,11 @@
       "new": "Nuovo rifornimento",
       "empty": "Nessun rifornimento"
     },
+    "work": {
+      "title": "Lavori",
+      "new": "Nuovo lavoro",
+      "empty": "Nessun lavoro"
+    },
     "scheduled": {
       "title": "Lavori ordinari",
       "new": "Nuovo lavoro ordinario",
@@ -284,10 +289,11 @@
       "other": "Altro"
     },
     "category_options": {
-      "scheduled": "Programmata",
-      "unscheduled": "Imprevista"
+      "scheduled": "Ordinario",
+      "unscheduled": "Imprevisto"
     },
-    "notes": "Note"
+    "notes": "Note",
+    "work_kind": "Tipo di lavoro"
   },
   "values": {
     "title": "Elenchi personali",

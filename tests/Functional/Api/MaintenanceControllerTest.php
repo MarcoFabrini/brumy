@@ -212,7 +212,8 @@ final class MaintenanceControllerTest extends ApiTestCase
         $this->jsonRequest('POST', '/api/maintenances', [...$this->maintenanceBody($vehicle->getId(), null), 'category' => 'unscheduled'], session: $token);
         self::assertSame(['oil_change', 'unscheduled'], [$this->jsonBody()['type'], $this->jsonBody()['category']]);
 
-        foreach (['inspection' => 2, 'unscheduled' => 1, 'scheduled' => 0] as $category => $count) {
+        // Più sezioni insieme (la sezione "Lavori" dell'app): valori sconosciuti ignorati
+        foreach (['inspection' => 2, 'unscheduled' => 1, 'scheduled' => 0, 'scheduled,unscheduled' => 1, 'unscheduled,inspection' => 3, 'scheduled, nope' => 0, 'nope' => 3] as $category => $count) {
             $this->jsonRequest('GET', '/api/maintenances?vehicleId='.$vehicle->getId().'&category='.$category, session: $token);
             self::assertCount($count, $this->jsonBody(), $category);
         }

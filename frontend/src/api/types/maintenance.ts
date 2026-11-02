@@ -22,6 +22,22 @@ export const MAINTENANCE_CATEGORIES = ['scheduled', 'unscheduled', 'inspection']
 export type MaintenanceCategory = (typeof MAINTENANCE_CATEGORIES)[number];
 
 /**
+ * Le sezioni dei lavori nell'app: `work` riunisce ordinari e imprevisti (si sceglie nel modulo), `inspection` è la
+ * revisione. La categoria resta nel dato: grafici e spese continuano a distinguere ordinari e imprevisti.
+ */
+export const MAINTENANCE_SECTIONS = ['work', 'inspection'] as const;
+export type MaintenanceSection = (typeof MAINTENANCE_SECTIONS)[number];
+export const WORK_CATEGORIES = ['scheduled', 'unscheduled'] as const satisfies readonly MaintenanceCategory[];
+
+export function maintenanceSectionOf(category: MaintenanceCategory): MaintenanceSection {
+  return category === 'inspection' ? 'inspection' : 'work';
+}
+
+export function categoriesOf(section: MaintenanceSection): readonly MaintenanceCategory[] {
+  return section === 'inspection' ? ['inspection'] : WORK_CATEGORIES;
+}
+
+/**
  * Raw backend response — match Maintenance entity con groups serializzati.
  * Lista usa groups più snelli (no workshop), detail usa quelli completi.
  */

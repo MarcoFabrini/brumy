@@ -1,12 +1,17 @@
 import { useSearchParams } from 'react-router-dom';
 import { EXPENSE_SECTIONS, type ExpenseSection } from '@/api/types/expense';
-import { MAINTENANCE_CATEGORIES, type MaintenanceCategory } from '@/api/types/maintenance';
+import type { MaintenanceCategory, MaintenanceSection } from '@/api/types/maintenance';
 
-/** Sezione dei lavori dalla query string (`?category=`); assente o sconosciuta = lavori ordinari. */
-export function useMaintenanceCategoryParam(): MaintenanceCategory {
+/**
+ * Sezione dei lavori dalla query string (`?category=`): `inspection` = revisione, tutto il resto = lavori (anche i
+ * vecchi link `scheduled`/`unscheduled`). `newCategory` è la categoria proposta creando un lavoro: imprevisto solo
+ * se il link lo chiede.
+ */
+export function useMaintenanceSectionParam(): { section: MaintenanceSection; newCategory: MaintenanceCategory } {
   const [params] = useSearchParams();
   const raw = params.get('category');
-  return MAINTENANCE_CATEGORIES.find((c) => c === raw) ?? 'scheduled';
+  if (raw === 'inspection') return { section: 'inspection', newCategory: 'inspection' };
+  return { section: 'work', newCategory: raw === 'unscheduled' ? 'unscheduled' : 'scheduled' };
 }
 
 /** Sezione delle spese dalla query string (`?section=`); assente o sconosciuta = altre spese. */

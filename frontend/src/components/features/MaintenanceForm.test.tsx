@@ -87,6 +87,26 @@ describe('MaintenanceForm — suggerimenti dell\'officina', () => {
     await i18n.changeLanguage('it');
   });
 
+  it('nei lavori si sceglie ordinario o imprevisto; parte da quello del link', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    expect(screen.getByRole('button', { name: 'Ordinario', pressed: true })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Imprevisto' }));
+    expect(screen.getByRole('button', { name: 'Imprevisto', pressed: true })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Descrizione/), 'Gomma bucata');
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ category: 'unscheduled' });
+  });
+
+  it('la revisione non ha la scelta ordinario/imprevisto', () => {
+    renderForm({ category: 'inspection' });
+
+    expect(screen.queryByRole('button', { name: 'Imprevisto' })).not.toBeInTheDocument();
+  });
+
   it('toccando un suggerimento il payload ha quell\'officina', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();

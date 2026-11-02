@@ -30,19 +30,19 @@ class MaintenanceRepository extends ServiceEntityRepository
     }
 
     /**
-     * @param MaintenanceCategory|null $category sezione (ordinari, imprevisti, revisione); null = tutte
+     * @param list<MaintenanceCategory> $categories sezioni (ordinari, imprevisti, revisione); vuota = tutte
      * @param ListSearch|null $search ricerca dell'elenco; null = nessun filtro
      *
      * @return list<Maintenance>
      */
-    public function findByVehiclePaginated(Vehicle $vehicle, int $page = 1, int $limit = 20, ?MaintenanceCategory $category = null, ?ListSearch $search = null): array
+    public function findByVehiclePaginated(Vehicle $vehicle, int $page = 1, int $limit = 20, array $categories = [], ?ListSearch $search = null): array
     {
         $offset = max(0, ($page - 1) * $limit);
         $qb = $this->createQueryBuilder('m')
             ->where('m.vehicle = :vehicle')
             ->setParameter('vehicle', $vehicle);
-        if ($category !== null) {
-            $qb->andWhere('m.category = :category')->setParameter('category', $category);
+        if ($categories !== []) {
+            $qb->andWhere('m.category IN (:categories)')->setParameter('categories', $categories);
         }
         if ($search !== null) {
             ListSearchFilter::apply($qb, $search, self::searchFields());
