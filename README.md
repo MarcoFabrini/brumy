@@ -12,7 +12,7 @@ Self-hosted vehicle management (PWA): fuel logs, scheduled and unscheduled work,
 
 ### Features
 
-- **Every cost in its own section:** refuelings, scheduled work, unscheduled work, inspection, taxes, insurance, other expenses, components and reminders, each with its count on the vehicle page.
+- **Every cost in its own section:** refuelings, work (scheduled or unscheduled, chosen in the form), inspection, taxes, insurance, other expenses, components and reminders, each with its count on the vehicle page.
 - **Fast entry:** a phone-first "+" with the vehicle already picked; stations, workshops, shops, expense categories, tax types and insurers are remembered and suggested while you type, and you can rename, merge or delete them in your personal lists.
 - **Fuel prices (Italy):** when you add a refueling, pick a nearby station or search one by name and its price is filled in, from the Ministry's daily open data; stations in your list remember theirs, so it works from home too. Follow the stations you use and a chart on the home page shows how their prices change, day by day.
 - **Components:** keep the model, serial number, shop and price of every part you buy, link it to the work where it was fitted and see where it was used.
@@ -244,7 +244,7 @@ Gestione veicoli self-hosted (PWA): rifornimenti, lavori ordinari e imprevisti, 
 
 ### Funzioni
 
-- **Ogni costo nella sua sezione:** rifornimenti, lavori ordinari, lavori imprevisti, revisione, tasse, assicurazione, altre spese, componenti e promemoria, ognuna col suo conteggio nella pagina del veicolo.
+- **Ogni costo nella sua sezione:** rifornimenti, lavori (ordinari o imprevisti, si sceglie nel modulo), revisione, tasse, assicurazione, altre spese, componenti e promemoria, ognuna col suo conteggio nella pagina del veicolo.
 - **Inserimento veloce:** un "+" pensato per lo smartphone, col veicolo già scelto; distributori, officine, negozi, categorie di spesa, tipi di tassa e compagnie vengono ricordati e suggeriti mentre scrivi, e negli elenchi personali li rinomini, li unisci o li elimini.
 - **Prezzi del carburante (Italia):** inserendo un rifornimento scegli un distributore vicino o lo cerchi per nome e il prezzo si compila da solo, dai dati aperti giornalieri del Ministero; i distributori del tuo elenco ricordano il loro, così funziona anche da casa. Segui i distributori che usi e un grafico sulla home mostra come cambiano i loro prezzi, giorno per giorno.
 - **Componenti:** modello, numero di serie, negozio e prezzo di ogni pezzo che compri, collegato al lavoro in cui è stato montato, con l'elenco dei lavori in cui è stato usato.

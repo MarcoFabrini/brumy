@@ -280,6 +280,13 @@ else
     assert_contains "$css_path: Content-Type CSS" "$(header content-type)" "text/css"
 fi
 
+for icon in /apple-touch-icon.png /favicon.ico /icons/icon-192.png; do
+    READ_BODY=0 fetch "http://127.0.0.1$icon"
+    assert_eq "GET $icon -> 200" "200" "$RESP_STATUS"
+    assert_contains "$icon: no-cache (nome fisso, si ricontrolla)" "$(header cache-control)" "no-cache"
+    assert_not_contains "$icon: mai immutable" "$(header cache-control)" "immutable"
+done
+
 READ_BODY=0 fetch http://127.0.0.1/assets/does-not-exist-0000.js
 assert_eq "asset inesistente -> 404 (non l'index.html della SPA)" "404" "$RESP_STATUS"
 

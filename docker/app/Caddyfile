@@ -43,8 +43,17 @@
 		file_server
 	}
 
-	handle @assets {
+	# Bundle di Vite: il nome contiene l'hash del contenuto, quindi un URL non cambia mai contenuto.
+	handle /assets/* {
 		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# File statici a nome fisso (favicon, apple-touch-icon, icone del manifest): cambiano contenuto allo stesso URL,
+	# quindi si ricontrollano sempre (ETag, risposta 304 se uguali). Con `immutable` Safari teneva la vecchia icona
+	# anche reinstallando la PWA sulla schermata Home.
+	handle @assets {
+		header Cache-Control "no-cache"
 		file_server
 	}
 
