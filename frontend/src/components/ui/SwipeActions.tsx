@@ -97,7 +97,8 @@ export function SwipeActions({ actions, children, className }: SwipeActionsProps
             className={cn(
               'flex h-full flex-1 items-center justify-center px-2 text-[0.9375rem] font-semibold text-white',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white',
-              action.className ?? 'bg-primary',
+              // Sul viola dell'app il testo prende il suo colore di contrasto (scuro nel tema scuro), non il bianco.
+              action.className ?? 'bg-primary text-primary-foreground',
             )}
           >
             {action.label}

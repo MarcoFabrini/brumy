@@ -94,7 +94,8 @@ export function ListRow<C extends ElementType = 'div'>({
           aria-hidden="true"
           className={cn(
             'flex size-[29px] shrink-0 items-center justify-center rounded-[7px] text-white [&_svg]:size-[18px]',
-            iconClassName ?? 'bg-primary',
+            // Sul viola dell'app il glifo prende il suo colore di contrasto (scuro nel tema scuro), non il bianco.
+            iconClassName ?? 'bg-primary text-primary-foreground',
           )}
         >
           {icon}

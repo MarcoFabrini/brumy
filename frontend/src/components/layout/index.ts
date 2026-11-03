@@ -1,4 +1,5 @@
 export { AppLayout } from './AppLayout';
+export { AppLogo } from './AppLogo';
 export { AuthGate, type AuthGateProps } from './AuthGate';
 export { AuthLayout, type AuthLayoutProps } from './AuthLayout';
 export { BottomNav } from './BottomNav';

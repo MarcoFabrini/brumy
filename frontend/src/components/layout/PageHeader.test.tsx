@@ -24,6 +24,15 @@ describe('PageHeader', () => {
     expect(screen.getByRole('button', { name: 'Nuovo' })).toBeInTheDocument();
   });
 
+  it('leading sta prima del titolo grande e con srTitle sparisce da md insieme a lui', () => {
+    render(<PageHeader srTitle="Officina" leading={<span data-testid="logo" />} />);
+
+    const logo = screen.getByTestId('logo');
+    const h1 = screen.getByRole('heading', { level: 1, name: 'Officina' });
+    expect(logo.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(logo.parentElement).toHaveClass('md:hidden');
+  });
+
   it('"Indietro" in stile iOS chiama onBack', async () => {
     await i18n.changeLanguage('it');
     const onBack = vi.fn();

@@ -28,7 +28,7 @@ export const useThemeStore = create<ThemeState>()(
 );
 
 /** Colore delle barre di sistema (status bar, barra del browser): lo sfondo dell'app nel tema attivo. */
-const SYSTEM_BAR_COLOR = { light: '#f2f2f7', dark: '#000000' } as const;
+const SYSTEM_BAR_COLOR = { light: '#f5f2f8', dark: '#050407' } as const;
 
 /** Risolve 'system' a 'light'|'dark', applica la class 'dark' su documentElement e allinea il theme-color. */
 export function applyTheme(theme: Theme) {

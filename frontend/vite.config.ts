@@ -23,8 +23,8 @@ export default defineConfig({
         name: 'Brumy — Gestione veicoli',
         short_name: 'Brumy',
         description: 'Manutenzioni, rifornimenti, spese e scadenze per i tuoi veicoli',
-        theme_color: '#f2f2f7',          // sfondo dell'app (iOS systemGroupedBackground)
-        background_color: '#f2f2f7',
+        theme_color: '#f5f2f8',          // sfondo dell'app (--background del tema chiaro)
+        background_color: '#f5f2f8',
         display: 'standalone',
         orientation: 'portrait-primary',  // mobile-first
         scope: '/',
@@ -33,7 +33,8 @@ export default defineConfig({
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Sfondo pieno e margini già adatti alla maschera: lo stesso file vale anche come maskable.
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

@@ -96,10 +96,10 @@ describe('colore delle barre di sistema e testo grande', () => {
 
     mockSystemDark(true);
     applyTheme('system');
-    expect(meta.content).toBe('#000000');
+    expect(meta.content).toBe('#050407');
 
     applyTheme('light');
-    expect(meta.content).toBe('#f2f2f7');
+    expect(meta.content).toBe('#f5f2f8');
   });
 
   it('il testo grande mette e toglie la class text-large su <html>', () => {

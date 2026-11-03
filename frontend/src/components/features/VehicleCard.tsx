@@ -22,7 +22,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
       to={`/vehicles/${vehicle.id}`}
       state={returnState}
       icon={<Car />}
-      iconClassName={archived ? 'bg-[#8e8e93]' : 'bg-[#007aff]'}
+      iconClassName={archived ? 'bg-[#8e8e93]' : 'bg-[#7b1fc1]'}
       label={vehicle.name}
       description={[`${vehicle.brand} ${vehicle.model}`, vehicle.year, vehicle.licensePlate].filter(Boolean).join(' · ')}
       value={

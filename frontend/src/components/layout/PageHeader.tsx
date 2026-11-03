@@ -27,9 +27,11 @@ export interface PageHeaderProps {
   action?: ReactNode;
   /** Se presente, mostra "‹ Indietro" nella barra. */
   onBack?: () => void;
+  /** Elemento prima del titolo grande (es. il logo nella Home); con `srTitle` sparisce da `md` insieme al titolo. */
+  leading?: ReactNode;
 }
 
-export function PageHeader({ title, srTitle, description, action, onBack }: PageHeaderProps) {
+export function PageHeader({ title, srTitle, description, action, onBack, leading }: PageHeaderProps) {
   const heading = title ?? srTitle;
   const titleRef = useRef<HTMLDivElement>(null);
   const collapsed = useScrolledPast(titleRef, Boolean(heading));
@@ -47,11 +49,12 @@ export function PageHeader({ title, srTitle, description, action, onBack }: Page
           </div>
         )}
         {heading && (
-          <div ref={titleRef}>
+          <div ref={titleRef} className={cn(leading && 'flex items-center gap-3')}>
+            {leading && <div className={cn('shrink-0', !title && 'md:hidden')}>{leading}</div>}
             <Heading
               level={1}
               className={cn(
-                'text-[2.125rem] font-bold leading-[1.15] tracking-tight md:text-3xl',
+                'min-w-0 text-[2.125rem] font-bold leading-[1.15] tracking-tight md:text-3xl',
                 !title && 'md:sr-only',
               )}
             >

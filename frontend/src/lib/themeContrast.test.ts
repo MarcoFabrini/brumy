@@ -61,8 +61,8 @@ describe.each([
 describe.each([
   ['chiaro', block(':root')],
   ['scuro', block('.dark')],
-])('contrasto dei colori di sistema iOS (tema %s)', (_name, scope) => {
-  it('il testo dei pulsanti pieni ha almeno 4.5:1 sul blu dell\'app', () => {
+])('contrasto dei colori dell\'app (tema %s)', (_name, scope) => {
+  it('il testo dei pulsanti pieni ha almeno 4.5:1 sul viola dell\'app', () => {
     expect(ratio(toRgb(token(scope, 'primary-foreground')), toRgb(token(scope, 'primary')))).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -70,7 +70,7 @@ describe.each([
     expect(ratio(toRgb(token(scope, 'muted-foreground')), toRgb(token(scope, surface)))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('il blu usato come testo (link, "Indietro") ha almeno 4.5:1 sullo sfondo', () => {
-    expect(ratio(toRgb(token(scope, 'primary')), toRgb(token(scope, 'background')))).toBeGreaterThanOrEqual(4.5);
+  it.each(['background', 'card'])('il viola usato come testo (link, "Indietro", tab attiva) ha almeno 4.5:1 su %s', (surface) => {
+    expect(ratio(toRgb(token(scope, 'primary')), toRgb(token(scope, surface)))).toBeGreaterThanOrEqual(4.5);
   });
 });

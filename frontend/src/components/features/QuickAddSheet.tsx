@@ -91,7 +91,7 @@ export function QuickAddSheet({ open, onOpenChange }: QuickAddSheetProps) {
                     navigate('/vehicles/new');
                   }}
                   icon={<Car />}
-                  iconClassName="bg-[#007aff]"
+                  iconClassName="bg-[#7b1fc1]"
                   label={t('quick_add.new_vehicle')}
                   chevron
                 />
