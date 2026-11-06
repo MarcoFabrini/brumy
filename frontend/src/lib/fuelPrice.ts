@@ -1,5 +1,5 @@
 import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
-import { todayIso } from './format';
+import { toLocalIsoDate, todayIso } from './format';
 
 /**
  * Self o servito da usare per il prezzo: quello scelto se il distributore ce l'ha, altrimenti l'altro. GPL e metano si
@@ -19,6 +19,35 @@ export function isRecentForFuelPrice(isoDate: string | undefined, now: Date = ne
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   return isoDate === todayIso(now) || isoDate === todayIso(yesterday);
+}
+
+/**
+ * I prezzi in tempo reale al posto di quelli del file, distributore per distributore; quelli senza risposta restano
+ * com'erano (distanza compresa, che la risposta in tempo reale non ha).
+ */
+export function withLivePrices(stations: FuelStation[], live: FuelStation[]): FuelStation[] {
+  const byId = new Map(live.map((s) => [s.id, s.prices]));
+  return stations.map((s) => {
+    const prices = byId.get(s.id);
+    return prices ? { ...s, prices } : s;
+  });
+}
+
+/**
+ * Quando è stato comunicato un prezzo, rispetto a oggi sul dispositivo: oggi e ieri con l'ora ("oggi alle 7:12"),
+ * prima solo la data. `time` è nel fuso del dispositivo.
+ */
+export function communicatedWhen(
+  iso: string,
+  locale: string,
+  now: Date = new Date(),
+): { day: 'today' | 'yesterday' | 'earlier'; time: string } {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime()) || !iso.includes('T')) return { day: 'earlier', time: '' };
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const day = toLocalIsoDate(at) === toLocalIsoDate(now) ? 'today' : toLocalIsoDate(at) === toLocalIsoDate(yesterday) ? 'yesterday' : 'earlier';
+  return { day, time: new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at) };
 }
 
 /** Stesso nome di una voce dell'elenco: come l'unicità sul server, a meno di maiuscole e spazi. */

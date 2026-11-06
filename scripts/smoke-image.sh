@@ -431,7 +431,8 @@ if docker exec -u www-data "$APP" php bin/console app:reminders:dispatch --no-in
 # Le righe esatte dei job Ofelia, lette da compose.yml: un'opzione inesistente o un comando che rifiuta
 # --no-interaction farebbero fallire il job a ogni esecuzione senza che nessuno se ne accorga.
 # Per messenger-retry, --time-limit=2 in coda sostituisce quello del job (vince l'ultimo): a coda vuota consume aspetta.
-for job in messenger-retry cache-prune tokens-cleanup; do
+# fuel-prices-live senza distributori seguiti non chiama il ministero: prova solo che il job parte.
+for job in messenger-retry cache-prune tokens-cleanup fuel-prices-live; do
     job_cmd="$(sed -n "s/^ *ofelia\\.job-exec\\.$job\\.command: \"\\(.*\\)\"\$/\\1/p" "$(dirname "$0")/../compose.yml")"
     extra=""
     [ "$job" = "messenger-retry" ] && extra=" --time-limit=2"

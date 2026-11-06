@@ -73,6 +73,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Equatab
     private ?string $avatarPath = null;
 
     /**
+     * Ultima versione di Brumy pubblicata su GitHub di cui l'amministratore dell'istanza ha già ricevuto la notifica
+     * push ({@see \App\Service\AppUpdateNotifier}): una sola notifica per versione, anche dopo un riavvio.
+     */
+    #[ORM\Column(name: 'update_notified_version', length: 20, nullable: true)]
+    private ?string $updateNotifiedVersion = null;
+
+    /**
      * Quando l'utente ha confermato il proprio indirizzo email (null = non verificato).
      * Gli account creati prima dell'introduzione della verifica sono grandfathered
      * (impostati = created_at dalla migrazione).
@@ -200,6 +207,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Equatab
     public function setLocale(string $locale): self
     {
         $this->locale = $locale;
+        return $this;
+    }
+
+    public function getUpdateNotifiedVersion(): ?string
+    {
+        return $this->updateNotifiedVersion;
+    }
+
+    public function setUpdateNotifiedVersion(?string $version): self
+    {
+        $this->updateNotifiedVersion = $version;
         return $this;
     }
 

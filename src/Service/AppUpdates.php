@@ -13,16 +13,17 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * Versione installata dell'app e controllo delle nuove versioni pubblicate su GitHub.
  *
  * La versione è quella di `frontend/package.json`, che il rilascio aggiorna prima del tag (l'immagine la copia).
- * Il controllo legge i tag `vX.Y.Z` del repository pubblico una volta al giorno (job Ofelia `app:update:check`) e
- * tiene l'ultima versione stabile nella cache dell'app: l'avviso è solo informativo, non scarica niente. Dopo un
- * riavvio del container la cache è vuota fino al controllo successivo. Si spegne con `UPDATE_CHECK_ENABLED=0`.
+ * Il controllo legge i tag `vX.Y.Z` del repository pubblico ogni ora (job Ofelia `app:update:check`) e tiene
+ * l'ultima versione stabile nella cache dell'app: l'avviso è solo informativo, non scarica niente
+ * ({@see AppUpdateNotifier} manda la notifica push). Dopo un riavvio del container la cache è vuota fino al controllo
+ * successivo. Si spegne con `UPDATE_CHECK_ENABLED=0`.
  */
 final class AppUpdates
 {
     public const REPOSITORY = 'MarcoFabrini/brumy';
     private const TAGS_URL = 'https://api.github.com/repos/'.self::REPOSITORY.'/tags?per_page=100';
     private const CACHE_KEY = 'app_updates.latest_version';
-    /** Il controllo è giornaliero: due giorni coprono un job saltato senza tenere un dato vecchio per sempre. */
+    /** Il controllo è orario: due giorni coprono un'interruzione di GitHub senza tenere un dato vecchio per sempre. */
     private const CACHE_TTL = 172800;
     private const VERSION_PATTERN = '/^\d+\.\d+\.\d+$/';
 

@@ -97,6 +97,52 @@ describe('RefuelingForm — prezzi del carburante', () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ pricePerLiter: '1.899', station: 'Q8 sotto casa', fuelStationId: null });
   });
 
+  it('propone il prezzo del giorno stesso quando il server lo ha', async () => {
+    const morning = new Date();
+    morning.setHours(7, 12, 0, 0);
+    const base = mockedAuthFetch.getMockImplementation();
+    mockedAuthFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/fuel-prices/live?ids=59183&fuel=diesel') {
+        const live = station(59183, 'Q8 · Via Emilia Est 1420, Modena', '1.709', '1.899');
+        return [{ ...live, prices: { ...live.prices, self: { price: '1.709', communicatedAt: morning.toISOString() } } }];
+      }
+      return base?.(path, init);
+    });
+    renderForm();
+
+    await userEvent.setup().type(screen.getByLabelText(/Distributore/), 'Q8 sotto casa');
+
+    await waitFor(() => expect(screen.getByLabelText(/€\/L/)).toHaveValue('1.709'));
+    expect(screen.getByText(/Prezzo del distributore, comunicato oggi alle 0?7:12/)).toBeInTheDocument();
+  });
+
+  it('nei distributori vicini i prezzi del giorno stesso arrivano dopo quelli del file', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: {
+        getCurrentPosition: (ok: PositionCallback) =>
+          ok({ coords: { latitude: 44.64712345, longitude: 10.92521 } } as GeolocationPosition),
+      },
+    });
+    const base = mockedAuthFetch.getMockImplementation();
+    mockedAuthFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/fuel-prices/live?ids=59183,600&fuel=diesel') {
+        return [{ ...station(600, 'Eni · Via Giardini 300, Modena', null, null), prices: { self: { price: '1.719', communicatedAt: new Date().toISOString() }, served: null } }];
+      }
+      return base?.(path, init);
+    });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(await screen.findByRole('button', { name: /Distributori vicini/ }));
+    const eni = await screen.findByRole('button', { name: /Eni · Via Giardini 300, Modena/ });
+    expect(eni).toHaveTextContent('1,759');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Eni · Via Giardini 300, Modena/ })).toHaveTextContent('1,719'));
+    expect(screen.getByRole('button', { name: /Eni · Via Giardini 300, Modena/ })).toHaveTextContent('prezzo di oggi alle');
+    // Il distributore senza risposta in tempo reale tiene il prezzo del file
+    expect(screen.getByRole('button', { name: /Q8 · Via Emilia Est 1420, Modena/ })).toHaveTextContent('1,729');
+  });
+
   it('un prezzo scritto dopo la scelta del distributore resta; una scelta fatta dopo lo sostituisce', async () => {
     const user = userEvent.setup();
     renderForm();

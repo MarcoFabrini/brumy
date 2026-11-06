@@ -1,20 +1,40 @@
 import { z } from 'zod';
 import { authFetch } from '@/api/client';
 import { useAuthStore, type AuthStatus } from '@/stores/useAuthStore';
-import { hasDifferentServerKey, webSubscriptionBody } from '@/lib/webPush';
+import {
+  hasDifferentServerKey,
+  rememberPushEndpoint,
+  rememberedPushEndpoint,
+  urlBase64ToUint8Array,
+  webSubscriptionBody,
+} from '@/lib/webPush';
 
 const vapidPublicKeySchema = z.object({ publicKey: z.string() });
 
 /**
- * Ri-registra sul server la subscription push già presente in questo browser. Il server cancella le subscription
- * di tutti i dispositivi a ogni reset/cambio password e cambio email: senza questo passo il dispositivo da cui
- * l'utente ha appena fatto il cambio smetterebbe di ricevere notifiche pur risultando "iscritto".
+ * Rimette in ordine le notifiche di questo browser all'inizio di ogni sessione (e quando si apre la scheda delle
+ * notifiche):
+ * - una subscription presente si ri-registra sul server, che le cancella tutte a ogni reset/cambio password e cambio
+ *   email: senza questo passo il dispositivo da cui l'utente ha fatto il cambio smetterebbe di ricevere notifiche pur
+ *   risultando "iscritto";
+ * - se l'utente le aveva accese qui ({@link rememberedPushEndpoint}) e il browser ha perso la subscription con il
+ *   permesso ancora concesso (iPhone, dopo un aggiornamento o un riavvio dell'app), la ricrea senza chiedere niente e
+ *   toglie dal server l'endpoint vecchio, così non arrivano notifiche doppie.
  *
- * Solo se il permesso è già concesso, esiste una subscription e la sua chiave VAPID è quella corrente: non chiede
- * permessi, non crea subscription nuove, non disiscrive (quello resta a `usePushSubscription`). L'upsert per
- * endpoint lato server la rende idempotente. Best-effort: non lancia mai.
+ * Non chiede permessi e non disiscrive (quello resta a `usePushSubscription` e al logout). Una subscription con una
+ * chiave VAPID diversa da quella corrente si lascia stare. L'upsert per endpoint lato server la rende idempotente;
+ * due chiamate insieme condividono lo stesso giro. Best-effort: non lancia mai.
  */
-export async function resyncThisDevice(): Promise<void> {
+let running: Promise<void> | null = null;
+
+export function resyncThisDevice(): Promise<void> {
+  running ??= syncThisDevice().finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function syncThisDevice(): Promise<void> {
   try {
     if (
       typeof navigator === 'undefined' ||
@@ -26,17 +46,32 @@ export async function resyncThisDevice(): Promise<void> {
       return;
     }
     const reg = await navigator.serviceWorker.getRegistration();
-    const sub = await reg?.pushManager.getSubscription();
-    if (!sub) return;
+    if (!reg) return;
+    let sub = await reg.pushManager.getSubscription();
+    const remembered = rememberedPushEndpoint();
+    if (!sub && remembered === null) return;
 
     const { publicKey } = vapidPublicKeySchema.parse(await authFetch<unknown>('/api/push-subscriptions/vapid-public-key'));
-    if (!publicKey || hasDifferentServerKey(sub, publicKey)) return;
+    if (!publicKey || (sub && hasDifferentServerKey(sub, publicKey))) return;
 
+    sub ??= await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+    });
     await authFetch<void>('/api/push-subscriptions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: webSubscriptionBody(sub),
     });
+    if (remembered !== null && remembered !== sub.endpoint) {
+      // L'endpoint perso dal browser può restare attivo per il servizio push: niente notifiche doppie
+      await authFetch<void>('/api/push-subscriptions/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'web', endpoint: remembered }),
+      }).catch(() => undefined);
+    }
+    rememberPushEndpoint(sub.endpoint);
   } catch {
     // ignorato: al massimo questo dispositivo resta senza notifiche finché l'utente non le riattiva
   }

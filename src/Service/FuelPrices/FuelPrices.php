@@ -43,6 +43,8 @@ final class FuelPrices
     /** Un import in coda al massimo ogni ora, per quante richieste trovino i dati vecchi. */
     private const IMPORT_REQUEST_KEY = 'fuel_prices.import_requested';
     private const IMPORT_REQUEST_TTL = 3600;
+    /** I dati del ministero (file e tempo reale) sono in ora italiana, qualunque sia APP_TIMEZONE dell'istanza. */
+    public const TIMEZONE = 'Europe/Rome';
     /** I distributori senza marchio hanno questa "bandiera": per loro conta il nome. */
     private const UNBRANDED = 'Pompe Bianche';
 
@@ -132,6 +134,19 @@ final class FuelPrices
     }
 
     /**
+     * I distributori dati, nell'ordine dato (quelli che non esistono mancano): le viste che il frontend aggiorna coi
+     * prezzi in tempo reale.
+     *
+     * @param list<int> $ids
+     *
+     * @return list<StationView>
+     */
+    public function stations(array $ids, ?FuelType $fuel): array
+    {
+        return $this->views(array_map(static fn (array $s): array => [$s, null], $this->stations->findRecords($ids)), $fuel);
+    }
+
+    /**
      * Collega una voce distributore dell'elenco al distributore ufficiale (null = scollega).
      *
      * @return bool false se il distributore non esiste (la voce resta com'era)
@@ -198,7 +213,8 @@ final class FuelPrices
     {
         $last = $this->stations->lastImport();
         if ($last !== null && $value->getFuelStationId() !== null) {
-            $this->stations->recordHistory($last['extractedOn'], $value->getFuelStationId());
+            // Solo i prezzi del file: uno arrivato in tempo reale dopo l'estrazione è di oggi, e lo scrive il job dei seguiti
+            $this->stations->recordHistory($last['extractedOn'], $value->getFuelStationId(), $last['extractedOn']->modify('+1 day'));
         }
     }
 
@@ -247,6 +263,11 @@ final class FuelPrices
     {
         $priceFuel = $fuel === null ? null : self::priceFuel($fuel);
         $prices = $priceFuel === null ? [] : $this->stations->pricesFor(array_map(static fn (array $s): int => $s[0]['id'], $stations), $priceFuel);
+        $timezone = new \DateTimeZone(self::TIMEZONE);
+        $withZone = static fn (?array $point): ?array => $point === null ? null : [
+            'price' => $point['price'],
+            'communicatedAt' => (new \DateTimeImmutable($point['communicatedAt'], $timezone))->format(\DATE_ATOM),
+        ];
 
         return array_map(static fn (array $s): array => [
             'id' => $s[0]['id'],
@@ -256,7 +277,7 @@ final class FuelPrices
             'city' => self::titleCase($s[0]['city']),
             'province' => $s[0]['province'],
             'distanceKm' => $s[1] === null ? null : round($s[1], 2),
-            'prices' => $prices[$s[0]['id']] ?? ['self' => null, 'served' => null],
+            'prices' => ['self' => $withZone($prices[$s[0]['id']]['self'] ?? null), 'served' => $withZone($prices[$s[0]['id']]['served'] ?? null)],
         ], $stations);
     }
 

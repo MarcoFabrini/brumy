@@ -404,7 +404,9 @@
       "title": "Informazioni",
       "version": "Versione",
       "dev": "sviluppo",
-      "update_available": "Aggiornamento disponibile"
+      "update_available": "Aggiornamento disponibile",
+      "release_banner": "È uscita Brumy {{version}}: aggiorna il server per installarla.",
+      "release_notes": "Novità"
     }
   },
   "security": {
@@ -1064,6 +1066,7 @@
       "disabled": "I prezzi del carburante sono spenti su questa istanza",
       "invalid_query": "Ricerca del distributore non valida",
       "station_not_found": "Distributore non trovato",
+      "live_rate_limited": "Troppi aggiornamenti dei prezzi: riprova tra un po'",
       "not_linked": "Collega prima la voce a un distributore"
     },
     "two_factor": {
@@ -1143,9 +1146,13 @@
     "mode_self": "Self",
     "mode_served": "Servito",
     "distance": "{{km}} km",
-    "communicated_on": "prezzo del {{date}}",
+    "communicated_today": "prezzo di oggi alle {{time}}",
+    "communicated_yesterday": "prezzo di ieri alle {{time}}",
+    "communicated_earlier": "prezzo del {{date}}",
     "no_price": "Nessun prezzo",
-    "proposed": "Prezzo del distributore, comunicato il {{date}}",
+    "proposed_today": "Prezzo del distributore, comunicato oggi alle {{time}}",
+    "proposed_yesterday": "Prezzo del distributore, comunicato ieri alle {{time}}",
+    "proposed_earlier": "Prezzo del distributore, comunicato il {{date}}",
     "no_price_for_fuel": "Il distributore non ha un prezzo per questo carburante",
     "linked_station": "Distributore per i prezzi",
     "station_gone": "Distributore non più nei dati del Ministero",

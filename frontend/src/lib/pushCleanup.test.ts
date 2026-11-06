@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { unsubscribeThisDevice } from './pushCleanup';
+import { rememberPushEndpoint, rememberedPushEndpoint } from './webPush';
+import { stubLocalStorage } from '@/test/memoryStorage';
 
 // Qui authFetch è quello vero: si simula solo la rete (fetch).
 const fetchMock = vi.fn<typeof fetch>();
@@ -73,5 +75,15 @@ describe('unsubscribeThisDevice', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('dimentica che le notifiche erano accese qui: al prossimo utente non si riaccendono da sole', async () => {
+    stubLocalStorage();
+    rememberPushEndpoint('https://push/old');
+    installServiceWorker(false);
+
+    await unsubscribeThisDevice();
+
+    expect(rememberedPushEndpoint()).toBeNull();
   });
 });

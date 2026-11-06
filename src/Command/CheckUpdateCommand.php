@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Service\AppUpdateNotifier;
 use App\Service\AppUpdates;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -12,14 +13,17 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Controlla su GitHub se è uscita una versione più recente di quella installata: l'amministratore dell'istanza la
- * vede nel profilo. Job Ofelia giornaliero (compose.yml). Rilanciabile; con UPDATE_CHECK_ENABLED=0 non fa niente.
+ * Controlla su GitHub se è uscita una versione più recente di quella installata: l'amministratore dell'istanza riceve
+ * una notifica push (una per versione) e la vede nell'app. Job Ofelia ogni ora (compose.yml). Rilanciabile; con
+ * UPDATE_CHECK_ENABLED=0 non fa niente.
  */
 #[AsCommand(name: 'app:update:check', description: 'Check GitHub for a newer Brumy release')]
 final class CheckUpdateCommand extends Command
 {
-    public function __construct(private readonly AppUpdates $updates)
-    {
+    public function __construct(
+        private readonly AppUpdates $updates,
+        private readonly AppUpdateNotifier $notifier,
+    ) {
         parent::__construct();
     }
 
@@ -44,6 +48,9 @@ final class CheckUpdateCommand extends Command
         $update = $this->updates->availableUpdate();
         if ($update !== null) {
             $io->warning(sprintf('Disponibile la versione %s (installata: %s): %s', $update, $current, AppUpdates::releaseUrl($update)));
+            if ($this->notifier->notifyAdmin($update)) {
+                $io->note('Notifica inviata all\'amministratore dell\'istanza.');
+            }
         } else {
             $io->success(sprintf('Nessun aggiornamento (installata: %s, ultima pubblicata: %s).', $current, $latest ?? 'nessuna'));
         }

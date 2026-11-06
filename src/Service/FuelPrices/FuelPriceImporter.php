@@ -51,8 +51,14 @@ final class FuelPriceImporter
             if (count($parsed['stations']) < self::MIN_STATIONS) {
                 throw new FuelPriceImportException(sprintf('Only %d fuel stations in the MIMIT file.', count($parsed['stations'])));
             }
+            // I prezzi arrivati in tempo reale dopo l'estrazione sono più nuovi del file: si rimettono dopo averlo scritto,
+            // e dopo lo storico, che per il giorno dell'estrazione deve avere i prezzi del file
+            // (vince comunque il più recente, quindi basta prendere tutto dal giorno dell'estrazione)
+            $live = $this->stations->pricesCommunicatedSince($parsed['extractedOn']);
             $counts = $this->stations->replaceAll($parsed['stations'], $prices, $parsed['extractedOn'], new \DateTimeImmutable());
             $this->stations->recordHistory($parsed['extractedOn']);
+            $open = array_fill_keys($this->stations->existingIds(array_values(array_unique(array_column($live, 'stationId')))), true);
+            $this->stations->upsertNewerPrices(array_values(array_filter($live, static fn (array $p): bool => isset($open[$p['stationId']]))));
             $this->logger->info('Fuel prices imported.', $counts + ['extractedOn' => $parsed['extractedOn']->format('Y-m-d')]);
 
             return $counts + ['extractedOn' => $parsed['extractedOn']];

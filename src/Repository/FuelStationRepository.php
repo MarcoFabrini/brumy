@@ -73,6 +73,87 @@ class FuelStationRepository extends ServiceEntityRepository
         return ['stations' => count($stations), 'prices' => count($prices)];
     }
 
+    /**
+     * Scrive prezzi di distributori esistenti tenendo, per ogni distributore/carburante/self, la comunicazione più
+     * recente: un prezzo più vecchio di quello salvato non lo sostituisce mai. Per i prezzi in tempo reale e per
+     * rimetterli dopo l'import del mattino.
+     *
+     * @param list<PriceRow> $prices
+     */
+    public function upsertNewerPrices(array $prices): void
+    {
+        $connection = $this->getEntityManager()->getConnection();
+        foreach (array_chunk($prices, self::INSERT_BATCH) as $chunk) {
+            // Le assegnazioni vanno da sinistra a destra: il prezzo confronta la data ancora vecchia, poi si aggiorna la data
+            $connection->executeStatement(
+                'INSERT INTO fuel_prices (station_id, fuel, is_self, price, communicated_at) VALUES '
+                .implode(', ', array_fill(0, count($chunk), '(?, ?, ?, ?, ?)'))
+                .' ON DUPLICATE KEY UPDATE price = IF(VALUES(communicated_at) > communicated_at, VALUES(price), price),'
+                .' communicated_at = GREATEST(communicated_at, VALUES(communicated_at))',
+                array_merge(...array_map(
+                    static fn (array $p): array => [$p['stationId'], $p['fuel']->value, (int) $p['self'], $p['price'], $p['communicatedAt']->format('Y-m-d H:i:s')],
+                    $chunk,
+                )),
+            );
+        }
+    }
+
+    /**
+     * I prezzi comunicati da $since in poi: prima dell'import del mattino sono solo quelli arrivati in tempo reale, più
+     * nuovi dell'estrazione, da rimettere dopo averla scritta.
+     *
+     * @return list<PriceRow>
+     */
+    public function pricesCommunicatedSince(\DateTimeImmutable $since): array
+    {
+        /** @var list<array{station_id: int|string, fuel: string, is_self: int|string, price: string, communicated_at: string}> $rows */
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT station_id, fuel, is_self, price, communicated_at FROM fuel_prices WHERE communicated_at >= ?',
+            [$since->format('Y-m-d H:i:s')],
+        );
+
+        return array_map(static fn (array $r): array => [
+            'stationId' => (int) $r['station_id'],
+            'fuel' => FuelType::from($r['fuel']),
+            'self' => (int) $r['is_self'] === 1,
+            'price' => $r['price'],
+            'communicatedAt' => new \DateTimeImmutable($r['communicated_at']),
+        ], $rows);
+    }
+
+    /**
+     * Gli id, tra quelli dati, dei distributori che esistono.
+     *
+     * @param list<int> $ids
+     *
+     * @return list<int>
+     */
+    public function existingIds(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return array_map('intval', $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT id FROM fuel_stations WHERE id IN (?)',
+            [$ids],
+            [ArrayParameterType::INTEGER],
+        ));
+    }
+
+    /**
+     * I distributori seguiti da almeno una voce non eliminata.
+     *
+     * @return list<int>
+     */
+    public function followedIds(): array
+    {
+        return array_map('intval', $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT DISTINCT s.id FROM fuel_stations s JOIN user_values v ON v.fuel_station_id = s.id
+             WHERE v.follows_price = 1 AND v.deleted_at IS NULL ORDER BY s.id',
+        ));
+    }
+
     /** @return array{extractedOn: \DateTimeImmutable, importedAt: \DateTimeImmutable}|null null se non c'è ancora nessun import */
     public function lastImport(): ?array
     {
@@ -135,6 +216,24 @@ class FuelStationRepository extends ServiceEntityRepository
         return $this->records('SELECT '.self::STATION_COLUMNS.' FROM fuel_stations WHERE id = ?', [$id])[0] ?? null;
     }
 
+    /**
+     * @param list<int> $ids
+     *
+     * @return list<StationRecord> nell'ordine degli id, senza quelli che non esistono
+     */
+    public function findRecords(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $byId = [];
+        foreach ($this->records('SELECT '.self::STATION_COLUMNS.' FROM fuel_stations WHERE id IN (?)', [$ids], [ArrayParameterType::INTEGER]) as $record) {
+            $byId[$record['id']] = $record;
+        }
+
+        return array_values(array_filter(array_map(static fn (int $id): ?array => $byId[$id] ?? null, $ids)));
+    }
+
     public function exists(int $id): bool
     {
         return $this->getEntityManager()->getConnection()->fetchOne('SELECT 1 FROM fuel_stations WHERE id = ?', [$id]) !== false;
@@ -164,7 +263,7 @@ class FuelStationRepository extends ServiceEntityRepository
             $pairs[$id] ??= ['self' => null, 'served' => null];
             $pairs[$id][(int) $row['is_self'] === 1 ? 'self' : 'served'] = [
                 'price' => $row['price'],
-                'communicatedAt' => substr($row['communicated_at'], 0, 10),
+                'communicatedAt' => $row['communicated_at'],
             ];
         }
 
@@ -173,20 +272,26 @@ class FuelStationRepository extends ServiceEntityRepository
 
     /**
      * Copia nello storico, come prezzo di $day, gli ultimi prezzi dei distributori seguiti (da una voce non eliminata),
-     * o del solo $stationId se dato. Rifatto lo stesso giorno, aggiorna le righe invece di duplicarle.
+     * o del solo $stationId se dato; con $communicatedBefore, solo i prezzi comunicati prima. Rifatto lo stesso giorno,
+     * aggiorna le righe invece di duplicarle.
      *
      * @return int righe scritte (MariaDB conta 2 per una riga aggiornata)
      */
-    public function recordHistory(\DateTimeImmutable $day, ?int $stationId = null): int
+    public function recordHistory(\DateTimeImmutable $day, ?int $stationId = null, ?\DateTimeImmutable $communicatedBefore = null): int
     {
         $stations = $stationId === null
             ? 'SELECT fuel_station_id FROM user_values WHERE follows_price = 1 AND deleted_at IS NULL AND fuel_station_id IS NOT NULL'
             : '?';
         $params = $stationId === null ? [$day->format('Y-m-d')] : [$day->format('Y-m-d'), $stationId];
+        $before = '';
+        if ($communicatedBefore !== null) {
+            $before = ' AND communicated_at < ?';
+            $params[] = $communicatedBefore->format('Y-m-d H:i:s');
+        }
 
         return (int) $this->getEntityManager()->getConnection()->executeStatement(
             'INSERT INTO fuel_price_history (station_id, fuel, is_self, day, price)
-             SELECT station_id, fuel, is_self, ?, price FROM fuel_prices WHERE station_id IN ('.$stations.')
+             SELECT station_id, fuel, is_self, ?, price FROM fuel_prices WHERE station_id IN ('.$stations.')'.$before.'
              ON DUPLICATE KEY UPDATE price = VALUES(price)',
             $params,
         );
@@ -235,14 +340,15 @@ class FuelStationRepository extends ServiceEntityRepository
     }
 
     /**
-     * @param list<int|float|string> $params
+     * @param list<int|float|string|list<int>> $params
+     * @param array<int<0, max>, ArrayParameterType> $types
      *
      * @return list<StationRecord>
      */
-    private function records(string $sql, array $params): array
+    private function records(string $sql, array $params, array $types = []): array
     {
         /** @var list<array{id: int|string, brand: string, name: string, address: string, city: string, province: string, latitude: float|string|null, longitude: float|string|null}> $rows */
-        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative($sql, $params);
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative($sql, $params, $types);
 
         return array_map(static fn (array $r): array => [
             'id' => (int) $r['id'],

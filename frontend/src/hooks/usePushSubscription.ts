@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { authFetch } from '@/api/client';
 import { vapidPublicKeyKey } from '@/hooks/usePushSettings';
-import { hasDifferentServerKey, urlBase64ToUint8Array, webSubscriptionBody } from '@/lib/webPush';
+import { resyncThisDevice } from '@/lib/pushResync';
+import {
+  forgetPushEndpoint,
+  hasDifferentServerKey,
+  rememberPushEndpoint,
+  rememberedPushEndpoint,
+  urlBase64ToUint8Array,
+  webSubscriptionBody,
+} from '@/lib/webPush';
 
 export type PushStatus =
   | 'unsupported' // browser senza Push API / serviceWorker
@@ -97,6 +105,11 @@ export function usePushSubscription() {
           await sub.unsubscribe();
           sub = null;
         }
+        // Accese qui e perse dal browser (iPhone dopo un aggiornamento): si ricreano invece di mostrarle spente
+        if (!sub && Notification.permission === 'granted' && rememberedPushEndpoint() !== null) {
+          await resyncThisDevice();
+          sub = await reg.pushManager.getSubscription();
+        }
         if (!cancelled) setStatus(sub ? 'subscribed' : 'unsubscribed');
       } catch {
         if (!cancelled) setStatus('sw-unavailable');
@@ -142,6 +155,7 @@ export function usePushSubscription() {
         throw err;
       }
 
+      rememberPushEndpoint(sub.endpoint);
       setStatus('subscribed');
     } catch (err) {
       setStatus('unsubscribed');
@@ -164,6 +178,7 @@ export function usePushSubscription() {
         });
         await sub.unsubscribe();
       }
+      forgetPushEndpoint();
       setStatus('unsubscribed');
     } catch (err) {
       setStatus('subscribed');

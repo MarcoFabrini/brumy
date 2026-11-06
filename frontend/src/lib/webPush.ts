@@ -37,3 +37,36 @@ export function webSubscriptionBody(sub: PushSubscription): string {
     deviceLabel: navigator.userAgent.split(' ').slice(-1)[0],
   });
 }
+
+/**
+ * Su questo dispositivo l'utente ha acceso le notifiche e non le ha spente: si salva l'endpoint dell'ultima
+ * subscription. Serve perché il browser può perderla da solo (iPhone, dopo un aggiornamento dell'app o un riavvio:
+ * `getSubscription()` torna null con il permesso ancora concesso); con questo segno `pushResync` la ricrea senza
+ * chiedere niente all'utente e toglie dal server quella vecchia. Sta sul dispositivo e non sul server perché è una
+ * scelta di questo dispositivo, che il server riconosce solo dall'endpoint, cioè proprio quello che cambia.
+ */
+const PUSH_WANTED_KEY = 'brumy.push.endpoint';
+
+export function rememberedPushEndpoint(): string | null {
+  try {
+    return localStorage.getItem(PUSH_WANTED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberPushEndpoint(endpoint: string): void {
+  try {
+    localStorage.setItem(PUSH_WANTED_KEY, endpoint);
+  } catch {
+    // Storage non disponibile: le notifiche funzionano, solo non si ripristinano da sole
+  }
+}
+
+export function forgetPushEndpoint(): void {
+  try {
+    localStorage.removeItem(PUSH_WANTED_KEY);
+  } catch {
+    // ignorato
+  }
+}

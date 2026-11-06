@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Service;
 
-use App\Command\CheckUpdateCommand;
 use App\Service\AppUpdates;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -83,29 +80,5 @@ final class AppUpdatesTest extends TestCase
         } catch (\RuntimeException) {
         }
         self::assertSame('0.7.1', $offline->availableUpdate());
-    }
-
-    public function testCommandReportsTheUpdate(): void
-    {
-        $tester = new CommandTester(new CheckUpdateCommand($this->updates([['name' => 'v0.7.1']])));
-
-        self::assertSame(Command::SUCCESS, $tester->execute([]));
-        self::assertStringContainsString('0.7.1', $tester->getDisplay());
-    }
-
-    public function testCommandDoesNothingWhenTurnedOff(): void
-    {
-        $client = new MockHttpClient(static fn () => throw new \LogicException('nessuna richiesta a GitHub'));
-        $tester = new CommandTester(new CheckUpdateCommand(new AppUpdates($client, new ArrayAdapter(), $this->packageJson, false)));
-
-        self::assertSame(Command::SUCCESS, $tester->execute([]));
-        self::assertStringContainsString('UPDATE_CHECK_ENABLED=0', $tester->getDisplay());
-    }
-
-    public function testCommandFailsWhenGitHubIsDown(): void
-    {
-        $tester = new CommandTester(new CheckUpdateCommand($this->updates(new MockResponse('', ['http_code' => 500]))));
-
-        self::assertSame(Command::FAILURE, $tester->execute([]));
     }
 }

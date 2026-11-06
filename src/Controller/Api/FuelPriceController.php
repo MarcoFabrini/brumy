@@ -8,10 +8,12 @@ use App\Entity\User;
 use App\Enum\FuelType;
 use App\Service\ActiveOrganizationResolver;
 use App\Service\FuelPrices\FuelPrices;
+use App\Service\FuelPrices\LiveFuelPrices;
 use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -30,6 +32,8 @@ final class FuelPriceController extends AbstractController
     public function __construct(
         private readonly FuelPrices $fuelPrices,
         private readonly ActiveOrganizationResolver $orgResolver,
+        private readonly LiveFuelPrices $livePrices,
+        private readonly RateLimiterFactoryInterface $fuelPricesLiveLimiter,
     ) {
     }
 
@@ -116,6 +120,40 @@ final class FuelPriceController extends AbstractController
         }
 
         return new JsonResponse($station);
+    }
+
+    #[OA\Get(
+        summary: 'The given fuel stations with today\'s prices (max 20), in the given order',
+        description: 'Prices are first refreshed from the MIMIT Osservaprezzi website (each station at most every 15 minutes, 5 s at most); '
+            .'when that fails, or with FUEL_PRICES_LIVE_ENABLED=0, the stations come with the prices of the daily file. Unknown ids are left out.',
+        parameters: [
+            new OA\Parameter(name: 'ids', in: 'query', required: true, description: 'Comma-separated station ids', schema: new OA\Schema(type: 'string', example: '3464,1021')),
+            new OA\Parameter(ref: '#/components/parameters/FuelPriceFuel'),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Stations', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: '#/components/schemas/FuelStationView'))),
+            new OA\Response(response: 400, description: 'fuel_prices.invalid_query'),
+            new OA\Response(response: 404, description: 'fuel_prices.disabled'),
+            new OA\Response(response: 429, description: 'fuel_prices.live_rate_limited'),
+        ],
+    )]
+    #[Route('/live', name: 'live', methods: ['GET'])]
+    public function live(Request $request): JsonResponse
+    {
+        $this->ensureEnabled();
+        $raw = explode(',', (string) $request->query->get('ids', ''));
+        if (count($raw) > FuelPrices::SEARCH_LIMIT || array_filter($raw, static fn (string $id): bool => !ctype_digit($id) || strlen($id) > 9) !== []) {
+            return $this->problem('fuel_prices.invalid_query', 400);
+        }
+        $ids = array_values(array_unique(array_map('intval', $raw)));
+        /** @var User $user */
+        $user = $this->getUser();
+        if (!$this->fuelPricesLiveLimiter->create('user-'.$user->getId())->consume()->isAccepted()) {
+            return $this->problem('fuel_prices.live_rate_limited', 429);
+        }
+        $this->livePrices->refresh($ids);
+
+        return new JsonResponse($this->fuelPrices->stations($ids, $this->fuel($request)));
     }
 
     #[OA\Get(

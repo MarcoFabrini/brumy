@@ -111,7 +111,7 @@ final class FuelPriceControllerTest extends ApiTestCase
         self::assertSame([1, 2], array_column($rows, 'id'), 'Bologna è fuori dal raggio, il distributore senza posizione non c\'è');
         self::assertSame('Q8 · Via Emilia Est 1420, Modena', $rows[0]['label']);
         self::assertLessThan(1.0, $rows[0]['distanceKm']);
-        self::assertSame(['price' => '1.729', 'communicatedAt' => '2026-10-24'], $rows[0]['prices']['self']);
+        self::assertSame(['price' => '1.729', 'communicatedAt' => '2026-10-24T07:30:00+02:00'], $rows[0]['prices']['self']);
         self::assertSame('1.899', $rows[0]['prices']['served']['price']);
         self::assertSame(['self' => null, 'served' => null], $rows[1]['prices'], 'nessun prezzo del gasolio');
     }
@@ -172,6 +172,30 @@ final class FuelPriceControllerTest extends ApiTestCase
         $this->jsonRequest('GET', '/api/fuel-prices/stations/99', session: $token);
         self::assertResponseStatusCodeSame(404);
         self::assertSame('fuel_prices.station_not_found', $this->jsonBody()['title']);
+    }
+
+    public function testLiveGivesTheStationsInTheOrderAsked(): void
+    {
+        [, , $token] = $this->createAuthenticatedUser();
+        $this->seed();
+
+        // Nei test il ministero non si chiama mai (FUEL_PRICES_LIVE_ENABLED spento): arrivano i prezzi del file
+        $this->jsonRequest('GET', '/api/fuel-prices/live?ids=2,99,1&fuel=diesel', session: $token);
+        self::assertResponseIsSuccessful();
+        $rows = $this->rows();
+        self::assertSame([2, 1], array_column($rows, 'id'));
+        self::assertNull($rows[0]['distanceKm']);
+        self::assertSame(['price' => '1.729', 'communicatedAt' => '2026-10-24T07:30:00+02:00'], $rows[1]['prices']['self']);
+
+        foreach (['', 'ids=', 'ids=1,abc', 'ids=-1', 'ids='.implode(',', range(1, FuelPrices::SEARCH_LIMIT + 1))] as $query) {
+            $this->jsonRequest('GET', '/api/fuel-prices/live?'.$query, session: $token);
+            self::assertResponseStatusCodeSame(400, $query);
+            self::assertSame('fuel_prices.invalid_query', $this->jsonBody()['title']);
+        }
+
+        $_ENV['FUEL_PRICES_ENABLED'] = $_SERVER['FUEL_PRICES_ENABLED'] = '0';
+        $this->jsonRequest('GET', '/api/fuel-prices/live?ids=1', session: $token);
+        self::assertResponseStatusCodeSame(404);
     }
 
     public function testRequiresAuthentication(): void

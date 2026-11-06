@@ -62,7 +62,7 @@ nelmio_api_doc:
                     nullable: true
                     properties:
                         price: { type: string, example: '1.789', description: 'EUR per liter' }
-                        communicatedAt: { type: string, format: date, description: 'When the station communicated it' }
+                        communicatedAt: { type: string, format: date-time, example: '2026-11-05T07:12:00+01:00', description: 'When the station communicated it (daily file, or live for the stations refreshed by /live)' }
                 FuelStationView:
                     type: object
                     properties:

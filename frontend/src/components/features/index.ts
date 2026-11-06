@@ -23,6 +23,7 @@ export { FuelTypeBadge, type FuelTypeBadgeProps } from './FuelTypeBadge';
 export { SettingsSourceBadge, type SettingsSourceBadgeProps } from './SettingsSourceBadge';
 export { PushSettingsCard } from './PushSettingsCard';
 export { AboutSection } from './AboutSection';
+export { ReleaseBanner } from './ReleaseBanner';
 export { MaintenanceCard, type MaintenanceCardProps } from './MaintenanceCard';
 export { MaintenanceForm, type MaintenanceFormProps } from './MaintenanceForm';
 export { VehicleCard, type VehicleCardProps } from './VehicleCard';

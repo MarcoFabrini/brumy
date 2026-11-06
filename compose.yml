@@ -93,6 +93,7 @@ services:
       ofelia.job-exec.messenger-retry.user: "www-data"
       ofelia.job-exec.cache-prune.user: "www-data"
       ofelia.job-exec.fuel-prices.user: "www-data"
+      ofelia.job-exec.fuel-prices-live.user: "www-data"
       ofelia.job-exec.update-check.user: "www-data"
       ofelia.job-exec.reminders.schedule: "0 0 7 * * *"
       ofelia.job-exec.reminders.command: "php bin/console app:reminders:dispatch --no-interaction"
@@ -105,11 +106,15 @@ services:
       # le chiavi usate una volta sola (un login con un'email inventata) resterebbero su disco per sempre.
       ofelia.job-exec.cache-prune.schedule: "0 15 4 * * *"
       ofelia.job-exec.cache-prune.command: "php bin/console cache:pool:prune --no-interaction"
-      # Prezzi del carburante (open data MIMIT, "prezzo alle 8"): spento con FUEL_PRICES_ENABLED=0.
-      ofelia.job-exec.fuel-prices.schedule: "0 30 8 * * *"
+      # Prezzi del carburante (open data MIMIT, "prezzo alle 8", pubblicato verso le 8:45): spento con FUEL_PRICES_ENABLED=0.
+      ofelia.job-exec.fuel-prices.schedule: "0 15 9 * * *"
       ofelia.job-exec.fuel-prices.command: "php bin/console app:fuel-prices:import --no-interaction"
-      # Nuova versione su GitHub (solo un avviso nel profilo dell'amministratore): spento con UPDATE_CHECK_ENABLED=0.
-      ofelia.job-exec.update-check.schedule: "0 45 5 * * *"
+      # Prezzi del giorno stesso dei distributori seguiti, ogni ora dalle 6 alle 22: spento con FUEL_PRICES_LIVE_ENABLED=0.
+      ofelia.job-exec.fuel-prices-live.schedule: "0 5 6-22 * * *"
+      ofelia.job-exec.fuel-prices-live.command: "php bin/console app:fuel-prices:refresh-followed --no-interaction"
+      # Nuova versione su GitHub: notifica push (una per versione) e avviso nell'app all'amministratore, niente
+      # download. Ogni ora, così l'avviso arriva poco dopo il rilascio. Spento con UPDATE_CHECK_ENABLED=0.
+      ofelia.job-exec.update-check.schedule: "0 45 * * * *"
       ofelia.job-exec.update-check.command: "php bin/console app:update:check --no-interaction"
       ofelia.job-exec.messenger-retry.schedule: "0 30 * * * *"
       # messenger:failed:retry non va bene qui: senza id dei messaggi rifiuta --no-interaction e non ha --limit.
@@ -186,6 +191,10 @@ services:
   scheduler:
     image: mcuadros/ofelia:0.4.0-beta.5
     command: daemon --docker --docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    # Orari dei job in ora italiana (promemoria alle 7, backup alle 3…): senza, Ofelia va in UTC e tutto parte
+    # un'ora più tardi d'inverno e due d'estate.
+    environment:
+      TZ: Europe/Rome
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:

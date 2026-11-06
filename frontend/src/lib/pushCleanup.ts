@@ -1,4 +1,5 @@
 import { authFetch } from '@/api/client';
+import { forgetPushEndpoint } from '@/lib/webPush';
 
 /**
  * Disiscrive il browser corrente dalle notifiche push (server + browser). Da chiamare PRIMA del logout,
@@ -7,6 +8,8 @@ import { authFetch } from '@/api/client';
  * Best-effort: un errore qui non deve mai impedire il logout.
  */
 export async function unsubscribeThisDevice(): Promise<void> {
+  // Il prossimo utente di questo dispositivo non deve ritrovarsi le notifiche riaccese da sole
+  forgetPushEndpoint();
   try {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const reg = await navigator.serviceWorker.getRegistration();

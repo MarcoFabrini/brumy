@@ -35,6 +35,15 @@ export async function getFuelStation(id: number, fuel?: FuelType): Promise<FuelS
   return fuelStationSchema.parse(await authFetch<unknown>(`/api/fuel-prices/stations/${id}${query}`));
 }
 
+/**
+ * Gli stessi distributori coi prezzi del giorno stesso (il server li chiede al ministero, al massimo ogni 15 minuti per
+ * distributore): nell'ordine dato, senza quelli che non esistono.
+ */
+export async function getLiveFuelStations(ids: number[], fuel: FuelType): Promise<FuelStation[]> {
+  const raw = await authFetch<unknown>(`/api/fuel-prices/live?ids=${ids.join(',')}&fuel=${encodeURIComponent(fuel)}`);
+  return z.array(fuelStationSchema).parse(raw);
+}
+
 /** Andamento del prezzo self di un carburante base negli ultimi 30 giorni, per ogni distributore seguito. */
 export async function listFollowedFuelPrices(fuel: FuelType): Promise<FollowedFuelStation[]> {
   const raw = await authFetch<unknown>(`/api/fuel-prices/followed?fuel=${encodeURIComponent(fuel)}`);

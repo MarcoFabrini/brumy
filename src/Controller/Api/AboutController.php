@@ -32,7 +32,7 @@ final class AboutController extends AbstractController
         summary: 'Installed app version, and the newer release for the instance admin',
         responses: [new OA\Response(response: 200, description: 'Version', content: new OA\JsonContent(properties: [
             new OA\Property(property: 'version', type: 'string', example: '0.7.0', description: '"dev" for a build without a release version'),
-            new OA\Property(property: 'update', type: 'object', nullable: true, description: 'Only for the instance admin, from the daily check of the GitHub tags; null otherwise', properties: [
+            new OA\Property(property: 'update', type: 'object', nullable: true, description: 'Only for the instance admin, from the hourly check of the GitHub tags; null otherwise', properties: [
                 new OA\Property(property: 'version', type: 'string', example: '0.7.1'),
                 new OA\Property(property: 'url', type: 'string', format: 'uri'),
             ]),

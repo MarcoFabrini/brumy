@@ -76,6 +76,12 @@ framework:
             policy: 'fixed_window'
             limit: 3
             interval: '15 minutes'
+        # Prezzi in tempo reale (GET /api/fuel-prices/live), per utente: ogni chiamata può fare fino a 20 richieste al
+        # ministero (meno, grazie alla cache di 15 minuti per distributore). Oltre, restano i prezzi del file.
+        fuel_prices_live:
+            policy: 'sliding_window'
+            limit: 120
+            interval: '1 hour'
 
 when@test:
     framework:

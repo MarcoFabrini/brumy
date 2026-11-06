@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Car, CheckCircle2, Plus } from 'lucide-react';
 import { Alert, ListRow, ListSection, Skeleton } from '@/components/ui';
 import { AppLogo, EmailVerificationBanner, PageHeader } from '@/components/layout';
-import { MonthSummaryCard, ReminderOverviewSection } from '@/components/features';
+import { MonthSummaryCard, ReleaseBanner, ReminderOverviewSection } from '@/components/features';
 import { FollowedFuelPrices } from '@/components/features/FollowedFuelPrices';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useDashboardCharts } from '@/hooks/useDashboardCharts';
@@ -51,6 +51,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader srTitle={orgName} leading={<AppLogo className="size-9" />} />
       <EmailVerificationBanner />
+      <ReleaseBanner />
 
       {dash.error ? <Alert variant="error">{errorMessage(dash.error)}</Alert> : null}
 

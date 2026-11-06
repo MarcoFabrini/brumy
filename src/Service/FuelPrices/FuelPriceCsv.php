@@ -89,13 +89,13 @@ final class FuelPriceCsv
             if (count($fields) !== 5 || !ctype_digit($fields[0])) {
                 continue;
             }
-            $fuel = self::FUELS[trim($fields[1])] ?? null;
+            $fuel = self::fuel($fields[1]);
             $value = trim($fields[2]);
             $communicatedAt = \DateTimeImmutable::createFromFormat('!d/m/Y H:i:s', trim($fields[4]));
             if ($fuel === null || !is_numeric($value) || $communicatedAt === false) {
                 continue;
             }
-            if ((float) $value < self::MIN_PRICE || (float) $value > self::MAX_PRICE || $communicatedAt < $oldest) {
+            if (!self::isPlausible((float) $value) || $communicatedAt < $oldest) {
                 continue;
             }
             $row = [
@@ -112,6 +112,18 @@ final class FuelPriceCsv
         }
 
         return array_values($prices);
+    }
+
+    /** Il carburante base col nome del ministero ("Gasolio"), null per le varianti di marca e i carburanti senza prezzo. */
+    public static function fuel(string $name): ?FuelType
+    {
+        return self::FUELS[trim($name)] ?? null;
+    }
+
+    /** Un prezzo fuori da MIN_PRICE-MAX_PRICE €/l è un errore di battitura del gestore. */
+    public static function isPlausible(float $price): bool
+    {
+        return $price >= self::MIN_PRICE && $price <= self::MAX_PRICE;
     }
 
     /**

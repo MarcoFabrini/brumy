@@ -404,7 +404,9 @@
       "title": "About",
       "version": "Version",
       "dev": "development",
-      "update_available": "Update available"
+      "update_available": "Update available",
+      "release_banner": "Brumy {{version}} is out: update the server to install it.",
+      "release_notes": "What's new"
     }
   },
   "security": {
@@ -1064,6 +1066,7 @@
       "disabled": "Fuel prices are turned off on this instance",
       "invalid_query": "Invalid fuel station search",
       "station_not_found": "Fuel station not found",
+      "live_rate_limited": "Too many price updates: try again later",
       "not_linked": "Link the entry to a fuel station first"
     },
     "two_factor": {
@@ -1143,9 +1146,13 @@
     "mode_self": "Self",
     "mode_served": "Full service",
     "distance": "{{km}} km",
-    "communicated_on": "price of {{date}}",
+    "communicated_today": "today's price at {{time}}",
+    "communicated_yesterday": "yesterday's price at {{time}}",
+    "communicated_earlier": "price of {{date}}",
     "no_price": "No price",
-    "proposed": "Station price, reported on {{date}}",
+    "proposed_today": "Station price, reported today at {{time}}",
+    "proposed_yesterday": "Station price, reported yesterday at {{time}}",
+    "proposed_earlier": "Station price, reported on {{date}}",
     "no_price_for_fuel": "The station has no price for this fuel",
     "linked_station": "Station for prices",
     "station_gone": "Station no longer in the Ministry data",

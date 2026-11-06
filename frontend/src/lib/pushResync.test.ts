@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authFetch } from '@/api/client';
 import { useAuthStore, type User } from '@/stores/useAuthStore';
 import { testUser } from '@/test/authFixtures';
+import { stubLocalStorage } from '@/test/memoryStorage';
 import { resyncPushOnSessionStart, resyncThisDevice, sessionStarted } from './pushResync';
-import { urlBase64ToUint8Array } from './webPush';
+import { rememberPushEndpoint, rememberedPushEndpoint, urlBase64ToUint8Array } from './webPush';
 
 vi.mock('@/api/client', () => ({ authFetch: vi.fn() }));
 
@@ -26,25 +27,35 @@ function browserSubscription(vapidKey: string) {
 function installPush({ permission = 'granted', subscription = browserSubscription(VAPID) as unknown }: { permission?: NotificationPermission; subscription?: unknown } = {}) {
   vi.stubGlobal('PushManager', class {});
   vi.stubGlobal('Notification', { permission });
+  const pushManager = {
+    getSubscription: vi.fn(async () => subscription),
+    subscribe: vi.fn(async () => ({ ...browserSubscription(VAPID), endpoint: NEW_ENDPOINT })),
+  };
   Object.defineProperty(navigator, 'serviceWorker', {
     configurable: true,
-    value: { getRegistration: async () => ({ pushManager: { getSubscription: async () => subscription } }) },
+    value: { getRegistration: async () => ({ pushManager }) },
   });
+  return pushManager;
 }
+
+const NEW_ENDPOINT = 'https://web.push.apple.com/new-endpoint';
 
 function serverKey(publicKey: string) {
   mockedAuthFetch.mockImplementation(async (path) => {
     if (path === '/api/push-subscriptions/vapid-public-key') return { publicKey };
     if (path === '/api/push-subscriptions') return { id: 1 };
+    if (path === '/api/push-subscriptions/unsubscribe') return undefined;
     throw new Error(`unexpected fetch ${path}`);
   });
 }
 
 const postCalls = () => mockedAuthFetch.mock.calls.filter(([path]) => path === '/api/push-subscriptions');
+const unsubscribeCalls = () => mockedAuthFetch.mock.calls.filter(([path]) => path === '/api/push-subscriptions/unsubscribe');
 
 describe('resyncThisDevice', () => {
   beforeEach(() => {
     mockedAuthFetch.mockReset();
+    stubLocalStorage();
   });
 
   afterEach(() => {
@@ -71,6 +82,62 @@ describe('resyncThisDevice', () => {
       authSecret: btoa(String.fromCharCode(4, 5)),
       deviceLabel: navigator.userAgent.split(' ').slice(-1)[0],
     });
+  });
+
+  it('si ricorda che su questo dispositivo le notifiche sono accese', async () => {
+    installPush();
+    serverKey(VAPID);
+
+    await resyncThisDevice();
+
+    expect(rememberedPushEndpoint()).toBe(ENDPOINT);
+  });
+
+  it('ricrea la subscription persa dal browser se qui erano accese, e toglie dal server quella vecchia', async () => {
+    rememberPushEndpoint(ENDPOINT);
+    const pushManager = installPush({ subscription: null });
+    serverKey(VAPID);
+
+    await resyncThisDevice();
+
+    expect(pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(pushManager.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
+    expect(JSON.parse(String(postCalls()[0]?.[1]?.body))).toMatchObject({ endpoint: NEW_ENDPOINT });
+    expect(JSON.parse(String(unsubscribeCalls()[0]?.[1]?.body))).toEqual({ platform: 'web', endpoint: ENDPOINT });
+    expect(rememberedPushEndpoint()).toBe(NEW_ENDPOINT);
+  });
+
+  it('due chiamate insieme ricreano la subscription una volta sola', async () => {
+    rememberPushEndpoint(ENDPOINT);
+    const pushManager = installPush({ subscription: null });
+    serverKey(VAPID);
+
+    await Promise.all([resyncThisDevice(), resyncThisDevice()]);
+
+    expect(pushManager.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('con il permesso non più concesso non ricrea niente', async () => {
+    rememberPushEndpoint(ENDPOINT);
+    const pushManager = installPush({ permission: 'default', subscription: null });
+    serverKey(VAPID);
+
+    await resyncThisDevice();
+
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+    expect(mockedAuthFetch).not.toHaveBeenCalled();
+  });
+
+  it('se il browser rifiuta di ricrearla non lancia e resta il segno per il prossimo giro', async () => {
+    rememberPushEndpoint(ENDPOINT);
+    const pushManager = installPush({ subscription: null });
+    pushManager.subscribe.mockRejectedValue(new DOMException('gesture', 'NotAllowedError'));
+    serverKey(VAPID);
+
+    await expect(resyncThisDevice()).resolves.toBeUndefined();
+
+    expect(postCalls()).toHaveLength(0);
+    expect(rememberedPushEndpoint()).toBe(ENDPOINT);
   });
 
   it('senza subscription nel browser non chiama il server', async () => {

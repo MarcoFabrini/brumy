@@ -15,10 +15,10 @@ import {
 } from '@/components/ui';
 import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
 import type { FuelType } from '@/api/types/vehicle';
-import { useFuelStationSearch, useNearbyFuelStations } from '@/hooks/useFuelPrices';
+import { useFuelStationSearch, useLiveFuelPrices, useNearbyFuelStations } from '@/hooks/useFuelPrices';
 import { useFormat } from '@/hooks/useFormat';
 import { requestPosition, type GeoError, type GeoPosition } from '@/lib/geolocation';
-import { pricedMode } from '@/lib/fuelPrice';
+import { communicatedWhen, pricedMode } from '@/lib/fuelPrice';
 import { cn } from '@/lib/utils';
 
 export interface FuelStationPickerProps {
@@ -86,6 +86,9 @@ function PickerBody({
   const searching = query.trim().length >= 2;
   const nearby = useNearbyFuelStations(location.status === 'found' ? location.position : null, fuel);
   const search = useFuelStationSearch(query, fuel);
+  // Subito i prezzi del file, poi quelli del giorno stesso per i distributori in lista
+  const nearbyStations = useLiveFuelPrices(nearby.data, fuel);
+  const foundStations = useLiveFuelPrices(search.data, fuel);
 
   return (
     <>
@@ -106,7 +109,7 @@ function PickerBody({
 
       {searching ? (
         <StationList
-          stations={search.data}
+          stations={foundStations}
           loading={search.isLoading}
           empty={t('fuel_prices.search_empty')}
           mode={mode}
@@ -120,7 +123,7 @@ function PickerBody({
       ) : (
         <StationList
           title={t('fuel_prices.nearby')}
-          stations={nearby.data}
+          stations={nearbyStations}
           loading={location.status === 'locating' || nearby.isLoading}
           empty={t('fuel_prices.nearby_empty')}
           mode={mode}
@@ -181,6 +184,10 @@ interface StationListProps {
 function StationList({ title, stations, loading, empty, mode, showPrice, onChoose }: StationListProps) {
   const { t } = useTranslation();
   const fmt = useFormat();
+  const communicatedLabel = (iso: string) => {
+    const when = communicatedWhen(iso, fmt.locale);
+    return t(`fuel_prices.communicated_${when.day}`, { time: when.time, date: fmt.date(iso) });
+  };
   if (loading) return <Skeleton className="h-44 w-full rounded-xl" />;
   if (!stations?.length) {
     return (
@@ -196,7 +203,7 @@ function StationList({ title, stations, loading, empty, mode, showPrice, onChoos
         const price = station.prices[shownMode];
         const details = [
           station.distanceKm !== null ? t('fuel_prices.distance', { km: fmt.decimal(station.distanceKm, 1) }) : null,
-          showPrice && price ? t('fuel_prices.communicated_on', { date: fmt.date(price.communicatedAt) }) : null,
+          showPrice && price ? communicatedLabel(price.communicatedAt) : null,
         ].filter(Boolean);
         return (
           <ListRow

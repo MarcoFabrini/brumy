@@ -18,7 +18,9 @@ parameters:
     app_vehicles_org_limit_default: 0
     # Prezzi del carburante dall'open data MIMIT (solo Italia). Override: FUEL_PRICES_ENABLED=0 per spegnerli.
     app_fuel_prices_enabled_default: true
-    # Controllo giornaliero di una nuova versione su GitHub (avviso all'amministratore). Override: UPDATE_CHECK_ENABLED=0.
+    # Prezzi del giorno stesso dall'interfaccia di Osservaprezzi, per pochi distributori alla volta. Override: FUEL_PRICES_LIVE_ENABLED=0.
+    app_fuel_prices_live_enabled_default: true
+    # Controllo orario di una nuova versione su GitHub (notifica e avviso all'amministratore). Override: UPDATE_CHECK_ENABLED=0.
     app_update_check_enabled_default: true
 
 services:
@@ -66,3 +68,5 @@ when@test:
         app_attachments_org_quota_mb_default: 1
         # 3 veicoli: i test del tetto lavorano al confine senza crearne decine (i factory non passano dal controllo).
         app_vehicles_org_limit_default: 3
+        # Nessuna chiamata al ministero nei test: chi prova i prezzi in tempo reale costruisce il servizio con una risposta finta.
+        app_fuel_prices_live_enabled_default: false

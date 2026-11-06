@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Organization;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -44,16 +45,26 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
      */
     public function isInstanceAdmin(User $user): bool
     {
-        $firstId = $this->createQueryBuilder('u')
-            ->select('u.id')
+        $firstId = $this->instanceAdminQuery()->select('u.id')->getQuery()->getOneOrNullResult();
+
+        return $firstId !== null && (int) $firstId['id'] === $user->getId();
+    }
+
+    /** L'amministratore dell'istanza (vedi {@see isInstanceAdmin}), null su un'istanza senza utenti. */
+    public function findInstanceAdmin(): ?User
+    {
+        $admin = $this->instanceAdminQuery()->getQuery()->getOneOrNullResult();
+
+        return $admin instanceof User ? $admin : null;
+    }
+
+    private function instanceAdminQuery(): QueryBuilder
+    {
+        return $this->createQueryBuilder('u')
             ->where('u.email NOT LIKE :anonymized')
             ->setParameter('anonymized', '%'.User::ANONYMIZED_EMAIL_SUFFIX)
             ->orderBy('u.id', 'ASC')
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult();
-
-        return $firstId !== null && (int) $firstId['id'] === $user->getId();
+            ->setMaxResults(1);
     }
 
     /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Un prezzo comunicato dal distributore (€/l, tre decimali) e il giorno della comunicazione. */
+/** Un prezzo comunicato dal distributore (€/l, tre decimali) e data e ora della comunicazione, con fuso (`2026-11-05T07:12:00+01:00`). */
 export const fuelPricePointSchema = z.object({ price: z.string(), communicatedAt: z.string() });
 export type FuelPricePoint = z.infer<typeof fuelPricePointSchema>;
 

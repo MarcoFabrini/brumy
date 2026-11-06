@@ -4,6 +4,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePushSubscription } from './usePushSubscription';
 import { authFetch } from '@/api/client';
+import { stubLocalStorage } from '@/test/memoryStorage';
+import { rememberPushEndpoint, rememberedPushEndpoint } from '@/lib/webPush';
 
 vi.mock('@/api/client', () => ({ authFetch: vi.fn() }));
 
@@ -17,6 +19,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('usePushSubscription', () => {
   beforeEach(() => {
     mockedAuthFetch.mockReset();
+    stubLocalStorage();
   });
 
   afterEach(() => {
@@ -222,6 +225,41 @@ describe('usePushSubscription', () => {
         expect(body).toMatchObject({ platform: 'web', endpoint: created.endpoint });
         expect(atob(body.p256dh ?? '')).toBe('chiave');
         expect(atob(body.authSecret ?? '')).toBe('auth');
+        expect(rememberedPushEndpoint()).toBe(created.endpoint);
+      });
+
+      it('accese qui e perse dal browser (iPhone dopo un aggiornamento): le ricrea da sola e mostra "subscribed"', async () => {
+        rememberPushEndpoint('https://push.example/perso');
+        const created = browserSubscription();
+        const pushManager = setupReady(created);
+        let current: unknown = null;
+        pushManager.getSubscription.mockImplementation(async () => current);
+        pushManager.subscribe.mockImplementation(async () => {
+          current = created;
+          return created;
+        });
+        routeFetch(async () => undefined);
+        vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+
+        const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+        await waitFor(() => expect(result.current.status).toBe('subscribed'));
+        expect(pushManager.subscribe).toHaveBeenCalledTimes(1);
+        expect(mockedAuthFetch).toHaveBeenCalledWith('/api/push-subscriptions/unsubscribe', expect.objectContaining({
+          body: JSON.stringify({ platform: 'web', endpoint: 'https://push.example/perso' }),
+        }));
+        expect(rememberedPushEndpoint()).toBe(created.endpoint);
+      });
+
+      it('mai accese qui: senza subscription resta "unsubscribed" e non ne crea', async () => {
+        const pushManager = setupReady(browserSubscription());
+        routeFetch(async () => undefined);
+        vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+
+        const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+        await waitFor(() => expect(result.current.status).toBe('unsubscribed'));
+        expect(pushManager.subscribe).not.toHaveBeenCalled();
       });
 
       it.each([
@@ -277,6 +315,7 @@ describe('usePushSubscription', () => {
 
         expect(calls).toEqual(['server', 'browser']);
         expect(result.current.status).toBe('unsubscribed');
+        expect(rememberedPushEndpoint()).toBeNull();
       });
 
       it('se il server fallisce nel disiscrivere si resta iscritti (stato coerente) e il browser non viene toccato', async () => {

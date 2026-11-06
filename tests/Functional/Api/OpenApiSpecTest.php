@@ -99,6 +99,7 @@ final class OpenApiSpecTest extends ApiTestCase
             '/api/fuel-prices/nearby',
             '/api/fuel-prices/search',
             '/api/fuel-prices/stations/{id}',
+            '/api/fuel-prices/live',
         ];
 
         $actual = array_keys($this->spec['paths']);

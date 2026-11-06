@@ -30,7 +30,7 @@ import { useValueSuggestions } from '@/hooks/useUserValues';
 import { useVehicle } from '@/hooks/useVehicles';
 import { useFormat } from '@/hooks/useFormat';
 import { todayIso } from '@/lib/format';
-import { isRecentForFuelPrice, pricedMode, sameValueName } from '@/lib/fuelPrice';
+import { communicatedWhen, isRecentForFuelPrice, pricedMode, sameValueName } from '@/lib/fuelPrice';
 import type { FuelServiceMode, FuelStation } from '@/api/types/fuelPrice';
 import { fuelPriceKeys, useFuelPricesStatus, useFuelStation } from '@/hooks/useFuelPrices';
 import { FuelModeToggle, FuelStationPicker } from './FuelStationPicker';
@@ -149,6 +149,7 @@ export function RefuelingForm({
   const stationPrices = priceStation.data?.prices;
   const priceMode = stationPrices ? pricedMode(stationPrices, mode) : mode;
   const proposal = stationPrices?.[priceMode] ?? null;
+  const proposalWhen = proposal ? communicatedWhen(proposal.communicatedAt, fmt.locale) : null;
 
   /**
    * Distributore, carburante o self/servito appena scelti dall'utente: il prezzo segue la nuova scelta (o si svuota se
@@ -175,8 +176,9 @@ export function RefuelingForm({
 
   function pickStation(station: FuelStation) {
     choiceChanged.current = true;
-    // Il foglio ha già i prezzi: niente seconda richiesta per lo stesso distributore
+    // Il foglio ha già i prezzi da mostrare subito; se quelli del giorno stesso non erano ancora arrivati, li chiede
     queryClient.setQueryData(fuelPriceKeys.station(station.id, fuelType), station);
+    void queryClient.invalidateQueries({ queryKey: fuelPriceKeys.station(station.id, fuelType), exact: true });
     form.setValue('station', station.label, { shouldDirty: true });
     form.setValue('fuelStationId', station.id);
   }
@@ -279,7 +281,7 @@ export function RefuelingForm({
         <div className="flex items-center justify-between gap-3">
           <Text variant="muted" className="text-xs">
             {proposal
-              ? t('fuel_prices.proposed', { date: fmt.date(proposal.communicatedAt) })
+              ? t(`fuel_prices.proposed_${proposalWhen?.day ?? 'earlier'}`, { time: proposalWhen?.time, date: fmt.date(proposal.communicatedAt) })
               : t('fuel_prices.no_price_for_fuel')}
           </Text>
           <FuelModeToggle mode={priceMode} onChange={chooseMode} compact />
